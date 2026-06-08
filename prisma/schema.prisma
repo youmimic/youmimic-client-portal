@@ -11,3 +11,249 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+
+//Model User
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  userRoles               UserRole[]
+  enterprises             Enterprise[]      @relation("EnterpriseOwner")
+  enterpriseMembers       EnterpriseMember[]
+  subscriptions           Subscription[]
+  avatars                 Avatar[]
+  bookings                Booking[]
+  emailVerificationTokens EmailVerificationToken[]
+  invitesSent             Invite[]          @relation("InvitedByUser")
+  systemEvents            SystemEvent[]
+  emailLogs               EmailLog[]
+  adminLogs               AdminLog[]        @relation("AdminUser")
+
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  permissions RolePermission[]
+  userRoles   UserRole[]
+  invites     Invite[]
+  enterpriseMembers EnterpriseMember[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Enterprise {
+  id          String   @id @default(cuid())
+  name        String
+  ownerUserId String
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+
+  owner         User               @relation("EnterpriseOwner", fields: [ownerUserId], references: [id])
+  members       EnterpriseMember[]
+  subscriptions Subscription[]
+  avatars       Avatar[]
+  bookings      Booking[]
+  invites       Invite[]
+
+  @@map("enterprises")
+}
+
+model EnterpriseMember {
+  id           String @id @default(cuid())
+  enterpriseId String
+  userId       String
+  roleId       String
+
+  enterprise Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id])
+
+  @@unique([enterpriseId, userId])
+  @@map("enterprise_members")
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  userId               String?
+  enterpriseId         String?
+  stripeCustomerId     String
+  stripeSubscriptionId String    @unique
+  planType             String
+  status               String
+  currentPeriodEnd     DateTime
+  createdAt            DateTime  @default(now())
+
+  user       User?       @relation(fields: [userId], references: [id])
+  enterprise Enterprise? @relation(fields: [enterpriseId], references: [id])
+  payments   Payment[]
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  amount         Int
+  status         String
+  createdAt      DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@map("payments")
+}
+
+model Avatar {
+  id             String   @id @default(cuid())
+  userId         String
+  enterpriseId   String?
+  heygenAvatarId String?
+  name           String
+  status         String   @default("pending")
+  previewUrl     String?
+  videoUrl       String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  user       User        @relation(fields: [userId], references: [id])
+  enterprise Enterprise? @relation(fields: [enterpriseId], references: [id])
+
+  @@map("avatars")
+}
+
+model Booking {
+  id            String   @id @default(cuid())
+  userId        String
+  enterpriseId  String?
+  requestedDate DateTime
+  timeStart     String
+  timeEnd       String
+  status        String   @default("pending")
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  user       User        @relation(fields: [userId], references: [id])
+  enterprise Enterprise? @relation(fields: [enterpriseId], references: [id])
+
+  @@map("bookings")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
+}
+
+model Invite {
+  id           String   @id @default(cuid())
+  enterpriseId String
+  email        String
+  roleId       String
+  token        String   @unique
+  status       String   @default("pending")
+  invitedById  String?
+  createdAt    DateTime @default(now())
+
+  enterprise Enterprise  @relation(fields: [enterpriseId], references: [id])
+  role       Role        @relation(fields: [roleId], references: [id])
+  invitedBy  User?       @relation("InvitedByUser", fields: [invitedById], references: [id])
+
+  @@map("invites")
+}
+
+model SystemEvent {
+  id        String   @id @default(cuid())
+  type      String
+  source    String
+  message   String
+  metadata  Json?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("system_events")
+}
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  emailType String
+  status    String
+  provider  String
+  response  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("email_logs")
+}
+
+model Webhook {
+  id          String   @id @default(cuid())
+  source      String
+  eventType   String
+  payload     Json
+  processed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("webhooks")
+}
+
+model AdminLog {
+  id          String   @id @default(cuid())
+  adminUserId String
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  adminUser User @relation("AdminUser", fields: [adminUserId], references: [id])
+
+  @@map("admin_logs")
+}
