@@ -103,7 +103,7 @@ export async function POST(req: Request) {
     const verifyUrl = `${process.env.NEXTAUTH_URL}/api/verify-email?token=${token}`;
 
     await resend.emails.send({
-      from: process.env.EMAIL_FROM!,
+      from: process.env.EMAIL_FROM || "welcome@youmimic.com",
       to: email,
       subject: "Verify your email",
       html: `
