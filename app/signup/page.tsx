@@ -4,6 +4,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { X } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -48,6 +49,8 @@ export default function SignupPage() {
   const router = useRouter();
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [showFormError, setShowFormError] = useState(true);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(true);
 
   const form = useForm<SignupFormInput>({
     resolver: zodResolver(signupFormSchema),
@@ -63,6 +66,8 @@ export default function SignupPage() {
   async function onSubmit(values: SignupFormInput) {
     setFormError("");
     setSuccessMessage("");
+    setShowFormError(true);
+    setShowSuccessMessage(true);
 
     const response = await fetch("/api/register", {
       method: "POST",
@@ -117,15 +122,31 @@ export default function SignupPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {formError && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {formError}
+          {formError && showFormError && (
+            <div className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p>{formError}</p>
+              <button
+                type="button"
+                onClick={() => setShowFormError(false)}
+                aria-label="Dismiss signup error message"
+                className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           )}
 
-          {successMessage && (
-            <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-              {successMessage}
+          {successMessage && showSuccessMessage && (
+            <div className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              <p>{successMessage}</p>
+              <button
+                type="button"
+                onClick={() => setShowSuccessMessage(false)}
+                aria-label="Dismiss signup success message"
+                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           )}
 

@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -30,7 +31,11 @@ import { Input } from "@/components/ui/input";
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
   const [formError, setFormError] = useState("");
+  const [showFormError, setShowFormError] = useState(true);
+  const [showRegistered, setShowRegistered] = useState(true);
+  const [showVerified, setShowVerified] = useState(true);
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -46,6 +51,7 @@ export default function LoginPage() {
 
   async function onSubmit(values: LoginInput) {
     setFormError("");
+    setShowFormError(true);
 
     const result = await signIn("credentials", {
       email: values.email,
@@ -80,22 +86,48 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {registered === "1" && (
-            <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-              Account created successfully. Please check your email to verify
-              your account.
+          {registered === "1" && showRegistered && (
+            <div className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              <p>
+                Account created successfully. Please check your email to verify
+                your account.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowRegistered(false)}
+                aria-label="Dismiss registration success message"
+                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           )}
 
-          {verified === "1" && (
-            <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-              Your email has been verified. You can now log in.
+          {verified === "1" && showVerified && (
+            <div className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              <p>Your email has been verified. You can now log in.</p>
+              <button
+                type="button"
+                onClick={() => setShowVerified(false)}
+                aria-label="Dismiss email verification success message"
+                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           )}
 
-          {formError && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {formError}
+          {formError && showFormError && (
+            <div className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p>{formError}</p>
+              <button
+                type="button"
+                onClick={() => setShowFormError(false)}
+                aria-label="Dismiss login error message"
+                className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           )}
 
