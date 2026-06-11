@@ -1,4 +1,3 @@
-// lib/validations/auth.ts
 import { z } from "zod";
 
 const emailRegex =
@@ -50,6 +49,15 @@ export const registerSchema = z.object({
     }),
 
   password: passwordSchema,
+
+  acceptTerms: z.boolean().refine((value) => value === true, {
+    message: "You must agree to the Terms and Conditions",
+  }),
+
+  termsLinkClicked: z.boolean().refine((value) => value === true, {
+    message:
+      "Please open and review the Terms and Conditions before continuing",
+  }),
 });
 
 export const loginSchema = z.object({

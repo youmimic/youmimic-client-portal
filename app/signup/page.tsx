@@ -48,9 +48,7 @@ type RegisterResponse = {
 export default function SignupPage() {
   const router = useRouter();
   const [formError, setFormError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [showFormError, setShowFormError] = useState(true);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(true);
 
   const form = useForm<SignupFormInput>({
     resolver: zodResolver(signupFormSchema),
@@ -59,15 +57,23 @@ export default function SignupPage() {
       email: "",
       password: "",
       confirmPassword: "",
+      acceptTerms: false,
+      termsLinkClicked: false,
     },
     mode: "onBlur",
   });
 
+  function handleTermsClick() {
+    form.setValue("termsLinkClicked", true, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
+  }
+
   async function onSubmit(values: SignupFormInput) {
     setFormError("");
-    setSuccessMessage("");
     setShowFormError(true);
-    setShowSuccessMessage(true);
 
     const response = await fetch("/api/register", {
       method: "POST",
@@ -88,9 +94,11 @@ export default function SignupPage() {
             key === "name" ||
             key === "email" ||
             key === "password" ||
-            key === "confirmPassword"
+            key === "confirmPassword" ||
+            key === "acceptTerms" ||
+            key === "termsLinkClicked"
           ) {
-            form.setError(key, {
+            form.setError(key as keyof SignupFormInput, {
               type: "server",
               message: messages[0],
             });
@@ -101,11 +109,6 @@ export default function SignupPage() {
       setFormError(data.error ?? "Unable to create your account.");
       return;
     }
-
-    setSuccessMessage(
-      data.message ??
-        "Account created. Please check your email to verify your account.",
-    );
 
     router.push("/login?registered=1");
     router.refresh();
@@ -130,20 +133,6 @@ export default function SignupPage() {
                 onClick={() => setShowFormError(false)}
                 aria-label="Dismiss signup error message"
                 className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-          )}
-
-          {successMessage && showSuccessMessage && (
-            <div className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-              <p>{successMessage}</p>
-              <button
-                type="button"
-                onClick={() => setShowSuccessMessage(false)}
-                aria-label="Dismiss signup success message"
-                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -228,6 +217,53 @@ export default function SignupPage() {
                       />
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <input type="hidden" {...form.register("termsLinkClicked")} />
+
+              <FormField
+                control={form.control}
+                name="acceptTerms"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-start gap-3 rounded-md border p-3">
+                      <input
+                        id="acceptTerms"
+                        type="checkbox"
+                        checked={field.value}
+                        onChange={(e) => field.onChange(e.target.checked)}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <div className="space-y-1">
+                        <label
+                          htmlFor="acceptTerms"
+                          className="text-sm font-medium leading-none"
+                        >
+                          I agree to the{" "}
+                          <a
+                            href="/terms-and-conditions.pdf"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={handleTermsClick}
+                            className="underline underline-offset-4"
+                          >
+                            Terms and Conditions
+                          </a>
+                        </label>
+                        <p className="text-sm text-muted-foreground">
+                          You must open the Terms and Conditions link and accept
+                          them before creating your account.
+                        </p>
+                      </div>
+                    </div>
+                    <FormMessage />
+                    {!form.formState.errors.acceptTerms && (
+                      <div className="text-sm text-red-600">
+                        {form.formState.errors.termsLinkClicked?.message}
+                      </div>
+                    )}
                   </FormItem>
                 )}
               />

@@ -52,7 +52,23 @@ export async function POST(req: Request) {
       );
     }
 
-    const { name, email, password } = parsed.data;
+    const { name, email, password, acceptTerms, termsLinkClicked } =
+      parsed.data;
+
+    if (!acceptTerms || !termsLinkClicked) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          fieldErrors: {
+            acceptTerms: ["You must accept the Terms and Conditions"],
+            termsLinkClicked: [
+              "Please open the Terms and Conditions before continuing",
+            ],
+          },
+        },
+        { status: 400 },
+      );
+    }
 
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -103,7 +119,7 @@ export async function POST(req: Request) {
     const verifyUrl = `${process.env.NEXTAUTH_URL}/api/verify-email?token=${token}`;
 
     await resend.emails.send({
-      from: process.env.EMAIL_FROM || "welcome@youmimic.com",
+      from: process.env.EMAIL_FROM!,
       to: email,
       subject: "Verify your email",
       html: `
