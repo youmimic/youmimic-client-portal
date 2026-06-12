@@ -58,6 +58,13 @@ export const registerSchema = z.object({
     message:
       "Please open and review the Terms and Conditions before continuing",
   }),
+  acceptPrivacyPolicy: z.boolean().refine((value) => value === true, {
+    message: "You must accept the Privacy Policy",
+  }),
+
+  privacyPolicyLinkClicked: z.boolean().refine((value) => value === true, {
+    message: "Please open the Privacy Policy before continuing",
+  }),
 });
 
 export const loginSchema = z.object({
