@@ -1,5 +1,68 @@
 # HANDOFF.md
 
+## Session: Billing dashboard page — 2026-06-13
+
+### What was inspected
+
+- `prisma/schema.prisma` — `Subscription { ownerType, planType, status, currentPeriodEnd, cancelAtPeriodEnd, stripeCustomerId }`, `Enterprise { ownerUserId }`, `EnterpriseMember { enterpriseId, userId }`.
+- `auth.ts` — `session.user.id` is the DB user ID; confirmed no billing-specific fields in JWT.
+- `app/(dashboard)/dashboard/settings/page.tsx` + `avatars/page.tsx` — established patterns: `auth()` → redirect if no session, Prisma fetch with `select`, `Card`/`CardContent`/`CardHeader`/`CardTitle`/`CardFooter` layout, `formatDate` with `Intl.DateTimeFormat("en-CA")`.
+- `components/dashboard/booking-actions.tsx` — client component pattern: `"use client"`, `useState` for busy/error, `fetch` + `router.refresh()`; confirmed `Button` variants (`default`, `outline`, `secondary`, `ghost`, `destructive`, `link`).
+- `components/ui/card.tsx` — confirmed `CardFooter` has `border-t bg-muted/50` for visual separation; confirmed `CardAction` slot exists for right-aligned header content.
+- `app/api/stripe/checkout-session/route.ts` + `customer-portal/route.ts` — confirmed request shape: `{ planType, enterpriseId? }` and `{ enterpriseId? }` respectively; confirmed both return `{ url }`.
+- `components/dashboard/app-sidebar.tsx` — confirmed `/dashboard/billing` nav link already present.
+
+### What changed
+
+1. **`components/dashboard/billing-actions.tsx`** (new) — `"use client"` component.
+   - Exports `BillingAction` type (discriminated union `{ type: "checkout", planType, enterpriseId? } | { type: "portal", enterpriseId? }`).
+   - Exports `BillingActionButton`: accepts `action`, `label`, `variant`; manages `busy`/`error` state; POSTs to `/api/stripe/checkout-session` or `/api/stripe/customer-portal`; on success redirects via `window.location.href = url` (no `router.refresh` needed — Stripe-hosted page); on error shows inline `text-destructive` message; keeps button disabled until redirect or error.
+
+2. **`app/(dashboard)/dashboard/billing/page.tsx`** (new) — server component at `/dashboard/billing`.
+   - `auth()` → redirect to `/login` if no session.
+   - Three Prisma queries run in `Promise.all`:
+     - `personalSub` — `subscription.findFirst({ where: { userId, ownerType: "USER" } })`
+     - `ownedEnterprises` — `enterprise.findMany({ where: { ownerUserId } })` with nested `subscriptions` (latest 1)
+     - `memberEnterprises` — `enterpriseMember.findMany({ where: { userId, enterprise: { ownerUserId: { not: userId } } } })`
+   - `resolveAction(sub, planType, enterpriseId?)` → determines `BillingAction`, button label, and variant:
+     - No sub / `stripeCustomerId` absent / CANCELED / INCOMPLETE_EXPIRED → Subscribe (checkout)
+     - INCOMPLETE → Complete checkout (checkout re-initiation, reuses existing customer)
+     - All other statuses (ACTIVE/TRIALING/PAST_DUE/UNPAID/PAUSED) → Manage billing (portal, outline variant)
+   - Three sections (sections hidden if empty):
+     - **Personal plan** — `PersonalPlanCard` with subscribe or manage-billing CTA.
+     - **Enterprise plans** — one `EnterprisePlanCard` per owned enterprise.
+     - **Enterprise memberships** — `MembershipNoticeCard` (read-only, no action buttons) for non-owned memberships.
+   - `SubscriptionDetails` renders: plan badge + status badge, renewal/end date (hidden for canceled/expired), PAST_DUE warning, UNPAID warning, cancel-at-period-end warning, INCOMPLETE explanation.
+   - No Stripe IDs exposed in the UI.
+
+### Files changed
+
+| File | Status |
+|---|---|
+| `components/dashboard/billing-actions.tsx` | Created |
+| `app/(dashboard)/dashboard/billing/page.tsx` | Created |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; /dashboard/billing ƒ Dynamic (18 routes total)
+```
+
+### Unresolved issues
+
+1. Stripe price ID env vars (`STRIPE_CREATOR_PRICE_ID`, `STRIPE_ENTERPRISE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`) are still placeholders — checkout will return HTTP 500 until filled in from Stripe Dashboard.
+2. The billing portal requires a Stripe Billing Portal configuration to be set up in the Stripe Dashboard before it can be opened.
+3. No payment history view — `Payment` records exist in the DB but are not surfaced in any UI yet.
+4. `/dashboard/billing` shows personal plan as "No active subscription" for all new users (correct behaviour for a fresh account).
+
+### Recommended next milestone
+
+**Payment history** — add a collapsible or separate "Payment history" section to the billing page (or a sub-route `/dashboard/billing/history`) that fetches `payment.findMany({ where: { subscription: { userId } } })` and renders a table of invoices with amount, date, and status. The `Payment` model has `stripeInvoiceId` which could link to Stripe-hosted receipts.
+
+---
+
 ## Session: Stripe billing backend — 2026-06-13
 
 ### What was inspected
