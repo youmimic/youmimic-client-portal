@@ -1,54 +1,58 @@
 # HANDOFF.md
 
-## Session: Booking creation — 2026-06-13
+## Session: Booking management flow — 2026-06-13
 
 ### What was inspected
 
-- `prisma/schema.prisma` — Booking model confirmed: `id`, `userId`, `enterpriseId?`, `requestedDate` (DateTime), `timeStart` (String), `timeEnd` (String), `status` (default "pending"), `notes?`, `createdAt`
-- `app/(dashboard)/dashboard/bookings/page.tsx` — existing read-only bookings page from prior session
-- `lib/validations/auth.ts` — Zod v4 pattern using `.refine()`, `safeParse`, `flatten().fieldErrors`
-- `app/api/register/route.ts` — route handler pattern: parse body, safeParse, return fieldErrors on 422
-- `app/login/login-form.tsx` — client form pattern: `useForm` + `zodResolver`, `fetch` to API route, `router.refresh()` after success
-- `components/ui/button.tsx` — shadcn CLI overwrote this when adding Dialog; `asChild` support was removed; restored manually
+- `lib/validations/booking.ts` — existing `createBookingSchema`: date required + parseable, HH:MM regex, notes max 500, cross-field timeEnd > timeStart. No past-date guard.
+- `app/api/bookings/route.ts` — POST handler: auth check, safeParse, 422 + fieldErrors on failure, Prisma create, revalidatePath.
+- `components/dashboard/new-booking-dialog.tsx` — create dialog: useForm + zodResolver, fetch POST, router.refresh on success, inline fieldErrors on 422. No `min` attr on date input, no notes counter.
+- `app/(dashboard)/dashboard/bookings/page.tsx` — server component, reads bookings, renders BookingsTable, no edit/cancel actions.
 
 ### What changed
 
-1. **`components/ui/dialog.tsx`** (new, via `npx shadcn add dialog`) — Base UI-backed Dialog component
-2. **`components/ui/textarea.tsx`** (new, via `npx shadcn add textarea`) — Textarea component for notes field
-3. **`components/ui/button.tsx`** (updated) — shadcn CLI removed `asChild`/Slot support when it regenerated the file. Restored `asChild?: boolean` via `@radix-ui/react-slot`, kept new Base UI base and new variant/size tokens (the shadcn base-nova update). Fixes pre-existing typecheck failure in `app/login/page.tsx:56`.
-4. **`lib/validations/booking.ts`** (new) — Zod schema `createBookingSchema`: validates `requestedDate` (non-empty, parseable date), `timeStart`/`timeEnd` (HH:MM regex), `notes` (optional, max 500 chars). Cross-field refinement: `timeEnd > timeStart`.
-5. **`app/api/bookings/route.ts`** (new) — POST route handler. Requires auth session; returns 401 if unauthenticated. Validates body with `createBookingSchema`; returns 422 + `fieldErrors` on failure. Creates booking with `userId` from session. Calls `revalidatePath("/dashboard/bookings")`. Returns 201 + created booking.
-6. **`components/dashboard/new-booking-dialog.tsx`** (new) — Client component. Dialog trigger button in page header. Form: date picker, start/end time pickers (grid layout), optional notes textarea. Uses `useForm` + `zodResolver` (same pattern as `login-form.tsx`). On success: closes dialog, resets form, calls `router.refresh()`. On 422: maps `fieldErrors` back to individual form fields. On other errors: shows dismissable red banner. Mobile-safe: form grid collapses, dialog is full-width on mobile (`max-w-[calc(100%-2rem)]`).
-7. **`app/(dashboard)/dashboard/bookings/page.tsx`** (updated) — Added `NewBookingDialog` to page header. Title row is now `flex items-start justify-between` with the dialog trigger on the right.
+1. **`lib/validations/booking.ts`** — Added `notInPast` refinement to `requestedDate` (rejects dates before today's UTC date string). Exported `NOTES_MAX = 500` constant. Added `updateBookingSchema` (alias of the same base schema) and `UpdateBookingInput` type. The existing `createBookingSchema` and `CreateBookingInput` are unchanged in behaviour for callers.
+
+2. **`app/api/bookings/[id]/route.ts`** (new) — `PATCH` handler for field updates. Guards: 401 (no session), 404 (not found), 403 (not owner), 409 (status is `cancelled` or `completed`). Validates body with `updateBookingSchema` (422 + fieldErrors on failure). Updates `requestedDate`, `timeStart`, `timeEnd`, `notes`. Calls `revalidatePath("/dashboard/bookings")`. Returns updated booking.
+
+3. **`app/api/bookings/[id]/cancel/route.ts`** (new) — `POST` handler for cancellation. Same auth + ownership guards. Additional guards: 409 if already `cancelled` or `completed`. Sets `status = "cancelled"`, calls `revalidatePath`. Separate explicit endpoint — does not go through the PATCH handler.
+
+4. **`components/dashboard/new-booking-dialog.tsx`** — Added `min={todayISO()}` on the date input (HTML-level guard matching the new Zod refinement). Added live notes character counter (`useWatch` on the notes field, displayed as `{n}/{500}`, turns destructive when over limit).
+
+5. **`components/dashboard/booking-actions.tsx`** (new) — Client component `BookingActions`. Exports `BookingForActions` type (dates as strings for safe server→client prop passing). Renders nothing for `cancelled`/`completed` rows. For `pending`/`confirmed` rows: Edit icon button + Cancel icon button. Mounts two lazy dialogs:
+   - **`EditDialog`**: prefilled form (same fields as create, same validation), `PATCH /api/bookings/[id]`, maps 422 fieldErrors back to form fields, `router.refresh()` on success.
+   - **`CancelDialog`**: confirmation dialog, `POST /api/bookings/[id]/cancel`, `router.refresh()` on success.
+
+6. **`app/(dashboard)/dashboard/bookings/page.tsx`** — Added `toBookingForActions` helper to serialize `Date` fields before passing to client. Added `Actions` column (header is `sr-only`). Each row renders `<BookingActions booking={toBookingForActions(booking)} />`.
 
 ### Files changed
 
 | File | Status |
 |---|---|
-| `components/ui/dialog.tsx` | Created (shadcn CLI) |
-| `components/ui/textarea.tsx` | Created (shadcn CLI) |
-| `components/ui/button.tsx` | Updated — restored `asChild` support |
-| `lib/validations/booking.ts` | Created |
-| `app/api/bookings/route.ts` | Created |
-| `components/dashboard/new-booking-dialog.tsx` | Created |
-| `app/(dashboard)/dashboard/bookings/page.tsx` | Updated |
+| `lib/validations/booking.ts` | Updated — past-date guard, NOTES_MAX, updateBookingSchema |
+| `app/api/bookings/[id]/route.ts` | Created — PATCH update handler |
+| `app/api/bookings/[id]/cancel/route.ts` | Created — POST cancel handler |
+| `components/dashboard/new-booking-dialog.tsx` | Updated — min date attr, notes counter |
+| `components/dashboard/booking-actions.tsx` | Created — edit + cancel dialogs |
+| `app/(dashboard)/dashboard/bookings/page.tsx` | Updated — Actions column, toBookingForActions |
 
 ### Checks run
 
 ```
 npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
 npm run typecheck → clean (0 errors)
-npm run build     → clean; /api/bookings and /dashboard/bookings both ƒ Dynamic
+npm run build     → clean; /api/bookings/[id] and /api/bookings/[id]/cancel both ƒ Dynamic
 ```
 
 ### Unresolved issues
 
-1. **`app/(auth)/login/actions.ts`** — unused server action (`loginUser`). Still dead code; low priority.
-2. **`app/page.tsx`** — still the boilerplate Next.js starter. Should be replaced with a landing page or `/dashboard` redirect.
+1. **`app/(auth)/login/actions.ts`** — unused server action (`loginUser`). Still dead code.
+2. **`app/page.tsx`** — boilerplate Next.js starter. Should be replaced with a landing page or `/dashboard` redirect.
 3. **Dashboard stub nav items** — Avatars, Billing, Settings still 404.
 4. **`callbackUrl` param on login redirect** — proxy appends `callbackUrl` but login form ignores it.
-5. **No enterprise selector in booking form** — `enterpriseId` is optional in the schema; the form omits it. If users belong to enterprises, this can be added as a `<select>` populated from a server-side fetch.
+5. **No enterprise selector in booking form** — `enterpriseId` omitted. Can be added if enterprise membership becomes relevant.
+6. **Past-date guard is UTC-based** — `notInPast` compares `requestedDate >= new Date().toISOString().split("T")[0]`. Users in UTC− timezones may be blocked from booking "today" during early morning hours. A future improvement would accept a client timezone header and compute today's date in the user's local zone.
 
 ### Recommended next milestone
 
-**Avatars page** (`app/(dashboard)/dashboard/avatars/page.tsx`) — same pattern as bookings: server component, `prisma.avatar.findMany({ where: { userId } })`, card/table with status badges, empty state. No creation form needed initially (avatars are provisioned by the platform, not self-serve).
+**Avatars page** (`app/(dashboard)/dashboard/avatars/page.tsx`) — server component, `prisma.avatar.findMany({ where: { userId } })`, card/table with status badges and `previewUrl` thumbnail if present, empty state. Avatars are platform-provisioned so no creation form needed initially.

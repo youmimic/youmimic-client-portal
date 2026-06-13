@@ -9,6 +9,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { NewBookingDialog } from "@/components/dashboard/new-booking-dialog";
+import {
+  BookingActions,
+  type BookingForActions,
+} from "@/components/dashboard/booking-actions";
 
 export const metadata = {
   title: "Bookings — YouMimic Portal",
@@ -54,6 +58,17 @@ function formatDate(date: Date): string {
   }).format(new Date(date));
 }
 
+function toBookingForActions(booking: BookingRow): BookingForActions {
+  return {
+    id: booking.id,
+    requestedDate: booking.requestedDate.toISOString().split("T")[0],
+    timeStart: booking.timeStart,
+    timeEnd: booking.timeEnd,
+    status: booking.status,
+    notes: booking.notes,
+  };
+}
+
 function BookingsTable({ bookings }: { bookings: BookingRow[] }) {
   return (
     <Card>
@@ -82,6 +97,9 @@ function BookingsTable({ bookings }: { bookings: BookingRow[] }) {
                 <th className="hidden px-4 py-3 font-medium text-muted-foreground md:table-cell">
                   Notes
                 </th>
+                <th className="px-4 py-3 font-medium text-muted-foreground">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -104,6 +122,9 @@ function BookingsTable({ bookings }: { bookings: BookingRow[] }) {
                   </td>
                   <td className="hidden max-w-xs truncate px-4 py-3 text-muted-foreground md:table-cell">
                     {booking.notes ?? "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <BookingActions booking={toBookingForActions(booking)} />
                   </td>
                 </tr>
               ))}
