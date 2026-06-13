@@ -219,6 +219,8 @@ function ProductMockup() {
             style={{
               backgroundColor: "rgba(25,24,24,0.07)",
               border: "1px solid rgba(25,24,24,0.09)",
+              backgroundImage: "url('/hero-bg.jpg')",
+              backgroundSize: "cover",
             }}
           >
             <div className="flex aspect-video items-center justify-center">
