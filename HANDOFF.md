@@ -1,5 +1,190 @@
 # HANDOFF.md
 
+## Session: Hero background + palette color system — 2026-06-13
+
+### What was inspected
+
+- `app/globals.css` — previous okclh-neutral design token set; fully replaced with YouMimic palette.
+- `app/(marketing)/page.tsx` — previous monochrome landing page; all 8 sections rebuilt with palette tokens.
+- `components/ui/button.tsx` — confirmed `style` prop passthrough works for inline color overrides.
+- `public/` — no hero image file exists. Background image CSS is in place; `hero-bg.jpg` activates automatically once dropped in `public/`.
+
+### Color system redesign
+
+New `globals.css` maps the YouMimic brand palette to semantic CSS variables:
+
+| Palette hex | oklch approx | Semantic role (light) | Semantic role (dark) |
+|---|---|---|---|
+| `#ECEAE9` | `oklch(0.934 0.005 78)` | `--background` | `--foreground`, `--primary-foreground` |
+| `#191818` | `oklch(0.130 0.003 30)` | `--foreground` | `--background` |
+| `#604B33` | `oklch(0.370 0.075 60)` | `--primary` (warm brown) | `--accent` |
+| `#60918C` | `oklch(0.590 0.068 178)` | `--accent` (dusty teal) | `--primary` |
+| `#9AB5C7` | `oklch(0.868 0.028 210)` | `--secondary` (steel blue derived) | muted palette |
+| `#ACC8CE` | `oklch(0.892 0.022 205)` | `--muted` (light teal surface) | — |
+
+**Light mode ring/ring**: teal `--accent`; **dark mode primary**: teal (teal reads warmer on charcoal than brown). Sidebar vars intentionally unchanged — dashboard has its own design language.
+
+### Hero background implementation
+
+The hero section uses a 3-layer CSS approach requiring no JavaScript and no image dependency:
+
+1. **Layer 1** — `background-color: #191818` (charcoal fallback) + `background-image: url('/hero-bg.jpg')` (activates automatically when file exists in `/public/`)
+2. **Layer 2** — directional gradient: `from-[#191818]/95 via-[#191818]/78 to-[#191818]/42` (left-opaque so text is always readable)
+3. **Layer 3** — radial ambient palette tints: warm brown at bottom-left, teal at top-right
+
+The hero is always dark (`#191818` base) regardless of the theme setting, so ProductMockup uses explicit palette hex values (`#ECEAE9` cream surface) rather than CSS tokens.
+
+### ProductMockup update
+
+`ProductMockup` is now fully hardcoded to light cream palette colors so it reads as a floating bright panel against the always-dark hero:
+- Panel background: `#ECEAE9`
+- Status/action accents: `#60918C` teal
+- Typography: `#191818` near-black
+- Language chips: `rgba(154,181,199,0.25)` steel-blue tint
+- Generate button: `#604B33` brown / `#ECEAE9` cream (matches hero CTA)
+
+### Section palette mapping
+
+| Section | Before | After |
+|---|---|---|
+| Stats numbers | `text-foreground` / `font-bold` | `text-primary` (brown in light, teal in dark) |
+| Feature icon containers | `bg-foreground/10`, icon `text-foreground` | `bg-accent/10 border-accent/20`, icon `text-accent` |
+| Step badges | neutral `bg-muted` | `bg-primary text-primary-foreground` (brown/cream) |
+| Avatar initials circle | neutral | `bg-accent/15 text-accent` (teal) |
+| Avatar Active dot | `emerald-500` | `bg-accent` (teal token) |
+| Pricing highlight ring | `ring-foreground` | `ring-primary` (brown in light, teal in dark) |
+| Final CTA | `bg-foreground text-background` | hardcoded `#191818` bg + ambient palette tints |
+| Final CTA primary button | default variant | hardcoded `#604B33` bg / `#ECEAE9` text |
+
+### Hero placeholder asset
+
+`/public/hero-bg.jpg` does not exist yet. The hero renders perfectly without it (dark charcoal + radial tints). Drop any high-quality atmospheric photo (people in professional settings, office environments, video studio backdrop) into `public/hero-bg.jpg` — the gradient overlay will darken and blend it automatically. Recommended: 1920×1080 minimum, dark/moody tone preferred.
+
+### What changed
+
+| File | Status |
+|---|---|
+| `app/globals.css` | Updated — full palette color token redesign, `:root` + `.dark` blocks rewritten |
+| `app/(marketing)/page.tsx` | Updated — hero 3-layer CSS background, ProductMockup explicit palette colors, all section token mapping |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 20 routes; / ƒ Dynamic (unchanged, expected)
+```
+
+### Unresolved issues
+
+1. `/public/hero-bg.jpg` placeholder — add a real photo to get the hero background image effect.
+2. Hero CTA buttons use inline `style` prop overrides — this bypasses Tailwind's purge-safe class system but is intentional for hardcoded palette hex on the always-dark hero. If the hero palette changes, update the inline styles in the hero and final CTA sections.
+3. Pricing tier prices are still placeholder text. Replace when pricing is finalized.
+
+### Recommended next milestone
+
+**`/contact` or demo booking route** — a simple form page at `/contact` or `/demo` within `app/(marketing)/` that collects name, email, company, and message, then calls the existing Resend mailer. Replace both hero secondary CTA and final CTA with `/contact` for enterprise-intent visitors.
+
+---
+
+## Session: Shared marketing shell + auth-aware header + visual upgrade — 2026-06-13
+
+### What was inspected
+
+- `app/page.tsx` — previous single-file landing page with inline header/footer, no auth awareness.
+- `app/layout.tsx` — root layout; only ThemeProvider + fonts. No shared chrome.
+- `app/(dashboard)/layout.tsx` — DashboardShell; unaffected.
+- `components/ui/theme-toggle.tsx` — existing `"use client"` ThemeToggle using `next-themes`; reused as-is.
+- `components/auth/sign-out-button.tsx` — dashboard sign-out; dashboard already has this; marketing header does not duplicate it.
+- `app/login/page.tsx` — already has `auth()` call and "already logged in" state; kept unchanged.
+- `app/signup/page.tsx` — no auth check needed; kept unchanged.
+
+### Architecture: `(marketing)` route group
+
+Created `app/(marketing)/` route group:
+
+| Route | Layout | Result |
+|---|---|---|
+| `/` | `app/(marketing)/layout.tsx` → `MarketingHeader` + `MarketingFooter` | `ƒ Dynamic` (auth check) |
+| `/login` | root layout only | `ƒ Dynamic` (unchanged) |
+| `/signup` | root layout only | `○ Static` (unchanged) |
+| `/dashboard/*` | `app/(dashboard)/layout.tsx` → `DashboardShell` | `ƒ Dynamic` (unchanged) |
+
+`app/page.tsx` was deleted — the route is now handled by `app/(marketing)/page.tsx`.
+
+### Auth-aware header
+
+`MarketingHeader` is an `async` server component that calls `auth()`:
+- **No session** → `ThemeToggle` | Sign in (ghost) | Get started (default)
+- **Session exists** → `ThemeToggle` | Dashboard (default)
+
+Sign-out is not exposed in the marketing header; users sign out from within the dashboard sidebar (already implemented). This avoids an unnecessary client component dependency in the marketing shell.
+
+### Theme toggle
+
+- `ThemeToggle` from `components/ui/theme-toggle.tsx` is reused unchanged.
+- `ThemeProvider` in `app/layout.tsx` already configured with `defaultTheme="system"` and `enableSystem`.
+- `suppressHydrationWarning` on `<html>` prevents flicker; `next-themes` injects its class-setting script before React hydrates.
+- Toggle is always visible in the header regardless of auth state.
+
+### Landing page visual improvements
+
+`app/(marketing)/page.tsx` now has 8 sections vs. the previous 6:
+
+| Section | What changed |
+|---|---|
+| **Hero** | Split two-column layout: copy left, `ProductMockup` right (desktop only). Mockup is a div-only product UI mock — window chrome, video preview area, status + language panel, script lines, action bar. No images. |
+| **Stats strip** | NEW — 4 stats bar (`3 min`, `12+`, `500+`, `99.9%`) on `bg-muted/30`. |
+| **Features** | Upgraded from 4-column icon cards to 2×2 horizontal `flex` cards with larger icons (size-10) and bolder treatment. |
+| **How it works** | Upgraded from plain numbered text to 3 bordered `bg-card` panels, each with step number badge + lucide icon in top-right. Icons: `Video`, `Cpu`, `Share2`. |
+| **Avatar showcase** | NEW — 3 example avatar cards showing deployed avatars: initial, name, role, `Active`/`Processing` status dot, language chip row. |
+| **Use cases** | Same content; icons upsized (size-10), font-weight boosted to `font-semibold`. |
+| **Pricing** | Unchanged — already clean. |
+| **Final CTA** | Unchanged — dark inverted section. |
+
+`ProductMockup` is a private function component inside the page file — it is desktop-only (`hidden lg:flex`).
+
+### Status dot colors
+
+Two semantic colors added for avatar status dots only (`emerald-500` for Active, `amber-400` for Processing). These are status-semantic and isolated to the showcase section.
+
+### What changed
+
+| File | Status |
+|---|---|
+| `app/page.tsx` | **Deleted** — route moved to route group |
+| `app/(marketing)/layout.tsx` | **Created** — `MarketingHeader` + `main.flex-1` wrapper + `MarketingFooter` |
+| `app/(marketing)/page.tsx` | **Created** — full enhanced landing page (8 sections) |
+| `components/marketing/marketing-header.tsx` | **Created** — async server component, auth-aware, ThemeToggle |
+| `components/marketing/marketing-footer.tsx` | **Created** — static server component |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean (after clearing stale .next/types cache from old app/page.tsx)
+npm run build     → clean; / ƒ Dynamic; all 19 routes intact; dashboard/auth unchanged
+```
+
+### Route-group caveats
+
+- `/login` and `/signup` are intentionally NOT in the `(marketing)` group — they have their own full-screen centered layout and don't want marketing chrome.
+- If a future marketing page (e.g., `/pricing`, `/about`) is added, place it in `app/(marketing)/` and it will automatically inherit the header and footer.
+- The `/` route changed from `○ Static` to `ƒ Dynamic` because `auth()` in `MarketingHeader` reads request cookies. This is expected behavior.
+
+### Unresolved issues
+
+1. Pricing tier prices are still placeholders. Replace when actual pricing is confirmed.
+2. No `/contact` or `/demo` route — final CTA still routes to `/signup`.
+3. `ProductMockup` and avatar showcase use illustrative/fictional data — replace when real product screenshots or brand guidelines are available.
+4. Status dot colors (`emerald-500`, `amber-400`) are not in the design token system — acceptable for semantic status indicators, but could be added as CSS variables if the design system is formalized.
+
+### Recommended next milestone
+
+**`/contact` or demo booking route** — a simple form page at `/contact` or `/demo` that collects name, email, company, and a message/use-case, then uses the existing Resend mailer (`lib/mailer.ts`) to notify the team. Link both the hero secondary CTA and the final CTA section to this page instead of `/signup` for enterprise-intent visitors.
+
+---
+
 ## Session: Landing page — production marketing homepage — 2026-06-13
 
 ### What was inspected
