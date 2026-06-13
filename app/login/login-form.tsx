@@ -60,7 +60,7 @@ export default function LoginForm() {
     });
 
     if (!result || result.error) {
-      const code = result?.error ?? "";
+      const code = result?.code ?? "";
 
       if (code.includes("email_not_verified")) {
         setFormError("Please verify your email before logging in.");

@@ -54,15 +54,7 @@ export default async function LoginPage() {
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild className="w-full">
-                <Link
-                  href={
-                    process.env.NEXT_PUBLIC_APP_URL +
-                    "/" +
-                    process.env.DASHBOARD_PATH
-                  }
-                >
-                  Go to dashboard
-                </Link>
+                <Link href="/dashboard">Go to dashboard</Link>
               </Button>
 
               <SignOutButton />
