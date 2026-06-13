@@ -1,5 +1,21 @@
 # HANDOFF.md
 
+## Session: callbackUrl wiring — 2026-06-13
+
+### What changed
+
+- **`app/login/login-form.tsx`** — reads `callbackUrl` from `useSearchParams`. Sanitised: only accepted if it starts with `/` and not `//` (prevents open-redirect). Used as post-login destination; falls back to `/dashboard` when absent or invalid.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean
+```
+
+---
+
 ## Session: Booking management flow — 2026-06-13
 
 ### What was inspected
@@ -49,7 +65,7 @@ npm run build     → clean; /api/bookings/[id] and /api/bookings/[id]/cancel bo
 1. **`app/(auth)/login/actions.ts`** — unused server action (`loginUser`). Still dead code.
 2. **`app/page.tsx`** — boilerplate Next.js starter. Should be replaced with a landing page or `/dashboard` redirect.
 3. **Dashboard stub nav items** — Avatars, Billing, Settings still 404.
-4. **`callbackUrl` param on login redirect** — proxy appends `callbackUrl` but login form ignores it.
+4. ~~**`callbackUrl` param on login redirect**~~ — resolved.
 5. **No enterprise selector in booking form** — `enterpriseId` omitted. Can be added if enterprise membership becomes relevant.
 6. **Past-date guard is UTC-based** — `notInPast` compares `requestedDate >= new Date().toISOString().split("T")[0]`. Users in UTC− timezones may be blocked from booking "today" during early morning hours. A future improvement would accept a client timezone header and compute today's date in the user's local zone.
 

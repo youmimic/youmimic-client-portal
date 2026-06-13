@@ -48,6 +48,11 @@ export default function LoginForm() {
 
   const verified = searchParams.get("verified");
   const registered = searchParams.get("registered");
+  const rawCallbackUrl = searchParams.get("callbackUrl") ?? "";
+  const callbackUrl =
+    rawCallbackUrl.startsWith("/") && !rawCallbackUrl.startsWith("//")
+      ? rawCallbackUrl
+      : "/dashboard";
 
   async function onSubmit(values: LoginInput) {
     setFormError("");
@@ -71,7 +76,7 @@ export default function LoginForm() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(callbackUrl);
     router.refresh();
   }
 
