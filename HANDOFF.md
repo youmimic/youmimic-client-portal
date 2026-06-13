@@ -1,5 +1,76 @@
 # HANDOFF.md
 
+## Session: Settings page — 2026-06-13
+
+### What was inspected
+
+- `auth.ts` — JWT strategy; `authorize` returns `id`, `name`, `email`, `isEmailVerified`, `roles`. JWT is not auto-refreshed, so page does a fresh Prisma fetch for accurate `emailVerified`, `createdAt`, and role names.
+- `next-auth.d.ts` — `session.user` shape: `id`, `name`, `email`, `roles: string[]`, `isEmailVerified: boolean`.
+- `prisma/schema.prisma` — User model: `name`, `email`, `emailVerified`, `createdAt`; roles via `userRoles → role.name`. `passwordHash` never fetched or displayed.
+
+### What changed
+
+- **`app/(dashboard)/dashboard/settings/page.tsx`** (new) — Settings page at `/dashboard/settings`.
+  - Server component; calls `auth()`, redirects to `/login` if no session or if Prisma returns no user.
+  - Fresh `prisma.user.findUnique({ select: { name, email, emailVerified, createdAt, userRoles → role.name } })` — bypasses potentially stale JWT values.
+  - **Read-only** — editing requires PATCH routes, JWT re-issuance (name), reverification email (email), or multi-step password flow; each is its own milestone.
+  - Two `Card` sections:
+    - **Account**: name, email, email verification badge (CheckCircle2 green / ShieldAlert yellow), member-since date.
+    - **Access**: role chips (`flex-wrap` row of muted badges), or "No roles assigned" fallback.
+  - `FieldRow` component: `dl` / `dt` / `dd` definition-list, `grid-cols-1` on mobile → `grid-cols-[10rem_1fr]` on `md+`.
+
+### Files changed
+
+| File | Status |
+|---|---|
+| `app/(dashboard)/dashboard/settings/page.tsx` | Created |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; /dashboard/settings ƒ Dynamic
+```
+
+---
+
+## Session: Avatars page — 2026-06-13
+
+### What was inspected
+
+- `prisma/schema.prisma` — Avatar model: `id`, `userId`, `enterpriseId?`, `heygenAvatarId?`, `name`, `status` (default `"pending"`), `previewUrl?`, `videoUrl?`, `metadata?` (Json), `createdAt`
+- `app/(dashboard)/dashboard/bookings/page.tsx` — server component pattern to replicate
+- `components/dashboard/app-sidebar.tsx` — confirmed sidebar already links `/dashboard/avatars`
+- `next.config.ts` — no `images.remotePatterns` configured; used `<Image unoptimized>` to avoid requiring domain config
+
+### What changed
+
+- **`app/(dashboard)/dashboard/avatars/page.tsx`** (new) — Avatars page at `/dashboard/avatars`.
+  - Server component; calls `auth()`, redirects to `/login` if no session.
+  - Fetches `prisma.avatar.findMany({ where: { userId }, include: { enterprise }, orderBy: { createdAt: "desc" } })`.
+  - **Card grid** layout (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`) — chosen over table because `previewUrl` is a visual thumbnail, most fields are optional (table would have many `—` cells), and cards collapse naturally on mobile.
+  - Each card: thumbnail (aspect-video `<Image fill unoptimized>` or placeholder icon), avatar name + status badge, enterprise name if present, `createdAt` date, truncated `heygenAvatarId` if present, `videoUrl` link if present.
+  - Empty state: `UserCircle2` icon + "No avatars yet" with provisioning note.
+  - Status badge colours: `pending` → yellow, `processing`/`training` → blue, `ready`/`active` → green, `failed`/`error` → red, unknown → muted.
+  - No creation form — avatars are platform-provisioned.
+
+### Files changed
+
+| File | Status |
+|---|---|
+| `app/(dashboard)/dashboard/avatars/page.tsx` | Created |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; /dashboard/avatars ƒ Dynamic
+```
+
+---
+
 ## Session: callbackUrl wiring — 2026-06-13
 
 ### What changed
@@ -64,7 +135,7 @@ npm run build     → clean; /api/bookings/[id] and /api/bookings/[id]/cancel bo
 
 1. **`app/(auth)/login/actions.ts`** — unused server action (`loginUser`). Still dead code.
 2. **`app/page.tsx`** — boilerplate Next.js starter. Should be replaced with a landing page or `/dashboard` redirect.
-3. **Dashboard stub nav items** — Avatars, Billing, Settings still 404.
+3. **Dashboard stub nav items** — ~~Avatars~~ live, ~~Settings~~ live. Billing still 404.
 4. ~~**`callbackUrl` param on login redirect**~~ — resolved.
 5. **No enterprise selector in booking form** — `enterpriseId` omitted. Can be added if enterprise membership becomes relevant.
 6. **Past-date guard is UTC-based** — `notInPast` compares `requestedDate >= new Date().toISOString().split("T")[0]`. Users in UTC− timezones may be blocked from booking "today" during early morning hours. A future improvement would accept a client timezone header and compute today's date in the user's local zone.
