@@ -1,5 +1,55 @@
 # HANDOFF.md
 
+## Session: Landing page — production marketing homepage — 2026-06-13
+
+### What was inspected
+
+- `app/page.tsx` — confirmed default Next.js starter (Next.js logo, Vercel/Next.js links, boilerplate copy). No business content.
+- `components/ui/button.tsx` — base-ui + Slot-based Button, `asChild` available, sizes up to `lg` (h-9); added `h-11` custom height overrides for hero CTAs.
+- `components/ui/card.tsx` — `overflow-hidden` on root card; avoided absolute-positioned children; "Most popular" badge placed inside `CardHeader` instead.
+- `app/layout.tsx` — Geist font vars, ThemeProvider wrapping; landing page shares the root layout.
+- `app/globals.css` — oklch neutral palette, Tailwind v4. No hue-based accent tokens in the design system; page stays within monochrome + foreground/background inversion for the final CTA section.
+
+### What changed
+
+- **`app/page.tsx`** — replaced default starter with a full marketing landing page:
+  - **Sticky nav**: YouMimic wordmark (left) + Sign in (ghost) + Get started (default) CTAs (right).
+  - **Hero**: bold headline "Say it once. Scale it everywhere.", supporting copy, primary CTA → `/signup`, secondary CTA → `/login`.
+  - **Value propositions**: 4-column grid of icon cards — Immediate deployment, Production at scale, Multilingual by default, Enterprise governance.
+  - **How it works**: 3 numbered steps (01–03) — Record → Avatar built → Generate and deploy.
+  - **Use cases**: 2-column icon+text list — Employee training, Customer communication, Marketing, Internal updates.
+  - **Pricing preview**: 3 tiers (Creator / Enterprise / Custom), Enterprise highlighted with `ring-2 ring-foreground` and "Most popular" badge. All CTAs → `/signup`.
+  - **Final CTA**: dark inverted section (`bg-foreground text-background`) with Create account and Sign in CTAs.
+  - **Footer**: copyright + Sign in / Get started links.
+  - No `"use client"` — pure server component; builds as `○ (Static)`.
+
+### Files changed
+
+| File             | Status                                   |
+| ---------------- | ---------------------------------------- |
+| `app/page.tsx`   | Replaced — full marketing landing page   |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; / ○ (Static) confirmed; all 19 routes intact
+```
+
+### Unresolved issues
+
+1. Nav bar does not reflect authentication state — always shows Sign in + Get started. A follow-up could add a server-side session check (`auth()`) to swap "Sign in" for "Go to dashboard" when a user is already signed in.
+2. Pricing tier prices are currently placeholders ("Contact us", "Custom pricing", "Talk to us"). Replace with actual pricing once finalized.
+3. No `/contact` or `/demo` route — the final CTA section routes to `/signup` as the conversion destination. A dedicated demo/contact flow would improve enterprise conversion.
+4. `© 2026` hardcoded — should be updated annually or replaced with a dynamic expression once there is a defined revalidation strategy for the static page.
+
+### Recommended next milestone
+
+**Auth-aware nav** — make the sticky nav server-side aware: import `auth()`, if session exists replace "Sign in / Get started" with "Go to dashboard" link. This requires making `app/page.tsx` `async` but it remains a server component. No layout changes needed.
+
+---
+
 ## Session: Billing page debug — cancelAtPeriodEnd stale display — 2026-06-13
 
 ### What was inspected
@@ -27,11 +77,11 @@ If `STRIPE_WEBHOOK_SECRET` is still the placeholder `whsec_...`, the webhook han
 
 ### What changed
 
-| File | Change |
-|---|---|
+| File                                         | Change                                                                                                                                                                                                              |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `app/(dashboard)/dashboard/billing/page.tsx` | Added `force-dynamic`; `personalSub` and enterprise sub queries now `orderBy: { updatedAt: "desc" }`; wording "Ends on" → "Expires on"; cancellation warning now checks `cancelAtPeriodEnd` instead of `canceledAt` |
-| `app/api/stripe/customer-portal/route.ts` | Both `findFirst` calls now `orderBy: { updatedAt: "desc" }`; `return_url` changed from `/dashboard` to `/dashboard/billing` |
-| `app/api/stripe/webhook/route.ts` | `handleInvoicePaid` `findFirst` now `orderBy: { updatedAt: "desc" }` |
+| `app/api/stripe/customer-portal/route.ts`    | Both `findFirst` calls now `orderBy: { updatedAt: "desc" }`; `return_url` changed from `/dashboard` to `/dashboard/billing`                                                                                         |
+| `app/api/stripe/webhook/route.ts`            | `handleInvoicePaid` `findFirst` now `orderBy: { updatedAt: "desc" }`                                                                                                                                                |
 
 ### Checks run
 
@@ -90,9 +140,9 @@ npm run build     → clean; /dashboard/billing ƒ Dynamic (confirmed)
 
 ### Files changed
 
-| File | Status |
-|---|---|
-| `components/dashboard/billing-actions.tsx` | Created |
+| File                                         | Status  |
+| -------------------------------------------- | ------- |
+| `components/dashboard/billing-actions.tsx`   | Created |
 | `app/(dashboard)/dashboard/billing/page.tsx` | Created |
 
 ### Checks run
@@ -161,28 +211,29 @@ npm run build     → clean; /dashboard/billing ƒ Dynamic (18 routes total)
 
 ### Files changed
 
-| File | Status |
-|---|---|
-| `lib/stripe.ts` | Created |
-| `app/api/stripe/checkout-session/route.ts` | Created |
-| `app/api/stripe/customer-portal/route.ts` | Created |
-| `app/api/stripe/webhook/route.ts` | Created |
-| `.env` | Updated — `STRIPE_CREATOR_PRICE_ID` added, stale stubs removed |
-| `app/generated/prisma/*` | Regenerated via `prisma generate` |
+| File                                       | Status                                                         |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| `lib/stripe.ts`                            | Created                                                        |
+| `app/api/stripe/checkout-session/route.ts` | Created                                                        |
+| `app/api/stripe/customer-portal/route.ts`  | Created                                                        |
+| `app/api/stripe/webhook/route.ts`          | Created                                                        |
+| `.env`                                     | Updated — `STRIPE_CREATOR_PRICE_ID` added, stale stubs removed |
+| `app/generated/prisma/*`                   | Regenerated via `prisma generate`                              |
 
 ### Required environment variables
 
-| Variable | Purpose | Source |
-|---|---|---|
-| `STRIPE_SECRET_KEY` | Stripe API key | Stripe Dashboard → Developers → API keys |
-| `STRIPE_WEBHOOK_SECRET` | Webhook signature secret | `stripe listen --forward-to localhost:3000/api/stripe/webhook` (local) or Stripe Dashboard (prod) |
-| `STRIPE_CREATOR_PRICE_ID` | Price ID for the CREATOR plan | Stripe Dashboard → Products |
-| `STRIPE_ENTERPRISE_PRICE_ID` | Price ID for the ENTERPRISE plan | Stripe Dashboard → Products |
-| `NEXT_PUBLIC_APP_URL` | Base URL for checkout redirect URLs | Already set |
+| Variable                     | Purpose                             | Source                                                                                            |
+| ---------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `STRIPE_SECRET_KEY`          | Stripe API key                      | Stripe Dashboard → Developers → API keys                                                          |
+| `STRIPE_WEBHOOK_SECRET`      | Webhook signature secret            | `stripe listen --forward-to localhost:3000/api/stripe/webhook` (local) or Stripe Dashboard (prod) |
+| `STRIPE_CREATOR_PRICE_ID`    | Price ID for the CREATOR plan       | Stripe Dashboard → Products                                                                       |
+| `STRIPE_ENTERPRISE_PRICE_ID` | Price ID for the ENTERPRISE plan    | Stripe Dashboard → Products                                                                       |
+| `NEXT_PUBLIC_APP_URL`        | Base URL for checkout redirect URLs | Already set                                                                                       |
 
 ### Test steps
 
 1. **Webhook local testing**:
+
    ```bash
    stripe login
    stripe listen --forward-to localhost:3000/api/stripe/webhook
@@ -190,6 +241,7 @@ npm run build     → clean; /dashboard/billing ƒ Dynamic (18 routes total)
    ```
 
 2. **Creator checkout** (authenticated as any user):
+
    ```bash
    curl -X POST http://localhost:3000/api/stripe/checkout-session \
      -H "Cookie: <session-cookie>" \
@@ -199,6 +251,7 @@ npm run build     → clean; /dashboard/billing ƒ Dynamic (18 routes total)
    ```
 
 3. **Enterprise checkout** (authenticated as enterprise owner):
+
    ```bash
    curl -X POST http://localhost:3000/api/stripe/checkout-session \
      -H "Cookie: <session-cookie>" \
@@ -261,8 +314,8 @@ npm run build     → clean; /api/stripe/checkout-session /api/stripe/customer-p
 
 ### Files changed
 
-| File | Status |
-|---|---|
+| File                                          | Status  |
+| --------------------------------------------- | ------- |
 | `app/(dashboard)/dashboard/settings/page.tsx` | Created |
 
 ### Checks run
@@ -297,8 +350,8 @@ npm run build     → clean; /dashboard/settings ƒ Dynamic
 
 ### Files changed
 
-| File | Status |
-|---|---|
+| File                                         | Status  |
+| -------------------------------------------- | ------- |
 | `app/(dashboard)/dashboard/avatars/page.tsx` | Created |
 
 ### Checks run
@@ -354,14 +407,14 @@ npm run build     → clean
 
 ### Files changed
 
-| File | Status |
-|---|---|
-| `lib/validations/booking.ts` | Updated — past-date guard, NOTES_MAX, updateBookingSchema |
-| `app/api/bookings/[id]/route.ts` | Created — PATCH update handler |
-| `app/api/bookings/[id]/cancel/route.ts` | Created — POST cancel handler |
-| `components/dashboard/new-booking-dialog.tsx` | Updated — min date attr, notes counter |
-| `components/dashboard/booking-actions.tsx` | Created — edit + cancel dialogs |
-| `app/(dashboard)/dashboard/bookings/page.tsx` | Updated — Actions column, toBookingForActions |
+| File                                          | Status                                                    |
+| --------------------------------------------- | --------------------------------------------------------- |
+| `lib/validations/booking.ts`                  | Updated — past-date guard, NOTES_MAX, updateBookingSchema |
+| `app/api/bookings/[id]/route.ts`              | Created — PATCH update handler                            |
+| `app/api/bookings/[id]/cancel/route.ts`       | Created — POST cancel handler                             |
+| `components/dashboard/new-booking-dialog.tsx` | Updated — min date attr, notes counter                    |
+| `components/dashboard/booking-actions.tsx`    | Created — edit + cancel dialogs                           |
+| `app/(dashboard)/dashboard/bookings/page.tsx` | Updated — Actions column, toBookingForActions             |
 
 ### Checks run
 
