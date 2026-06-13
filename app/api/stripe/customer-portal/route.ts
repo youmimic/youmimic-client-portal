@@ -47,12 +47,14 @@ export async function POST(req: Request) {
 
       const sub = await prisma.subscription.findFirst({
         where: { enterpriseId, ownerType: "ENTERPRISE" },
+        orderBy: { updatedAt: "desc" },
         select: { stripeCustomerId: true },
       });
       stripeCustomerId = sub?.stripeCustomerId ?? null;
     } else {
       const sub = await prisma.subscription.findFirst({
         where: { userId: session.user.id, ownerType: "USER" },
+        orderBy: { updatedAt: "desc" },
         select: { stripeCustomerId: true },
       });
       stripeCustomerId = sub?.stripeCustomerId ?? null;
@@ -69,7 +71,7 @@ export async function POST(req: Request) {
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: `${appUrl}/dashboard`,
+      return_url: `${appUrl}/dashboard/billing`,
     });
 
     return NextResponse.json({ url: portalSession.url });

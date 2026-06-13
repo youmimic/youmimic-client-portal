@@ -1,5 +1,58 @@
 # HANDOFF.md
 
+## Session: Billing page debug — cancelAtPeriodEnd stale display — 2026-06-13
+
+### What was inspected
+
+- `app/(dashboard)/dashboard/billing/page.tsx` — full Prisma queries, `SubscriptionDetails` wording logic, page caching configuration.
+- `app/api/stripe/webhook/route.ts` — `handleSubscriptionUpsert`: confirmed `cancelAtPeriodEnd: sub.cancel_at_period_end` is written correctly; `handleInvoicePaid`: unordered `findFirst`.
+- `app/api/stripe/customer-portal/route.ts` — `return_url` was pointing to `/dashboard` (not `/dashboard/billing`); two unordered `findFirst` calls.
+- `prisma/schema.prisma` — `Subscription.stripeCustomerId` is `@unique`, but a user can have multiple rows if they re-subscribe after cancellation (new Stripe customer → new row). `updatedAt` field exists via `@updatedAt`.
+
+### Root causes identified
+
+1. **`findFirst` without `orderBy`** — `personalSub`, both portal lookups, and invoice-paid lookup all used `findFirst` with no ordering. With multiple subscription rows per owner (possible after cancel+re-subscribe), Postgres returns an arbitrary row, which could be an older CANCELED row with `cancelAtPeriodEnd=false`. Fixed with `orderBy: { updatedAt: "desc" }` on all four call sites.
+
+2. **Wrong `return_url`** — Stripe Portal returned users to `/dashboard`, not `/dashboard/billing`, so they never saw the updated billing page after a portal action. Fixed to `/dashboard/billing`.
+
+3. **Wording mismatch** — `cancelAtPeriodEnd=true` rendered "Ends on" instead of the required "Expires on". Fixed.
+
+4. **Warning used `canceledAt` instead of `cancelAtPeriodEnd`** — Stripe only sets `canceled_at` when the subscription is actually canceled (not when cancel-at-period-end is first set), so the "Scheduled to cancel" banner never appeared for portal-initiated cancellations. Switched condition to `cancelAtPeriodEnd`.
+
+5. **No `force-dynamic`** — The page was already dynamic (uses `cookies()` via `auth()`), but `export const dynamic = "force-dynamic"` was not declared. Added as an explicit safeguard against any future Full Route Cache regression.
+
+### Note on `STRIPE_WEBHOOK_SECRET`
+
+If `STRIPE_WEBHOOK_SECRET` is still the placeholder `whsec_...`, the webhook handler returns 500 and `cancelAtPeriodEnd` will never be updated in the DB regardless of the above fixes. Fill in the real secret from `stripe listen` (local) or Stripe Dashboard (prod).
+
+### What changed
+
+| File | Change |
+|---|---|
+| `app/(dashboard)/dashboard/billing/page.tsx` | Added `force-dynamic`; `personalSub` and enterprise sub queries now `orderBy: { updatedAt: "desc" }`; wording "Ends on" → "Expires on"; cancellation warning now checks `cancelAtPeriodEnd` instead of `canceledAt` |
+| `app/api/stripe/customer-portal/route.ts` | Both `findFirst` calls now `orderBy: { updatedAt: "desc" }`; `return_url` changed from `/dashboard` to `/dashboard/billing` |
+| `app/api/stripe/webhook/route.ts` | `handleInvoicePaid` `findFirst` now `orderBy: { updatedAt: "desc" }` |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; /dashboard/billing ƒ Dynamic (confirmed)
+```
+
+### Unresolved issues
+
+1. `STRIPE_WEBHOOK_SECRET` placeholder — webhook events will be rejected until filled in.
+2. `STRIPE_CREATOR_PRICE_ID` / `STRIPE_ENTERPRISE_PRICE_ID` still placeholder — checkout returns 500.
+3. No payment history view (Payment records exist but not surfaced in UI).
+
+### Recommended next milestone
+
+**Payment history** — add a collapsible or separate section to `/dashboard/billing` (or `/dashboard/billing/history`) that fetches `payment.findMany({ where: { subscription: { userId } } })` and renders a table of invoices with amount, date, and status. `Payment.stripeInvoiceId` can link to Stripe-hosted receipts.
+
+---
+
 ## Session: Billing dashboard page — 2026-06-13
 
 ### What was inspected

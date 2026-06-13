@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { AlertTriangle, Building2, Users } from "lucide-react";
 import { auth } from "@/auth";
+
+export const dynamic = "force-dynamic";
 import prisma from "@/lib/prisma";
 import {
   Card,
@@ -27,12 +29,14 @@ async function fetchBillingData(userId: string) {
   const [personalSub, ownedEnterprises, memberEnterprises] = await Promise.all([
     prisma.subscription.findFirst({
       where: { userId, ownerType: "USER" },
+      orderBy: { updatedAt: "desc" },
       select: {
         planType: true,
         status: true,
         currentPeriodEnd: true,
         cancelAtPeriodEnd: true,
         stripeCustomerId: true,
+        canceledAt: true,
       },
     }),
     prisma.enterprise.findMany({
@@ -41,7 +45,7 @@ async function fetchBillingData(userId: string) {
         id: true,
         name: true,
         subscriptions: {
-          orderBy: { createdAt: "desc" },
+          orderBy: { updatedAt: "desc" },
           take: 1,
           select: {
             planType: true,
@@ -49,6 +53,7 @@ async function fetchBillingData(userId: string) {
             currentPeriodEnd: true,
             cancelAtPeriodEnd: true,
             stripeCustomerId: true,
+            canceledAt: true,
           },
         },
       },
@@ -131,8 +136,7 @@ function formatDate(date: Date): string {
 
 const PLAN_STYLES: Record<string, string> = {
   FREE: "bg-muted text-muted-foreground",
-  CREATOR:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  CREATOR: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   ENTERPRISE:
     "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
 };
@@ -157,8 +161,7 @@ function PlanBadge({ plan }: { plan: string }) {
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE:
     "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  TRIALING:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  TRIALING: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   PAST_DUE:
     "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   UNPAID: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
@@ -210,7 +213,7 @@ function SubscriptionDetails({ sub }: { sub: SubData }) {
 
       {showPeriod && sub.currentPeriodEnd && (
         <p className="text-sm text-muted-foreground">
-          {sub.cancelAtPeriodEnd ? "Ends on" : "Renews on"}{" "}
+          {sub.canceledAt ? "Expires on" : "Renews on"}{" "}
           <span className="font-medium text-foreground">
             {formatDate(sub.currentPeriodEnd)}
           </span>
@@ -236,13 +239,13 @@ function SubscriptionDetails({ sub }: { sub: SubData }) {
             aria-hidden="true"
           />
           <span>
-            Invoice unpaid. Please update your payment method to reactivate
-            your subscription.
+            Invoice unpaid. Please update your payment method to reactivate your
+            subscription.
           </span>
         </div>
       )}
 
-      {sub.cancelAtPeriodEnd &&
+      {sub.canceledAt &&
         sub.status !== "CANCELED" &&
         sub.status !== "INCOMPLETE_EXPIRED" && (
           <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
@@ -274,8 +277,7 @@ function SubscriptionDetails({ sub }: { sub: SubData }) {
 function PersonalPlanCard({ sub }: { sub: SubData | null }) {
   const { action, label, variant } = resolveAction(sub, "CREATOR");
   const hasActiveSub =
-    sub &&
-    !["CANCELED", "INCOMPLETE_EXPIRED"].includes(sub.status ?? "");
+    sub && !["CANCELED", "INCOMPLETE_EXPIRED"].includes(sub.status ?? "");
 
   return (
     <Card>
@@ -290,7 +292,8 @@ function PersonalPlanCard({ sub }: { sub: SubData | null }) {
       </CardHeader>
 
       <CardContent>
-        {sub && !["CANCELED", "INCOMPLETE_EXPIRED"].includes(sub.status ?? "") ? (
+        {sub &&
+        !["CANCELED", "INCOMPLETE_EXPIRED"].includes(sub.status ?? "") ? (
           <SubscriptionDetails sub={sub} />
         ) : (
           <div className="flex flex-wrap items-center gap-2">
@@ -323,7 +326,11 @@ function EnterprisePlanCard({
   };
 }) {
   const sub = enterprise.subscriptions[0] ?? null;
-  const { action, label, variant } = resolveAction(sub, "ENTERPRISE", enterprise.id);
+  const { action, label, variant } = resolveAction(
+    sub,
+    "ENTERPRISE",
+    enterprise.id,
+  );
   const hasActiveSub =
     sub && !["CANCELED", "INCOMPLETE_EXPIRED"].includes(sub.status ?? "");
 
@@ -348,7 +355,8 @@ function EnterprisePlanCard({
       </CardHeader>
 
       <CardContent>
-        {sub && !["CANCELED", "INCOMPLETE_EXPIRED"].includes(sub.status ?? "") ? (
+        {sub &&
+        !["CANCELED", "INCOMPLETE_EXPIRED"].includes(sub.status ?? "") ? (
           <SubscriptionDetails sub={sub} />
         ) : (
           <div className="flex flex-wrap items-center gap-2">
@@ -391,10 +399,7 @@ function MembershipNoticeCard({
       </CardHeader>
       <CardContent>
         <div className="flex items-start gap-2 text-sm text-muted-foreground">
-          <Users
-            className="mt-0.5 h-4 w-4 shrink-0"
-            aria-hidden="true"
-          />
+          <Users className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
             Billing for this enterprise is managed by the enterprise owner.
             Contact them to make changes to the subscription.
@@ -455,7 +460,10 @@ export default async function BillingPage() {
           </h2>
           <div className="space-y-4">
             {memberEnterprises.map(({ enterprise }) => (
-              <MembershipNoticeCard key={enterprise.id} enterprise={enterprise} />
+              <MembershipNoticeCard
+                key={enterprise.id}
+                enterprise={enterprise}
+              />
             ))}
           </div>
         </section>

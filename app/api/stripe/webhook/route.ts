@@ -103,6 +103,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 
   const localSub = await prisma.subscription.findFirst({
     where: { stripeCustomerId: cid },
+    orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
   if (!localSub) return;
