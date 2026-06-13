@@ -44,7 +44,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const subId =
     typeof session.subscription === "string"
       ? session.subscription
-      : session.subscription?.id ?? null;
+      : (session.subscription?.id ?? null);
 
   const planType = toPlanType(session.metadata?.planType);
 
@@ -68,7 +68,7 @@ async function handleSubscriptionUpsert(sub: Stripe.Subscription) {
   const productId =
     typeof productVal === "string"
       ? productVal
-      : (productVal as Stripe.Product | null)?.id ?? null;
+      : ((productVal as Stripe.Product | null)?.id ?? null);
 
   // In Stripe v22 current_period_* moved to the subscription item level
   const periodStart = item?.current_period_start
@@ -78,12 +78,8 @@ async function handleSubscriptionUpsert(sub: Stripe.Subscription) {
     ? new Date(item.current_period_end * 1000)
     : null;
 
-  const canceledAt = sub.canceled_at
-    ? new Date(sub.canceled_at * 1000)
-    : undefined;
-  const trialEndsAt = sub.trial_end
-    ? new Date(sub.trial_end * 1000)
-    : undefined;
+  const canceledAt = sub.canceled_at ? new Date(sub.canceled_at * 1000) : null;
+  const trialEndsAt = sub.trial_end ? new Date(sub.trial_end * 1000) : null;
 
   await prisma.subscription.updateMany({
     where: { stripeCustomerId: cid },
