@@ -7,8 +7,8 @@ const baseUrl = process.env.BASE_URL || "http://localhost:3000";
 export const brandConfig: BrandConfig = {
   brandName: "youmimic",
   supportEmail: "support@youmimic.com",
-  logoLightUrl: `${baseUrl}/youmimic-logo-light.png`,
-  logoDarkUrl: `${baseUrl}/youmimic-logo-dark.png`,
+  logoLightUrl: `${baseUrl}/youmimic-green-transparent.png`,
+  logoDarkUrl: `${baseUrl}/youmimic-white-transparent.png`,
   colors: {
     primary: "#608982",
     bg: "#ECEAE9",
