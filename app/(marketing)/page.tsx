@@ -177,7 +177,7 @@ const plans = [
 function ProductMockup() {
   return (
     <div
-      className="relative w-full max-w-[420px] overflow-hidden rounded-2xl shadow-2xl"
+      className="relative w-full max-w-105 overflow-hidden rounded-2xl shadow-2xl"
       style={{
         backgroundColor: "#ECEAE9",
         border: "1px solid rgba(25,24,24,0.12)",
@@ -195,7 +195,7 @@ function ProductMockup() {
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="size-[9px] rounded-full"
+              className="size-2.25 rounded-full"
               style={{ backgroundColor: "#604B33", opacity: 0.4 }}
             />
           ))}
@@ -206,7 +206,7 @@ function ProductMockup() {
         >
           YouMimic Studio
         </span>
-        <div className="size-[9px]" />
+        <div className="size-2.25" />
       </div>
 
       {/* Body */}
@@ -257,7 +257,7 @@ function ProductMockup() {
           </div>
 
           {/* Status + languages panel */}
-          <div className="flex w-[100px] shrink-0 flex-col gap-2">
+          <div className="flex w-25 shrink-0 flex-col gap-2">
             <div
               className="rounded-lg p-2.5"
               style={{
@@ -388,7 +388,7 @@ export default function HomePage() {
   return (
     <>
       {/* ── Hero — always dark, palette-atmospheric ───────────────────────── */}
-      <section className="relative min-h-[600px] overflow-hidden lg:min-h-[680px]">
+      <section className="relative min-h-150 overflow-hidden lg:min-h-170">
         {/* Layer 1: Background — charcoal fallback; /public/hero-bg.jpg activates automatically */}
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -399,7 +399,7 @@ export default function HomePage() {
         />
 
         {/* Layer 2: Directional gradient — text side opaque, image side open */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#191818]/95 via-[#191818]/78 to-[#191818]/42" />
+        <div className="absolute inset-0 bg-linear-to-r from-[#191818]/95 via-[#191818]/78 to-[#191818]/42" />
 
         {/* Layer 3: Ambient palette tint for atmosphere */}
         <div
