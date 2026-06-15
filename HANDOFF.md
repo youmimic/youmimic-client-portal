@@ -1,5 +1,67 @@
 # HANDOFF.md
 
+## Session: Phase 4 – Middleware + Access Control — 2026-06-15
+
+### What was inspected
+
+- `proxy.ts` (root) — existing auth guard for `/dashboard`; no email-verified or subscription checks.
+- `auth.ts` — JWT/session callbacks; `isEmailVerified` already written into the JWT at login; roles included. Confirmed `EmailNotVerifiedError` prevents login if email unverified, so `isEmailVerified` is always `true` for fresh sessions, but old JWTs (pre-feature) could carry `false`.
+- `next-auth.d.ts` — `session.user.isEmailVerified: boolean` confirmed in both `Session` and `JWT` augmentations.
+- `prisma/schema.prisma` — `SubscriptionStatus` enum: `TRIALING`, `ACTIVE` are the active states.
+- `lib/prisma.ts` — Neon HTTP adapter; Node.js runtime compatible.
+- Next.js 16 docs (`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`) — Confirmed: `middleware` was deprecated and renamed to `proxy` in v16.0.0; `proxy.ts` at root IS the entry point; defaults to Node.js runtime since v16.
+
+### What changed
+
+- **`proxy.ts`** — made callback async; added two new guards after the existing auth check:
+  - `requireEmailVerified` for `/dashboard/avatars`: if `user.isEmailVerified` is falsy, redirect to `/verify-email?next=<pathname>`.
+  - `requireSubscription` for `/dashboard/bookings`: calls `userHasActiveSubscription(user.id)`; if no active sub, redirect to `/pricing?reason=subscription-required`.
+
+- **`lib/subscription.ts`** (new) — `userHasActiveSubscription(userId): Promise<boolean>`. Queries Prisma for a `TRIALING` or `ACTIVE` subscription row. Called from proxy on every `/dashboard/bookings` request (Node.js runtime; acceptable latency trade-off).
+
+- **`app/verify-email/page.tsx`** (new) — Minimal page shown when a logged-in user hits the email-verified guard. Displays the `next` param in the message; links back to `/dashboard`.
+
+- **`app/(marketing)/pricing/page.tsx`** (new) — Minimal pricing page inside the marketing shell. Shows a banner when `reason=subscription-required`; three plan cards (Free, Creator, Enterprise) with placeholder pricing.
+
+### Files changed
+
+| File | Status |
+|---|---|
+| `proxy.ts` | Updated — async callback, email-verified + subscription guards added |
+| `lib/subscription.ts` | Created — `userHasActiveSubscription` Prisma helper |
+| `app/verify-email/page.tsx` | Created — email verification gate landing page |
+| `app/(marketing)/pricing/page.tsx` | Created — pricing stub with subscription-gate banner |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 21 routes; "ƒ Proxy (Middleware)" confirmed in build output
+```
+
+### Manual verification notes
+
+- `proxy.ts` exports `proxy` + `config` — the Next.js 16 convention; the build output shows `ƒ Proxy (Middleware)` confirming it is active.
+- The `requireAuth` guard (existing) redirects unauthenticated users hitting `/dashboard/*` to `/login?callbackUrl=<path>`.
+- The `requireEmailVerified` guard fires for `/dashboard/avatars` when `user.isEmailVerified` is falsy (reads from JWT — no DB call).
+- The `requireSubscription` guard fires for `/dashboard/bookings` via a Prisma DB call per request. This is a known latency trade-off documented below.
+- `/verify-email` and `/pricing` routes now exist and return sensible pages rather than 404s.
+
+### Unresolved issues
+
+1. **Subscription guard uses a DB call per request** — `userHasActiveSubscription` queries Prisma on every `/dashboard/bookings` page load. Future improvement: expose subscription status in the JWT/session (requires adding a field to the `jwt` callback in `auth.ts` and refreshing on sub changes via a webhook handler) so the guard can read from the token instead.
+2. **Email-verified guard is currently a no-op in practice** — `auth.ts` throws `EmailNotVerifiedError` at login, so any active session has `isEmailVerified: true`. The guard protects against old JWT tokens (issued before the check was added) and guards against future auth flow changes.
+3. **`requirePermission` and `/admin` guards** — intentionally omitted per Phase 4 scope. To be added in a future milestone.
+4. **Pricing page is a stub** — plan cards use placeholder copy and prices. Replace with real pricing once finalized.
+5. **Verify-email page is a stub** — does not include a "resend verification email" button. Add that CTA in a follow-up.
+
+### Recommended next milestone
+
+**Expose subscription status in the JWT** — Add `subscriptionStatus` (or a boolean `hasActiveSubscription`) to the JWT in `auth.ts`'s `jwt` callback (fresh DB query on initial sign-in). Update the Stripe webhook handler to call `signIn`/JWT refresh or set a cookie when subscription status changes. Switch `proxy.ts` `requireSubscription` to read from `session.user` instead of calling Prisma, eliminating the per-request DB query.
+
+---
+
 ## Session: Theme-aware SiteLogo branding component — 2026-06-15
 
 ### What was inspected

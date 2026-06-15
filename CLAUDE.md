@@ -33,6 +33,8 @@ Use the existing alias/import patterns already present in the codebase.
 
 ## Existing repository signals
 
+## Existing repository signals
+
 The repository already contains strong evidence of these established areas:
 
 - `auth.ts`
@@ -45,21 +47,23 @@ The repository already contains strong evidence of these established areas:
 - `emails/templates/*`
 - `prisma/schema.prisma`
 - `middleware` folder / middleware-related structure
+- `AGENTS.md` with agent-specific instructions
+- `updates/` for documenting what was done
 
-Treat these as first-class existing systems to inspect and extend rather than replace blindly.[4]
+Treat these as first-class existing systems to inspect and extend rather than replace blindly.
 
 ## Working method
 
 For any substantial task, follow this sequence:
 
-1. Inspect the relevant files first.
+1. Inspect the relevant files first, including `AGENTS.md` and any files mentioned in the prompt.
 2. Summarize the current implementation and any gaps.
 3. Make a short plan.
 4. Implement the smallest coherent milestone.
 5. Verify the result with commands and route-level checks.
-6. End with a concise summary of files changed, what was done, and what remains.[5][6][7]
+6. End with a concise summary of files changed, what was done, and what remains.
 
-If a prompt conflicts with the live codebase, the live codebase wins after inspection.[2]
+If a prompt conflicts with the live codebase, the live codebase wins after inspection.
 
 ## Scope discipline
 
@@ -89,6 +93,8 @@ Never expose API keys, secrets, or service credentials to the client.[1]
 
 ## Verification requirements
 
+## Verification requirements
+
 Before considering any milestone complete, run the relevant checks and report the result:
 
 ```bash
@@ -97,10 +103,12 @@ npm run typecheck
 npm run build
 ```
 
-If one of these scripts does not exist, inspect `package.json`, use the closest equivalent, and explicitly report the substitution.[5]
+If one of these scripts does not exist, inspect `package.json`, use the closest equivalent, and explicitly report the substitution.
 
 For UI work, also verify the affected route renders and basic interactions work.
-For auth or middleware work, verify protected-route behavior and negative cases, not only the happy path.[5][7]
+For auth or middleware work, verify protected-route behavior and negative cases, not only the happy path.
+
+In addition to `HANDOFF.md`, each substantial session **must** create or update a dated markdown file under the `updates/` directory (for example, `updates/2026-06-15-bookings-and-payments.md`) summarizing what changed in that session. This provides a chronological documentation trail that can be reviewed over time.
 
 ## Output expectations for each session
 
@@ -113,4 +121,5 @@ At the end of each session, always provide:
 - unresolved issues,
 - recommended next milestone.
 
-If the session changes the current project state materially, update `HANDOFF.md` before stopping.[9][14]
+If the session changes the current project state materially, update `HANDOFF.md` before stopping.
+Also, add or update a corresponding entry in the `updates/` directory that briefly documents the session’s changes, using a filename that includes the date and a short slug for the work done.
