@@ -1,5 +1,66 @@
 # HANDOFF.md
 
+## Session: Theme-aware SiteLogo branding component — 2026-06-15
+
+### What was inspected
+
+- `components/marketing/marketing-header.tsx` — async server component with `auth()`, hardcoded green `next/image` logo.
+- `app/(marketing)/layout.tsx` — wraps marketing pages with `MarketingHeader` + `MarketingFooter`.
+- `app/layout.tsx` — `ThemeProvider` with `attribute="class"`, `defaultTheme="system"`, `enableSystem`, `suppressHydrationWarning`; left untouched.
+- `components/ui/theme-toggle.tsx` — `"use client"`, uses `useTheme`; left untouched.
+- `public/` — confirmed both `youmimic-green-transparent.png` and `youmimic-white-transparent.png` exist.
+- `components/dashboard/dashboard-header.tsx` — `"use client"`, `md:hidden` text span wordmark "YouMimic".
+- `components/dashboard/app-sidebar.tsx` — `"use client"`, text Link "YouMimic" in sidebar header, also passes `onMobileClose` onClick.
+- `components/branding/` — did not exist prior to this session.
+
+### What changed
+
+Created a reusable `SiteLogo` client component and wired it into the marketing header, dashboard header, and sidebar.
+
+**Hydration strategy**: `useSyncExternalStore` (returns `false` on server, `true` after client hydration) replaces the `useState`+`useEffect` pattern to satisfy the project's `react-hooks/set-state-in-effect` lint rule.
+
+**Variant logic**:
+- `forceVariant="dark"` — always renders `/youmimic-white-transparent.png`; `src` is determined at module eval, no hydration concern.
+- `forceVariant="light"` — always renders `/youmimic-green-transparent.png`; same reasoning.
+- `forceVariant="auto"` (default) — waits for `mounted = true` before rendering the `<Image>`; renders an `sr-only` span in the interim to keep layout stable.
+
+### Files changed
+
+| File | Status |
+|---|---|
+| `components/branding/site-logo.tsx` | **Created** — `"use client"`, `SiteLogoProps`, `useSyncExternalStore` mount guard, `forceVariant` logic |
+| `components/marketing/marketing-header.tsx` | Updated — replaced `next/image` + `Link` logo block with `<SiteLogo forceVariant="dark" />`; removed `Image` import |
+| `components/dashboard/dashboard-header.tsx` | Updated — replaced `<span md:hidden>YouMimic</span>` with `<SiteLogo className="flex items-center md:hidden" forceVariant="auto" />` |
+| `components/dashboard/app-sidebar.tsx` | Updated — replaced text `Link` wordmark with `<SiteLogo href="/dashboard" onClick={onMobileClose} forceVariant="auto" />` |
+
+### Behavior expectations
+
+| Location | Variant | Light mode | Dark mode |
+|---|---|---|---|
+| Marketing header (`/`) | `forceVariant="dark"` | White logo | White logo |
+| Dashboard header (mobile) | `forceVariant="auto"` | Green logo | White logo |
+| Sidebar wordmark | `forceVariant="auto"` | Green logo | White logo |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 20 routes; / ƒ Dynamic (unchanged)
+```
+
+### Unresolved issues
+
+1. Sidebar uses `bg-sidebar` CSS variables — in dark mode the sidebar background is dark, so the white auto-logo reads correctly. If the sidebar ever adopts a light background in dark mode, `forceVariant` may need revisiting.
+2. `/public/hero-bg.jpg` placeholder (from prior session) — still not replaced with a real photo.
+3. Pricing tier prices still placeholder text.
+
+### Recommended next milestone
+
+**`/contact` or demo booking route** — a form page at `app/(marketing)/contact/page.tsx` collecting name, email, company, and message, calling the existing Resend mailer. Replace hero secondary CTA and final CTA section links with `/contact`.
+
+---
+
 ## Session: Hero background + palette color system — 2026-06-13
 
 ### What was inspected

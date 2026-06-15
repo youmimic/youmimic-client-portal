@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import SignOutButton from "@/components/auth/sign-out-button";
+import { SiteLogo } from "@/components/branding/site-logo";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -39,13 +40,12 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center border-b border-sidebar-border px-6">
-        <Link
+        <SiteLogo
           href="/dashboard"
           onClick={onMobileClose}
-          className="font-semibold text-sidebar-foreground hover:opacity-80 transition-opacity"
-        >
-          YouMimic
-        </Link>
+          className="flex items-center"
+          forceVariant="auto"
+        />
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
