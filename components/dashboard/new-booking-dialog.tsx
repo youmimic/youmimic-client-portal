@@ -31,8 +31,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-function todayISO(): string {
-  return new Date().toISOString().split("T")[0];
+function minBookingDateISO(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 7); // today + 7 calendar days
+  return d.toISOString().split("T")[0];
 }
 
 export function NewBookingDialog() {
@@ -50,6 +52,8 @@ export function NewBookingDialog() {
     },
     mode: "onBlur",
   });
+
+  console.log("form errors", form.formState.errors);
 
   const notesValue = useWatch({ control: form.control, name: "notes" }) ?? "";
   const notesLength = notesValue.length;
@@ -100,11 +104,7 @@ export function NewBookingDialog() {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <Button
-        size="sm"
-        onClick={() => setOpen(true)}
-        aria-haspopup="dialog"
-      >
+      <Button size="sm" onClick={() => setOpen(true)} aria-haspopup="dialog">
         <Plus aria-hidden="true" />
         New booking
       </Button>
@@ -144,7 +144,7 @@ export function NewBookingDialog() {
                 <FormItem>
                   <FormLabel>Date</FormLabel>
                   <FormControl>
-                    <Input type="date" min={todayISO()} {...field} />
+                    <Input type="date" min={minBookingDateISO()} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -218,10 +218,7 @@ export function NewBookingDialog() {
             />
 
             <DialogFooter showCloseButton>
-              <Button
-                type="submit"
-                disabled={form.formState.isSubmitting}
-              >
+              <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting
                   ? "Requesting…"
                   : "Request booking"}

@@ -42,8 +42,10 @@ export type BookingForActions = {
 
 const EDITABLE_STATUSES = ["pending", "confirmed"];
 
-function todayISO(): string {
-  return new Date().toISOString().split("T")[0];
+function minBookingDateISO(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().split("T")[0];
 }
 
 function ErrorBanner({
@@ -168,7 +170,7 @@ function EditDialog({
                 <FormItem>
                   <FormLabel>Date</FormLabel>
                   <FormControl>
-                    <Input type="date" min={todayISO()} {...field} />
+                    <Input type="date" min={minBookingDateISO()} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
