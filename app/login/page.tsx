@@ -53,7 +53,7 @@ export default async function LoginPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild className="w-full">
+              <Button asChild className="w-full sm:flex-1">
                 <Link href="/dashboard">Go to dashboard</Link>
               </Button>
 

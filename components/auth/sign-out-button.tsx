@@ -9,7 +9,7 @@ export default function SignOutButton() {
     <Button
       type="button"
       variant="destructive"
-      className="w-full"
+      className="w-full sm:flex-1"
       onClick={() => signOut({ callbackUrl: "/login" })}
     >
       Sign out
