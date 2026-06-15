@@ -168,7 +168,7 @@ model Payment {
   stripeInvoiceId       String?  @unique
   stripePaymentIntentId String?  @unique
   amount                Int
-  currency              String   @default("usd")
+  currency              String   @default("aud")
   status                String
   createdAt             DateTime @default(now())
 
