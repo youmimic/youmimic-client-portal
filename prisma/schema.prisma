@@ -162,18 +162,40 @@ model Subscription {
   @@map("subscriptions")
 }
 
+enum PaymentStatus {
+  unpaid
+  paid
+  refunded
+  failed
+}
+
+enum PaymentType {
+  booking
+  subscription
+  other
+}
+
 model Payment {
-  id                    String   @id @default(cuid())
-  subscriptionId        String
-  stripeInvoiceId       String?  @unique
-  stripePaymentIntentId String?  @unique
+  id                    String         @id @default(cuid())
+  type      PaymentType       
+  stripeInvoiceId       String?        @unique
+  stripePaymentIntentId String?        @unique
   amount                Int
-  currency              String   @default("aud")
-  status                String
-  createdAt             DateTime @default(now())
+  currency              String         @default("aud")
 
-  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  status                PaymentStatus  @default(unpaid)
 
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  // Links to business objects (optional, depending on type)
+  bookingId      String?
+  subscriptionId String?
+
+  booking      Booking?      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
   @@index([subscriptionId])
   @@map("payments")
 }
@@ -198,6 +220,13 @@ model Avatar {
   @@map("avatars")
 }
 
+enum BookingStatus {
+  pending
+  confirmed
+  cancelled
+  completed
+}
+
 model Booking {
   id            String   @id @default(cuid())
   userId        String
@@ -205,12 +234,15 @@ model Booking {
   requestedDate DateTime
   timeStart     String
   timeEnd       String
-  status        String   @default("pending")
+  status        BookingStatus  @default(pending)
+  paymentStatus PaymentStatus  @default(unpaid)
   notes         String?
   createdAt     DateTime @default(now())
 
   user       User        @relation(fields: [userId], references: [id])
   enterprise Enterprise? @relation(fields: [enterpriseId], references: [id])
+
+  payments   Payment[]
 
   @@index([userId])
   @@index([enterpriseId])
