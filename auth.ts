@@ -3,6 +3,7 @@ import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import type { Prisma } from "@/app/generated/prisma/client";
+import { SubscriptionStatus } from "@/app/generated/prisma/enums";
 import prisma from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 
@@ -91,6 +92,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.roles = (user as { roles?: string[] }).roles ?? [];
         token.isEmailVerified =
           (user as { isEmailVerified?: boolean }).isEmailVerified ?? false;
+
+        // Populate subscription state at sign-in so proxy.ts can read from
+        // the token instead of querying the DB on every /dashboard/bookings request.
+        const userId = user.id;
+        if (userId) {
+          const activeSub = await prisma.subscription.findFirst({
+            where: {
+              userId,
+              status: { in: [SubscriptionStatus.TRIALING, SubscriptionStatus.ACTIVE] },
+            },
+            orderBy: { updatedAt: "desc" },
+            select: { id: true },
+          });
+          token.hasActiveSubscription = activeSub !== null;
+        } else {
+          token.hasActiveSubscription = false;
+        }
       }
 
       return token;
@@ -100,6 +118,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.roles = (token.roles as string[]) ?? [];
         session.user.isEmailVerified = Boolean(token.isEmailVerified);
+        // Undefined on tokens issued before this field was added → fail closed (false).
+        session.user.hasActiveSubscription = Boolean(token.hasActiveSubscription);
       }
 
       return session;

@@ -26,54 +26,72 @@ export const metadata = {
 // ---------------------------------------------------------------------------
 
 async function fetchBillingData(userId: string) {
-  const [personalSub, ownedEnterprises, memberEnterprises] = await Promise.all([
-    prisma.subscription.findFirst({
-      where: { userId, ownerType: "USER" },
-      orderBy: { updatedAt: "desc" },
-      select: {
-        planType: true,
-        status: true,
-        currentPeriodEnd: true,
-        cancelAtPeriodEnd: true,
-        stripeCustomerId: true,
-        canceledAt: true,
-      },
-    }),
-    prisma.enterprise.findMany({
-      where: { ownerUserId: userId },
-      select: {
-        id: true,
-        name: true,
-        subscriptions: {
-          orderBy: { updatedAt: "desc" },
-          take: 1,
-          select: {
-            planType: true,
-            status: true,
-            currentPeriodEnd: true,
-            cancelAtPeriodEnd: true,
-            stripeCustomerId: true,
-            canceledAt: true,
+  const [personalSub, ownedEnterprises, memberEnterprises, recentPayments] =
+    await Promise.all([
+      prisma.subscription.findFirst({
+        where: { userId, ownerType: "USER" },
+        orderBy: { updatedAt: "desc" },
+        select: {
+          planType: true,
+          status: true,
+          currentPeriodEnd: true,
+          cancelAtPeriodEnd: true,
+          stripeCustomerId: true,
+          canceledAt: true,
+        },
+      }),
+      prisma.enterprise.findMany({
+        where: { ownerUserId: userId },
+        select: {
+          id: true,
+          name: true,
+          subscriptions: {
+            orderBy: { updatedAt: "desc" },
+            take: 1,
+            select: {
+              planType: true,
+              status: true,
+              currentPeriodEnd: true,
+              cancelAtPeriodEnd: true,
+              stripeCustomerId: true,
+              canceledAt: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.enterpriseMember.findMany({
-      where: {
-        userId,
-        enterprise: { ownerUserId: { not: userId } },
-      },
-      select: {
-        enterprise: {
-          select: { id: true, name: true },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.enterpriseMember.findMany({
+        where: {
+          userId,
+          enterprise: { ownerUserId: { not: userId } },
         },
-      },
-      orderBy: { enterprise: { createdAt: "asc" } },
-    }),
-  ]);
+        select: {
+          enterprise: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { enterprise: { createdAt: "asc" } },
+      }),
+      // Payment history: subscription payments for this user's personal plan.
+      // TODO next milestone: also surface enterprise subscription payments for
+      // enterprises owned by this user, and add receipt links via
+      // stripe.invoices.retrieve(stripeInvoiceId).hosted_invoice_url.
+      prisma.payment.findMany({
+        where: { subscription: { userId } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          status: true,
+          createdAt: true,
+          stripeInvoiceId: true,
+        },
+      }),
+    ]);
 
-  return { personalSub, ownedEnterprises, memberEnterprises };
+  return { personalSub, ownedEnterprises, memberEnterprises, recentPayments };
 }
 
 type SubData = NonNullable<
@@ -128,6 +146,14 @@ function formatDate(date: Date): string {
     month: "long",
     day: "numeric",
   }).format(new Date(date));
+}
+
+function formatAmount(amount: number, currency: string): string {
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 2,
+  }).format(amount / 100);
 }
 
 // ---------------------------------------------------------------------------
@@ -194,6 +220,14 @@ function StatusBadge({ status }: { status: string }) {
     </span>
   );
 }
+
+const PAYMENT_STATUS_STYLES: Record<string, string> = {
+  paid: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  unpaid:
+    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  refunded: "bg-muted text-muted-foreground",
+};
 
 // ---------------------------------------------------------------------------
 // Shared card sub-components
@@ -411,6 +445,80 @@ function MembershipNoticeCard({
 }
 
 // ---------------------------------------------------------------------------
+// Payment history
+// ---------------------------------------------------------------------------
+
+type PaymentRecord = NonNullable<
+  Awaited<ReturnType<typeof fetchBillingData>>["recentPayments"]
+>[number];
+
+function PaymentHistorySection({ payments }: { payments: PaymentRecord[] }) {
+  if (payments.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center">
+          <p className="text-sm text-muted-foreground">No payment history yet.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b">
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                  Date
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                  Amount
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                  Invoice
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {payments.map((payment) => (
+                <tr key={payment.id}>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {formatDate(payment.createdAt)}
+                  </td>
+                  <td className="px-4 py-3 font-medium tabular-nums">
+                    {formatAmount(payment.amount, payment.currency)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        PAYMENT_STATUS_STYLES[payment.status] ??
+                        "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {payment.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {/* TODO: call stripe.invoices.retrieve(stripeInvoiceId) to get
+                        hosted_invoice_url, then render a clickable receipt link. */}
+                    {payment.stripeInvoiceId ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -418,7 +526,7 @@ export default async function BillingPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const { personalSub, ownedEnterprises, memberEnterprises } =
+  const { personalSub, ownedEnterprises, memberEnterprises, recentPayments } =
     await fetchBillingData(session.user.id);
 
   return (
@@ -468,6 +576,14 @@ export default async function BillingPage() {
           </div>
         </section>
       )}
+
+      {/* Payment history */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Payment history
+        </h2>
+        <PaymentHistorySection payments={recentPayments} />
+      </section>
     </div>
   );
 }

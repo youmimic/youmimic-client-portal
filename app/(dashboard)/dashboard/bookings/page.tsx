@@ -2,12 +2,7 @@ import { redirect } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NewBookingDialog } from "@/components/dashboard/new-booking-dialog";
 import {
   BookingActions,
@@ -34,8 +29,7 @@ const STATUS_STYLES: Record<string, string> = {
   confirmed:
     "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-  completed:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  completed: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -148,7 +142,7 @@ export default async function BookingsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Bookings</h1>
           <p className="text-muted-foreground">
-            View and manage your scheduled sessions.
+            View and manage your scheduled avatar capture sessions.
           </p>
         </div>
         <NewBookingDialog />
@@ -163,7 +157,8 @@ export default async function BookingsPage() {
             />
             <p className="text-base font-medium">No bookings yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Your scheduled sessions will appear here once bookings are made.
+              Your scheduled avatar capture sessions will appear here once
+              bookings are made.
             </p>
           </CardContent>
         </Card>

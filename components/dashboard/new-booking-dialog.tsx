@@ -113,7 +113,7 @@ export function NewBookingDialog() {
         <DialogHeader>
           <DialogTitle>New booking</DialogTitle>
           <DialogDescription>
-            Request a session by choosing a date and time.
+            Request an avatar capture session by choosing a date and time.
           </DialogDescription>
         </DialogHeader>
 

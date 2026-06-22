@@ -1,6 +1,5 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
-import { userHasActiveSubscription } from "@/lib/subscription";
 
 const PROTECTED_PREFIXES = ["/dashboard"];
 
@@ -33,14 +32,16 @@ export const proxy = auth(async (req) => {
       return NextResponse.redirect(url);
     }
 
-    // requireSubscription: /dashboard/bookings requires an active subscription
-    if (matchesPrefix(pathname, "/dashboard/bookings")) {
-      const hasActive = await userHasActiveSubscription(user.id);
-      if (!hasActive) {
-        const url = new URL("/pricing", nextUrl.origin);
-        url.searchParams.set("reason", "subscription-required");
-        return NextResponse.redirect(url);
-      }
+    // requireSubscription: /dashboard/bookings requires an active subscription.
+    // hasActiveSubscription is written into the JWT at sign-in; undefined on
+    // pre-migration tokens which are treated as false (fail closed).
+    if (
+      matchesPrefix(pathname, "/dashboard/bookings") &&
+      !user.hasActiveSubscription
+    ) {
+      const url = new URL("/pricing", nextUrl.origin);
+      url.searchParams.set("reason", "subscription-required");
+      return NextResponse.redirect(url);
     }
   }
 

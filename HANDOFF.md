@@ -1,5 +1,66 @@
 # HANDOFF.md
 
+## Session: JWT subscription gate + payment history scaffold — 2026-06-22
+
+### What was inspected
+
+- `proxy.ts` — confirmed existing subscription guard calls `userHasActiveSubscription(user.id)` (Prisma query on every `/dashboard/bookings` request).
+- `auth.ts` — confirmed `jwt` / `session` callbacks pattern; `isEmailVerified` and `roles` already in token.
+- `next-auth.d.ts` — `JWT` and `Session["user"]` augmentation shapes.
+- `lib/subscription.ts` — `userHasActiveSubscription` helper using `TRIALING | ACTIVE` guard.
+- `prisma/schema.prisma` — `SubscriptionStatus` enum, `Payment` model (amount, currency, status, stripeInvoiceId, subscriptionId).
+- `app/api/stripe/webhook/route.ts` — `handleSubscriptionUpsert` writes status to DB on `customer.subscription.updated`; no session refresh mechanism in place.
+- `app/(dashboard)/dashboard/billing/page.tsx` — full billing page reviewed; `fetchBillingData` extended.
+
+### What changed
+
+1. **`next-auth.d.ts`** — Added `hasActiveSubscription: boolean` to `Session["user"]`; added `hasActiveSubscription?: boolean` to `JWT`. No change to the `User` interface (field is not returned by `authorize`, only written in the `jwt` callback).
+
+2. **`auth.ts`** — Imported `SubscriptionStatus` from generated enums. In the `jwt` callback (initial sign-in branch where `user` is defined): queries `prisma.subscription.findFirst` for `TRIALING | ACTIVE` status with `orderBy: { updatedAt: "desc" }` and writes `token.hasActiveSubscription`. In the `session` callback: mirrors to `session.user.hasActiveSubscription = Boolean(token.hasActiveSubscription)` — `Boolean(undefined)` gives `false` for old/pre-migration tokens (fail-closed behaviour).
+
+3. **`proxy.ts`** — Removed `import { userHasActiveSubscription }` and the `await userHasActiveSubscription(user.id)` call. The `/dashboard/bookings` guard is now a single-line token read: `!user.hasActiveSubscription`. No per-request DB query.
+
+4. **`app/(dashboard)/dashboard/billing/page.tsx`** — Added a fourth query to `fetchBillingData` `Promise.all`: `prisma.payment.findMany({ where: { subscription: { userId } }, orderBy: { createdAt: "desc" }, take: 20 })`. Added `formatAmount` helper. Added `PAYMENT_STATUS_STYLES` map. Added `PaymentHistorySection` component rendering a table of date / amount / status / invoice-id. Added the **Payment history** section to the page body. Receipt links are scaffolded as a TODO (need `stripe.invoices.retrieve(stripeInvoiceId).hosted_invoice_url`).
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `next-auth.d.ts` | Added `hasActiveSubscription: boolean` to Session.user; `hasActiveSubscription?: boolean` to JWT |
+| `auth.ts` | SubscriptionStatus import; DB lookup + `token.hasActiveSubscription` in jwt callback; `Boolean(token.hasActiveSubscription)` in session callback |
+| `proxy.ts` | Removed lib/subscription import; replaced DB call with `!user.hasActiveSubscription` token read |
+| `app/(dashboard)/dashboard/billing/page.tsx` | Payment history query, formatAmount, PAYMENT_STATUS_STYLES, PaymentHistorySection, page section |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 21 routes; ƒ Proxy (Middleware) confirmed
+```
+
+### Known caveat: JWT freshness after Stripe subscription changes
+
+The `hasActiveSubscription` flag is written **once** — at sign-in — and lives in the JWT until the token expires or the user signs out and back in. When Stripe fires `customer.subscription.updated` or `customer.subscription.deleted`, the webhook updates the DB but **cannot invalidate the user's existing JWT**. This means:
+
+- A user whose subscription lapses mid-session can still reach `/dashboard/bookings` until their JWT expires or they re-authenticate.
+- A user who subscribes mid-session will still be blocked from `/dashboard/bookings` until re-authentication.
+
+There is no session refresh mechanism currently in the project. To close this gap in a future milestone: implement a force-refresh hook (e.g., a short-lived cookie written by the webhook that the `jwt` callback detects and triggers a re-read from DB), or accept the latency as a product trade-off and document the sign-out/sign-in resolution.
+
+### Unresolved issues
+
+1. **JWT staleness after Stripe events** — documented above. No DB query in proxy; user must re-auth to reflect subscription changes.
+2. **Payment history receipt links** — `stripeInvoiceId` is displayed as text. To make it a clickable link, add a server action or redirect endpoint that calls `stripe.invoices.retrieve(id)` to get `hosted_invoice_url`. Alternatively store `hosted_invoice_url` in the `Payment` record via the webhook (requires a schema migration).
+3. **Enterprise subscription payments** — `PaymentHistorySection` only queries personal subscription payments (`subscription.userId = userId`). Enterprise subscription payments (where `subscription.enterpriseId` belongs to the user's enterprise) are not yet shown.
+4. **Pre-existing stubs** — `STRIPE_WEBHOOK_SECRET`, `STRIPE_CREATOR_PRICE_ID`, `STRIPE_ENTERPRISE_PRICE_ID` still placeholder; checkout/webhook won't work until filled in.
+
+### Recommended next milestone
+
+**Payment receipt links** — add a `/api/stripe/invoice-redirect/[invoiceId]` GET route: auth check, verify the payment's subscription belongs to the requesting user (Prisma ownership check), call `stripe.invoices.retrieve(invoiceId)`, redirect to `hosted_invoice_url`. Then update `PaymentHistorySection` to render a "View" link for each row that has a `stripeInvoiceId`.
+
+---
+
 ## Session: Phase 4 – Middleware + Access Control — 2026-06-15
 
 ### What was inspected
