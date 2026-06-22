@@ -72,11 +72,19 @@ async function fetchBillingData(userId: string) {
         },
         orderBy: { enterprise: { createdAt: "asc" } },
       }),
-      // Payment history: subscription payments for this user's personal plan.
-      // Receipt links resolve via /api/stripe/invoice-redirect/[invoiceId].
-      // Enterprise subscription payments (owned enterprises) are a future addition.
+      // Payment history: personal + enterprise-owner subscription payments.
+      // OR[0] — personal plan payments (subscription.userId = userId).
+      // OR[1] — enterprise plan payments where this user is the enterprise owner.
+      // Non-owner enterprise members are excluded because ownerUserId never
+      // matches a member's userId. Receipt links resolve via
+      // /api/stripe/invoice-redirect/[invoiceId], which re-validates ownership.
       prisma.payment.findMany({
-        where: { subscription: { userId } },
+        where: {
+          OR: [
+            { subscription: { userId } },
+            { subscription: { enterprise: { ownerUserId: userId } } },
+          ],
+        },
         orderBy: { createdAt: "desc" },
         take: 20,
         select: {
@@ -86,6 +94,13 @@ async function fetchBillingData(userId: string) {
           status: true,
           createdAt: true,
           stripeInvoiceId: true,
+          subscription: {
+            select: {
+              enterprise: {
+                select: { name: true },
+              },
+            },
+          },
         },
       }),
     ]);
@@ -473,6 +488,9 @@ function PaymentHistorySection({ payments }: { payments: PaymentRecord[] }) {
                   Date
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                  Plan
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
                   Amount
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">
@@ -484,40 +502,57 @@ function PaymentHistorySection({ payments }: { payments: PaymentRecord[] }) {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {payments.map((payment) => (
-                <tr key={payment.id}>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {formatDate(payment.createdAt)}
-                  </td>
-                  <td className="px-4 py-3 font-medium tabular-nums">
-                    {formatAmount(payment.amount, payment.currency)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        PAYMENT_STATUS_STYLES[payment.status] ??
-                        "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {payment.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {payment.stripeInvoiceId ? (
-                      <a
-                        href={`/api/stripe/invoice-redirect/${payment.stripeInvoiceId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-primary underline-offset-4 hover:underline"
+              {payments.map((payment) => {
+                const scope =
+                  payment.subscription?.enterprise?.name ?? "Personal";
+                return (
+                  <tr key={payment.id}>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {formatDate(payment.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {payment.subscription?.enterprise ? (
+                        <span className="flex items-center gap-1.5">
+                          <Building2
+                            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          {scope}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Personal</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-medium tabular-nums">
+                      {formatAmount(payment.amount, payment.currency)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          PAYMENT_STATUS_STYLES[payment.status] ??
+                          "bg-muted text-muted-foreground"
+                        }`}
                       >
-                        View
-                      </a>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                        {payment.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {payment.stripeInvoiceId ? (
+                        <a
+                          href={`/api/stripe/invoice-redirect/${payment.stripeInvoiceId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary underline-offset-4 hover:underline"
+                        >
+                          View
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -1,5 +1,69 @@
 # HANDOFF.md
 
+## Session: Enterprise-owner payment history — 2026-06-22
+
+### What was inspected
+
+- `app/(dashboard)/dashboard/billing/page.tsx` — `fetchBillingData` payment query used `{ subscription: { userId } }` (personal only). `PaymentHistorySection` had four columns: Date, Amount, Status, Invoice.
+- `app/api/stripe/invoice-redirect/[invoiceId]/route.ts` — already checked both `subscription.userId === userId` and `subscription.enterprise.ownerUserId === userId`; no change required.
+- `prisma/schema.prisma` — `Subscription.userId?` for personal plans; `Subscription.enterpriseId?` + `enterprise.ownerUserId` for enterprise plans. `Payment.subscription` → nullable relation.
+
+### What changed
+
+**`app/(dashboard)/dashboard/billing/page.tsx`** — single file changed.
+
+1. **Payment query (`fetchBillingData`)** — replaced the single `{ subscription: { userId } }` filter with:
+   ```
+   OR: [
+     { subscription: { userId } },                               // personal
+     { subscription: { enterprise: { ownerUserId: userId } } }, // enterprise-owner
+   ]
+   ```
+   Added `subscription.enterprise.name` to the select to drive the new Plan column. Ordering and `take: 20` limit unchanged.
+
+2. **`PaymentHistorySection` UI** — added a "Plan" column between Date and Amount:
+   - Enterprise payments show a `Building2` icon + enterprise name.
+   - Personal payments show "Personal" in muted text.
+   - Invoice links unchanged — still route through `/api/stripe/invoice-redirect/[invoiceId]`.
+
+### How enterprise-owner payments are included
+
+The Prisma `OR` filter includes payments whose linked subscription has `enterprise.ownerUserId = userId`. Because `Enterprise.ownerUserId` is the user who created/owns the enterprise, only that user matches. Enterprise members with other roles are excluded.
+
+### How non-owner members are excluded
+
+Non-owner enterprise members have a `userId` that differs from `enterprise.ownerUserId`. Neither `OR` branch matches them:
+- Branch 1 (`subscription.userId = userId`) — enterprise subscriptions have `userId = null`, so this never matches any enterprise payment for any user.
+- Branch 2 (`subscription.enterprise.ownerUserId = userId`) — matches only the enterprise owner.
+
+The invoice redirect route has the same ownership check, so even if a member somehow constructed a direct URL, they receive 403.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/(dashboard)/dashboard/billing/page.tsx` | OR query for personal + enterprise-owner payments; Plan column in table |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 22 routes; ƒ Proxy (Middleware) confirmed
+```
+
+### Unresolved issues
+
+1. **`take: 20` is a combined limit** — if a user has many enterprise invoices, personal ones may be pushed off the first page. A pagination or "load more" control would address this, but is out of scope for now.
+2. **Zero-amount invoice URLs** — `hosted_invoice_url` is null for draft/zero-amount Stripe invoices; the redirect route returns 404. No in-page fallback message yet.
+3. **`STRIPE_AVATAR_CAPTURE_PRICE_ID`** — in `.env` but unreferenced in code; wire up with the avatar capture billing flow.
+
+### Recommended next milestone
+
+**Pagination or load-more for payment history** — the `take: 20` hard cap will hide older invoices as billing accumulates. A cursor-based `load more` button (server action returning the next page) or a `/dashboard/billing/history` full-list route would address this.
+
+---
+
 ## Session: API entitlement checks + payment receipt links — 2026-06-22
 
 ### What was inspected
