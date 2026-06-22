@@ -1,0 +1,110 @@
+name: Check Prisma Migration
+
+# Blocks merging a PR that modifies prisma/schema.prisma without also
+# committing at least one new or changed file in prisma/migrations/.
+# Runs on every PR targeting main. No Node or Prisma installation needed —
+# pure git diff comparison.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-migration:
+    name: Schema change has matching migration
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history is required so git can locate origin/main for the diff
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.base_ref }}
+
+      # ---------------------------------------------------------------
+      # Primary guard: fail if schema changed but no migration was added
+      # ---------------------------------------------------------------
+      - name: Verify schema change is accompanied by a migration
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+
+          SCHEMA_CHANGED=$(git diff --name-only "${BASE}...HEAD" -- prisma/schema.prisma \
+            | wc -l | tr -d '[:space:]')
+          MIGRATION_CHANGED=$(git diff --name-only "${BASE}...HEAD" -- prisma/migrations/ \
+            | wc -l | tr -d '[:space:]')
+
+          echo "prisma/schema.prisma changed : ${SCHEMA_CHANGED}"
+          echo "prisma/migrations/ changed   : ${MIGRATION_CHANGED}"
+
+          if [ "${SCHEMA_CHANGED}" -gt 0 ] && [ "${MIGRATION_CHANGED}" -eq 0 ]; then
+            echo ""
+            echo "ERROR ─────────────────────────────────────────────────────────"
+            echo ""
+            echo "  prisma/schema.prisma was modified in this PR but no migration"
+            echo "  file exists under prisma/migrations/. Merging without a"
+            echo "  migration will cause the production database to drift and"
+            echo "  may produce Prisma P2022 (column not found) errors."
+            echo ""
+            echo "  Fix: generate and commit the migration before pushing."
+            echo ""
+            echo "    npx prisma migrate dev --name <change-name>"
+            echo "    git add prisma/migrations/"
+            echo "    git commit -m 'migration: <change-name>'"
+            echo ""
+            echo "  Example:"
+            echo "    npx prisma migrate dev --name add_user_display_name"
+            echo ""
+            echo "  See docs/migrations.md for the full local workflow."
+            echo "────────────────────────────────────────────────────────────────"
+            exit 1
+          fi
+
+          echo "OK: migration check passed."
+
+      # ---------------------------------------------------------------
+      # Advisory warning: highlight destructive SQL in changed migrations
+      # This step never blocks the PR — it prints and exits 0 always.
+      # ---------------------------------------------------------------
+      - name: Warn on destructive SQL in changed migration files
+        if: always()
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+
+          # Collect .sql files added or modified in this PR
+          CHANGED_SQL=$(git diff --name-only "${BASE}...HEAD" -- prisma/migrations/ \
+            | grep '\.sql$' || true)
+
+          if [ -z "${CHANGED_SQL}" ]; then
+            exit 0
+          fi
+
+          # Patterns that deserve a human review before merge
+          DESTRUCTIVE="DROP TABLE|DROP COLUMN|DROP TYPE|TRUNCATE|DELETE FROM"
+          FLAGGED=""
+
+          for f in ${CHANGED_SQL}; do
+            if [ -f "$f" ] && grep -qiE "${DESTRUCTIVE}" "$f"; then
+              FLAGGED="${FLAGGED}  - ${f}\n"
+            fi
+          done
+
+          if [ -n "${FLAGGED}" ]; then
+            echo ""
+            echo "WARNING ────────────────────────────────────────────────────────"
+            echo ""
+            echo "  Potentially destructive SQL found in:"
+            printf "%b" "${FLAGGED}"
+            echo ""
+            echo "  Review before merging:"
+            echo "  • DROP TABLE / DROP COLUMN removes data permanently."
+            echo "  • TRUNCATE deletes all rows without a rollback point."
+            echo "  • For enum/type changes, prefer USING casts over DROP+ADD."
+            echo "  • Confirm production data has been migrated before dropping."
+            echo ""
+            echo "  This is advisory only — the PR is not blocked."
+            echo "────────────────────────────────────────────────────────────────"
+          fi
+
+          exit 0

@@ -1,0 +1,80 @@
+name: Apply Prisma Migrations (Production)
+
+# Canonical production migration step. Runs automatically when any migration
+# file lands on main (i.e. after a PR with schema changes is merged).
+#
+# The Vercel build script also runs `prisma migrate deploy` as a belt-and-
+# suspenders fallback (see docs/migrations.md for the rationale). Both are
+# idempotent — whichever runs second will see the migration already recorded
+# in _prisma_migrations and skip it safely.
+#
+# Required secrets (GitHub → Settings → Environments → production → Secrets):
+#   DIRECT_URL — direct (non-pooled) Neon connection string used by the
+#                Prisma CLI. Must match the DIRECT_URL in Vercel env vars.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'prisma/migrations/**'
+
+jobs:
+  migrate:
+    name: prisma migrate deploy → production
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 22 (LTS). Do not downgrade to 20 — deprecated in GitHub
+          # Actions runner images as of mid-2025.
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fail immediately with a clear message if the secret is absent.
+      # An empty secret causes a confusing Prisma error deep in the run.
+      - name: Verify DIRECT_URL secret is configured
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          if [ -z "${DIRECT_URL}" ]; then
+            echo ""
+            echo "ERROR ─────────────────────────────────────────────────────────"
+            echo ""
+            echo "  The DIRECT_URL secret is not set for the 'production'"
+            echo "  GitHub environment."
+            echo ""
+            echo "  Add it at:"
+            echo "  GitHub → Repository Settings → Environments → production"
+            echo "           → Environment secrets → DIRECT_URL"
+            echo ""
+            echo "  Value: the direct (non-pooled) Neon connection string."
+            echo "  Example format:"
+            echo "    postgresql://user:pass@ep-xxx.region.aws.neon.tech/db"
+            echo "             ?sslmode=require&channel_binding=require"
+            echo ""
+            echo "────────────────────────────────────────────────────────────────"
+            exit 1
+          fi
+          echo "OK: DIRECT_URL is set."
+
+      # prisma generate reads schema.prisma and produces the TypeScript client.
+      # It does not connect to the database.
+      - name: Generate Prisma client
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: npx prisma generate
+
+      # Apply all pending migrations. Safe to re-run: already-applied
+      # migrations are skipped. Uses DIRECT_URL (non-pooled) as required
+      # by the Prisma CLI (prisma.config.ts datasource.url = env("DIRECT_URL")).
+      - name: Apply migrations
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: npx prisma migrate deploy

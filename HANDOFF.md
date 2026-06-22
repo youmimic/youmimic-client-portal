@@ -1,5 +1,85 @@
 # HANDOFF.md
 
+## Session: CI migration guardrails — 2026-06-22
+
+### What was built
+
+Three layers of drift prevention added after the P2022 production incident:
+
+1. **PR guard** — `.github/workflows/check-prisma-migration.yml`
+   - Triggers on every PR to `main`
+   - Fails if `prisma/schema.prisma` changed and `prisma/migrations/` did not
+   - Warns (non-blocking) if changed migration SQL contains destructive keywords
+   - Pure shell, no Node install, fast
+
+2. **Production migration workflow** — `.github/workflows/prisma-migrate-prod.yml`
+   - Triggers on push to `main` when `prisma/migrations/**` changes
+   - Node 22 (not 20 — deprecated in GHA runners mid-2025)
+   - GitHub environment `production` (can add approval gates later)
+   - Fails immediately with clear message if `DIRECT_URL` secret is absent
+   - Steps: `npm ci` → `prisma generate` → `prisma migrate deploy`
+
+3. **Migration process documentation** — `docs/migrations.md`
+   - Local dev flow, PR guard behaviour, production path, secrets reference
+
+### Build script decision (Option A — belt-and-suspenders)
+
+`package.json` build script remains `prisma migrate deploy && next build`. Both GHA
+and Vercel run `migrate deploy`; both are idempotent (Prisma advisory lock prevents
+double-apply). The redundancy is intentional at the current team maturity. Simplify
+to `next build` when GHA coverage is trusted.
+
+### Why Node 22
+
+Node 20 hit a deprecation/removal issue in GitHub Actions runner images mid-2025.
+All workflows explicitly use `node-version: 22`. This is documented in the workflow
+comments and in `docs/migrations.md`.
+
+### Files added
+
+| File | Purpose |
+|---|---|
+| `.github/workflows/check-prisma-migration.yml` | PR guard |
+| `.github/workflows/prisma-migrate-prod.yml` | Production migration |
+| `docs/migrations.md` | Team migration process doc |
+
+### Secrets that must be configured
+
+**GitHub** (one-time setup):
+```
+Repository Settings → Environments → production → Secrets
+  DIRECT_URL = <direct Neon connection string>
+```
+
+**Vercel** (already required, unchanged):
+```
+Project → Environment Variables → Production
+  DATABASE_URL = <pooled Neon connection string>
+  DIRECT_URL   = <direct Neon connection string>
+```
+
+Vercel Build Command must be `npm run build`, not `next build` directly.
+
+### Checks run
+
+```
+npm run typecheck → clean
+npm run build     → migrate deploy (no pending, skipped); 23 routes; ƒ Proxy confirmed
+```
+
+### Remaining issues (carried forward)
+
+1. `take: 20` hard cap on payment history — add pagination.
+2. Zero-amount invoice 404 — no in-page fallback when `hosted_invoice_url` is null.
+3. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — in `.env`, not yet wired to code.
+4. Explicit `select` audit — avatars and settings pages still use implicit scalar
+   enumeration; same blast-radius risk if new fields are added to those models.
+5. Debug `console.log` in `new-booking-dialog.tsx:56` — remove before release.
+6. Create `production` GitHub environment in repo settings to enable the migration
+   workflow (currently the workflow file exists but the environment must be created).
+
+---
+
 ## Session: Schema drift migration + deployment hardening — 2026-06-22
 
 ### What was inspected
