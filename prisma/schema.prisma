@@ -234,19 +234,35 @@ model Booking {
   requestedDate DateTime
   timeStart     String
   timeEnd       String
-  status        BookingStatus  @default(pending)
-  paymentStatus PaymentStatus  @default(unpaid)
+  capturesCount Int           @default(1)
+  status        BookingStatus @default(pending)
+  paymentStatus PaymentStatus @default(unpaid)
   notes         String?
   createdAt     DateTime @default(now())
 
-  user       User        @relation(fields: [userId], references: [id])
-  enterprise Enterprise? @relation(fields: [enterpriseId], references: [id])
-
-  payments   Payment[]
+  user         User        @relation(fields: [userId], references: [id])
+  enterprise   Enterprise? @relation(fields: [enterpriseId], references: [id])
+  payments     Payment[]
+  participants BookingCaptureParticipant[]
 
   @@index([userId])
   @@index([enterpriseId])
   @@map("bookings")
+}
+
+model BookingCaptureParticipant {
+  id            String   @id @default(cuid())
+  bookingId     String
+  sortOrder     Int
+  firstName     String
+  contactNumber String
+  createdAt     DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, sortOrder])
+  @@index([bookingId])
+  @@map("booking_capture_participants")
 }
 
 model EmailVerificationToken {

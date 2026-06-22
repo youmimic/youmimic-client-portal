@@ -1,5 +1,215 @@
 # HANDOFF.md
 
+## Session: Replace native select with Base UI Select — 2026-06-22
+
+### What was done
+
+The `color-scheme: dark` CSS approach for the native `<select>` was insufficient. On real Chrome with the OS in light mode, the OS-rendered dropdown popup ignores page CSS and renders with light colors — unreadable on a dark dialog background.
+
+**Decision:** Replace `components/ui/select.tsx` entirely with a Base UI Select (`@base-ui/react/select`) component set so all rendering happens in the JS/CSS layer where Tailwind tokens apply consistently.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `components/ui/select.tsx` | Full rewrite — exports `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem` as Base UI Select wrappers |
+| `components/dashboard/new-booking-dialog.tsx` | capturesCount field uses new components; `onValueChange={(val) => field.onChange(Number(val))}` |
+| `components/dashboard/booking-actions.tsx` | Same change in `EditDialog` capturesCount field |
+
+### Key implementation details
+
+- `SelectContent` wraps Portal + Positioner + Popup + List. **Positioner has `className="z-60"`** so the dropdown floats above the `z-50` dialog — same fix as the tooltip Positioner.
+- Popup uses `min-w-(--anchor-width)` (Base UI CSS var) to match trigger width.
+- `SelectItem` uses `data-highlighted:bg-accent data-highlighted:text-accent-foreground` for hover state and `SelectPrimitive.ItemIndicator` (Check icon) for selected state.
+- `FormControl` (Radix Slot) wraps `SelectTrigger` so react-hook-form's `id`/`aria-*` reach the `<button>` element.
+
+### Checks run
+
+```
+npm run typecheck → clean
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run build     → next build clean; 23 routes; ƒ Proxy confirmed
+```
+
+### Remaining issues (carried forward)
+
+1. `take: 20` hard cap on payment history — add pagination.
+2. Zero-amount invoice 404 — no in-page fallback when `hosted_invoice_url` is null.
+3. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — in `.env`, not yet wired to code.
+4. Explicit `select` audit — avatars and settings pages still lack explicit selects.
+5. Create `production` GitHub environment in repo settings.
+6. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+### Recommended next milestone
+
+**Bookings list enhancements** — show participant names inline in the table (expandable row or tooltip on the Captures column).
+
+---
+
+## Session: Dark-mode select + tooltip layering (revised) — 2026-06-22
+
+### What was inspected
+
+- `components/ui/select.tsx` — confirmed native `<select>` wrapper (not Radix). Had `bg-transparent`, no explicit text color, no `color-scheme`.
+- `components/ui/tooltip.tsx` — `@base-ui/react/tooltip` wrapper. First fix session placed `z-60` on `TooltipPrimitive.Popup`; this session found that to be wrong.
+- `components/ui/dialog.tsx` — `DialogPrimitive.Backdrop` has `z-50 isolate`; `DialogPrimitive.Popup` has `z-50 position:fixed`.
+- `@base-ui/react/tooltip` source — confirmed `TooltipPositioner` renders with `positionMethod: 'absolute'` by default. Positioning styles (including `position: absolute`) applied via inline styles, not CSS classes.
+- `usePositioner.js` (Base UI) — confirmed the Positioner renders as a plain `div` with inline positioning styles; no z-index is injected by Base UI.
+- Visual test (headless Chromium) — created HTML test pages replicating the exact portal+z-index scenario to confirm both fixes.
+
+### Root cause: tooltip z-index (the real one)
+
+`z-index` is silently ignored on `position: static` elements. `TooltipPrimitive.Popup` renders as a plain `div` (static) — the first fix session's `z-60` on the Popup had zero CSS effect.
+
+`TooltipPrimitive.Positioner` has `position: absolute` (from Base UI inline styles). It is the element portaled to `<body>` that competes against the dialog in the body stacking context. It had no z-index → `z: auto` → loses to dialog's `z: 50`.
+
+**Fix:** `className="z-60"` on `TooltipPrimitive.Positioner`. Removed incorrect `z-60` from `TooltipPrimitive.Popup`.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `components/ui/tooltip.tsx` | `z-60` moved from `Popup` (static, ignored) to `Positioner` (positioned, effective) |
+
+---
+
+## Session: Build script + Prisma/theme diagnostics — 2026-06-22
+
+### What was inspected
+
+- `app/generated/prisma/models/Booking.ts` — `capturesCount` confirmed present in generated client (lines 30, 44, 225, etc.). `participants` relation confirmed. Client is fully up to date.
+- `app/generated/prisma/models/BookingCaptureParticipant.ts` — exists, complete. `prisma generate` was run correctly after the schema update.
+- `.gitignore` — `/app/generated/prisma` is gitignored (line 43). The generated Prisma client is NOT committed.
+- `package.json` build script — was `prisma migrate deploy && next build`; NO `prisma generate` in the build script. `postinstall: prisma generate` only runs when `npm install` runs.
+- `prisma migrate status` — local Neon DB is up to date with all 4 migrations (including the captures migration).
+- `app/(dashboard)/dashboard/bookings/page.tsx` — `fetchBookings` already has the correct explicit `select` with `capturesCount` and `participants`.
+- `components/providers/theme-provider.tsx` and `app/layout.tsx` — standard setup; `suppressHydrationWarning` is on `<html>`.
+- `node_modules/next-themes/dist/index.mjs` — internal `_` component renders `React.createElement("script", { dangerouslySetInnerHTML: ... })` inline in the component tree.
+
+### Root cause: Issue 1 — Prisma runtime error
+
+`/app/generated/prisma` is gitignored, so the generated client is never committed to source control. The build script only ran `prisma migrate deploy && next build`. On deployment environments that cache `node_modules` (common on Vercel, Railway, etc.), `npm install` is skipped, so `postinstall: prisma generate` never fires. The deploy bundle is compiled against an **old generated Prisma client** that doesn't know about `capturesCount`. The database has the column; the client doesn't — hence the runtime `Invalid prisma.booking.findMany() invocation`.
+
+Locally, `prisma generate` was run manually and the migration is applied, so the local environment is already correct. The issue manifests in production deploys with cached `node_modules`.
+
+### Root cause: Issue 2 — Theme provider script warning
+
+`next-themes` 0.4.6 renders its theme-detection script as a raw `React.createElement("script", { dangerouslySetInnerHTML: ... })` inside the React component tree. React 19's server renderer (used by Next.js 16 App Router) warns when it encounters inline `<script>` elements in component trees that aren't using React 19's new script hoisting API. This is a library-level incompatibility — there is no user-code configuration that suppresses this without either causing FOUC or bypassing React 19's rendering rules. The `suppressHydrationWarning` on `<html>` addresses attribute hydration mismatches (theme class) but not the script rendering warning.
+
+The warning is **non-breaking**: theming works correctly, end users are not affected, and it only appears in server logs / developer console. It will be resolved when `next-themes` releases a version using React 19's server script API (e.g., `useServerInsertedHTML` with proper React 19 compat).
+
+### What changed
+
+**`package.json`** — build script updated from:
+```
+"build": "prisma migrate deploy && next build"
+```
+to:
+```
+"build": "prisma generate && prisma migrate deploy && next build"
+```
+
+This ensures the Prisma client is always regenerated from the current schema during every build, regardless of whether `npm install`'s `postinstall` ran. This closes the production drift window.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `package.json` | `build` script: added `prisma generate &&` before `prisma migrate deploy` |
+
+### Checks run
+
+```
+npm run typecheck   → clean
+npm run lint        → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run build       → prisma generate clean; prisma migrate deploy (no pending); next build clean
+                      22 routes; ƒ Proxy confirmed
+```
+
+### Issue 2 status
+
+The React 19 + next-themes script warning is a **known cosmetic issue** with this version combination (next-themes 0.4.6 + React 19.2.4 + Next.js 16.2.7). No user-code fix is available without destabilizing theming. Track `next-themes` releases for a patch that uses React 19's `useServerInsertedHTML` with proper React 19 script handling. Until then, the warning is expected and non-breaking.
+
+**Local dev note**: If the Prisma runtime error was also seen locally, clear the `.next` cache (`rm -rf .next`) and restart the dev server. The dev server may have had a stale compiled bundle from before `prisma generate` was run.
+
+### Remaining issues (carried forward)
+
+1. `take: 20` hard cap on payment history — add pagination.
+2. Zero-amount invoice 404 — no in-page fallback when `hosted_invoice_url` is null.
+3. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — in `.env`, not yet wired to code.
+4. Explicit `select` audit — avatars and settings pages still lack explicit selects.
+5. Create `production` GitHub environment in repo settings to enable the migration workflow.
+6. Theme script warning — React 19 + next-themes 0.4.6 known issue; revisit on next-themes update.
+
+### Recommended next milestone
+
+**Local dev fix**: Delete `.next/` and restart `npm run dev` to clear any stale compiled bundles from before `prisma generate` was run.
+
+**Next code milestone**: Bookings list enhancements — expand participant details in the table (tooltip or expandable row on the Captures column showing participant names/contacts).
+
+---
+
+## Session: Captures-based booking flow — 2026-06-22
+
+### What was built
+
+Full captures-based booking upgrade across every booking surface:
+
+1. **Schema** — `capturesCount Int @default(1)` added to `Booking`; new `BookingCaptureParticipant` model with `sortOrder`, cascade delete.
+2. **Migration** — `20260622130000_add_captures_count_and_participants/migration.sql` (safe additive: `ADD COLUMN`, `CREATE TABLE` only — no drops, no data loss). Applied to production during build.
+3. **`lib/booking-time.ts`** (new) — `addHoursToTime(time, hours)` utility, handles midnight wrap.
+4. **`lib/validations/booking.ts`** — Added `capturesCount z.number().int().min(1).max(10)`, `participants` array schema with `firstName`/`contactNumber`, cross-field refine: `participants.length === capturesCount`. Removed the `timeEnd > timeStart` cross-field refine (server now always recomputes `timeEnd`).
+5. **`components/ui/select.tsx`** (new) — styled native `<select>` wrapper with `forwardRef`, Input-matching CSS classes. Works with FormControl/Slot.
+6. **`components/ui/tooltip.tsx`** (new) — `@base-ui/react/tooltip` wrapper components (`Tooltip`, `TooltipTrigger`, `TooltipContent`, `TooltipProvider`).
+7. **`components/dashboard/new-booking-dialog.tsx`** — Major update: capturesCount Select + CircleHelp tooltip, auto-computed read-only timeEnd (`useEffect` + `setValue`), `useFieldArray` participant blocks synced to capture count. Removed debug `console.log`.
+8. **`components/dashboard/booking-actions.tsx`** — Same form changes in EditDialog. `BookingForActions` type extended with `capturesCount: number` and `participants: Array<{firstName, contactNumber}>`.
+9. **`app/api/bookings/route.ts`** — POST: handles `capturesCount` and `participants`; creates participant rows nested in `prisma.booking.create`. **Server always recomputes `timeEnd = addHoursToTime(timeStart, capturesCount)` — client-submitted timeEnd is ignored.**
+10. **`app/api/bookings/[id]/route.ts`** — PATCH: same server-side timeEnd computation; replaces participants atomically via `deleteMany: {} + create`.
+11. **`app/(dashboard)/dashboard/bookings/page.tsx`** — Added `capturesCount` + `participants` to explicit `select`, `toBookingForActions`, and table (new "Captures" column).
+
+### Security note: server-side timeEnd
+
+`timeEnd` is always computed server-side as `addHoursToTime(timeStart, capturesCount)`. The client-submitted `timeEnd` value is accepted by Zod validation (for form state continuity) but the server overwrites it before persisting. This prevents any spoofing of session duration.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `prisma/schema.prisma` | `capturesCount` on `Booking`; new `BookingCaptureParticipant` model |
+| `prisma/migrations/20260622130000_.../migration.sql` | New safe-additive migration |
+| `lib/booking-time.ts` | **Created** — `addHoursToTime` utility |
+| `lib/validations/booking.ts` | `capturesCount`, `participants` array, updated refines |
+| `components/ui/select.tsx` | **Created** — styled native select |
+| `components/ui/tooltip.tsx` | **Created** — base-ui tooltip wrappers |
+| `components/dashboard/new-booking-dialog.tsx` | Full form update + debug log removed |
+| `components/dashboard/booking-actions.tsx` | EditDialog + `BookingForActions` type extended |
+| `app/api/bookings/route.ts` | `capturesCount`, participants, server-side timeEnd |
+| `app/api/bookings/[id]/route.ts` | Same + atomic participant replacement |
+| `app/(dashboard)/dashboard/bookings/page.tsx` | Query + table extended |
+
+### Checks run
+
+```
+npx prisma generate → clean (new BookingCaptureParticipant client generated)
+npm run typecheck   → clean
+npm run lint        → 0 errors, 1 pre-existing warning in lib/prisma.ts
+npm run build       → prisma migrate deploy applied migration; 23 routes; ƒ Proxy confirmed
+```
+
+### Remaining issues (carried forward)
+
+1. `take: 20` hard cap on payment history — add pagination.
+2. Zero-amount invoice 404 — no in-page fallback when `hosted_invoice_url` is null.
+3. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — in `.env`, not yet wired to code.
+4. Explicit `select` audit — avatars and settings pages still lack explicit selects.
+5. Create `production` GitHub environment in repo settings to enable the migration workflow.
+
+### Recommended next milestone
+
+**Bookings list enhancements** — show participant names inline in the table (expandable row or tooltip on the Captures column), or add a booking detail modal/page that lists all participants for a given booking.
+
+---
+
 ## Session: CI migration guardrails — 2026-06-22
 
 ### What was built

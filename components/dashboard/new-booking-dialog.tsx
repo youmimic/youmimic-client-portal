@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, X } from "lucide-react";
+import { CircleHelp, Plus, X } from "lucide-react";
 
 import {
   createBookingSchema,
   type CreateBookingInput,
+  MAX_CAPTURES,
   NOTES_MAX,
 } from "@/lib/validations/booking";
+import { addHoursToTime } from "@/lib/booking-time";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,7 +31,19 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 function minBookingDateISO(): string {
   const d = new Date();
@@ -46,17 +60,45 @@ export function NewBookingDialog() {
     resolver: zodResolver(createBookingSchema),
     defaultValues: {
       requestedDate: "",
+      capturesCount: 1,
       timeStart: "09:00",
       timeEnd: "10:00",
       notes: "",
+      participants: [{ firstName: "", contactNumber: "" }],
     },
     mode: "onBlur",
   });
 
-  console.log("form errors", form.formState.errors);
+  const { fields, replace } = useFieldArray({
+    control: form.control,
+    name: "participants",
+  });
 
+  const capturesCount = useWatch({ control: form.control, name: "capturesCount" });
+  const timeStart = useWatch({ control: form.control, name: "timeStart" });
   const notesValue = useWatch({ control: form.control, name: "notes" }) ?? "";
   const notesLength = notesValue.length;
+
+  // Auto-compute timeEnd when timeStart or capturesCount changes.
+  useEffect(() => {
+    if (timeStart && capturesCount) {
+      form.setValue("timeEnd", addHoursToTime(timeStart, Number(capturesCount)), {
+        shouldValidate: false,
+      });
+    }
+  }, [timeStart, capturesCount, form]);
+
+  // Sync participant array length to capturesCount.
+  useEffect(() => {
+    const count = Number(capturesCount) || 1;
+    if (fields.length === count) return;
+    replace(
+      Array.from({ length: count }, (_, i) => ({
+        firstName: fields[i]?.firstName ?? "",
+        contactNumber: fields[i]?.contactNumber ?? "",
+      })),
+    );
+  }, [capturesCount, fields, replace]);
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -113,7 +155,8 @@ export function NewBookingDialog() {
         <DialogHeader>
           <DialogTitle>New booking</DialogTitle>
           <DialogDescription>
-            Request an avatar capture session by choosing a date and time.
+            Request an avatar capture session by choosing a date, captures, and
+            time.
           </DialogDescription>
         </DialogHeader>
 
@@ -151,6 +194,53 @@ export function NewBookingDialog() {
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="capturesCount"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center gap-1.5">
+                    <FormLabel>Number of captures</FormLabel>
+                    <Tooltip>
+                      <TooltipTrigger
+                        type="button"
+                        aria-label="What is a capture?"
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Select how many avatar capture sessions are needed. Each
+                        capture takes 1 hour, so the end time is calculated
+                        automatically.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Select
+                    value={String(field.value)}
+                    onValueChange={(val) => field.onChange(Number(val))}
+                    name={field.name}
+                  >
+                    <FormControl>
+                      <SelectTrigger onBlur={field.onBlur} ref={field.ref}>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {Array.from({ length: MAX_CAPTURES }, (_, i) => i + 1).map(
+                        (n) => (
+                          <SelectItem key={n} value={String(n)}>
+                            {n} {n === 1 ? "capture" : "captures"}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
@@ -173,12 +263,64 @@ export function NewBookingDialog() {
                   <FormItem>
                     <FormLabel>End time</FormLabel>
                     <FormControl>
-                      <Input type="time" {...field} />
+                      <Input
+                        type="time"
+                        disabled
+                        aria-label="End time (auto-calculated)"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            </div>
+
+            {/* Participant sub-forms — one block per capture */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium">Participants</p>
+              {fields.map((fieldItem, index) => (
+                <div
+                  key={fieldItem.id}
+                  className="space-y-3 rounded-lg border border-border p-3"
+                >
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Capture {index + 1}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name={`participants.${index}.firstName`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Jane" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`participants.${index}.contactNumber`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Contact number</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="tel"
+                              placeholder="+61 4xx xxx xxx"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
 
             <FormField

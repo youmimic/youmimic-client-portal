@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { updateBookingSchema } from "@/lib/validations/booking";
+import { addHoursToTime } from "@/lib/booking-time";
 import { userHasActiveSubscription } from "@/lib/subscription";
 
 const EDITABLE_STATUSES = ["pending", "confirmed"];
@@ -55,15 +56,29 @@ export async function PATCH(
       );
     }
 
-    const { requestedDate, timeStart, timeEnd, notes } = parsed.data;
+    const { requestedDate, capturesCount, timeStart, notes, participants } =
+      parsed.data;
+
+    // Always compute timeEnd server-side — never trust the client-submitted value.
+    const timeEnd = addHoursToTime(timeStart, capturesCount);
 
     const updated = await prisma.booking.update({
       where: { id },
       data: {
         requestedDate: new Date(requestedDate),
+        capturesCount,
         timeStart,
         timeEnd,
         notes: notes || null,
+        participants: {
+          // Replace all participants atomically.
+          deleteMany: {},
+          create: participants.map((p, i) => ({
+            sortOrder: i + 1,
+            firstName: p.firstName,
+            contactNumber: p.contactNumber,
+          })),
+        },
       },
     });
 

@@ -21,9 +21,14 @@ async function fetchBookings(userId: string) {
       requestedDate: true,
       timeStart: true,
       timeEnd: true,
+      capturesCount: true,
       status: true,
       notes: true,
       enterprise: { select: { name: true } },
+      participants: {
+        select: { firstName: true, contactNumber: true, sortOrder: true },
+        orderBy: { sortOrder: "asc" },
+      },
     },
     orderBy: { requestedDate: "desc" },
   });
@@ -66,8 +71,13 @@ function toBookingForActions(booking: BookingRow): BookingForActions {
     requestedDate: booking.requestedDate.toISOString().split("T")[0],
     timeStart: booking.timeStart,
     timeEnd: booking.timeEnd,
+    capturesCount: booking.capturesCount,
     status: booking.status,
     notes: booking.notes,
+    participants: booking.participants.map((p) => ({
+      firstName: p.firstName,
+      contactNumber: p.contactNumber,
+    })),
   };
 }
 
@@ -89,6 +99,9 @@ function BookingsTable({ bookings }: { bookings: BookingRow[] }) {
                 </th>
                 <th className="px-4 py-3 font-medium text-muted-foreground">
                   Time
+                </th>
+                <th className="px-4 py-3 font-medium text-muted-foreground">
+                  Captures
                 </th>
                 <th className="hidden px-4 py-3 font-medium text-muted-foreground sm:table-cell">
                   Enterprise
@@ -115,6 +128,9 @@ function BookingsTable({ bookings }: { bookings: BookingRow[] }) {
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                     {booking.timeStart}–{booking.timeEnd}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {booking.capturesCount}
                   </td>
                   <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
                     {booking.enterprise?.name ?? "—"}

@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { createBookingSchema } from "@/lib/validations/booking";
+import { addHoursToTime } from "@/lib/booking-time";
 import { userHasActiveSubscription } from "@/lib/subscription";
 
 export async function POST(req: Request) {
@@ -34,15 +35,27 @@ export async function POST(req: Request) {
       );
     }
 
-    const { requestedDate, timeStart, timeEnd, notes } = parsed.data;
+    const { requestedDate, capturesCount, timeStart, notes, participants } =
+      parsed.data;
+
+    // Always compute timeEnd server-side — never trust the client-submitted value.
+    const timeEnd = addHoursToTime(timeStart, capturesCount);
 
     const booking = await prisma.booking.create({
       data: {
         userId: session.user.id,
         requestedDate: new Date(requestedDate),
+        capturesCount,
         timeStart,
         timeEnd,
         notes: notes || null,
+        participants: {
+          create: participants.map((p, i) => ({
+            sortOrder: i + 1,
+            firstName: p.firstName,
+            contactNumber: p.contactNumber,
+          })),
+        },
       },
     });
 
