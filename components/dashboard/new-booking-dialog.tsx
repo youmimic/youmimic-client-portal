@@ -74,7 +74,10 @@ export function NewBookingDialog() {
     name: "participants",
   });
 
-  const capturesCount = useWatch({ control: form.control, name: "capturesCount" });
+  const capturesCount = useWatch({
+    control: form.control,
+    name: "capturesCount",
+  });
   const timeStart = useWatch({ control: form.control, name: "timeStart" });
   const notesValue = useWatch({ control: form.control, name: "notes" }) ?? "";
   const notesLength = notesValue.length;
@@ -82,9 +85,13 @@ export function NewBookingDialog() {
   // Auto-compute timeEnd when timeStart or capturesCount changes.
   useEffect(() => {
     if (timeStart && capturesCount) {
-      form.setValue("timeEnd", addHoursToTime(timeStart, Number(capturesCount)), {
-        shouldValidate: false,
-      });
+      form.setValue(
+        "timeEnd",
+        addHoursToTime(timeStart, Number(capturesCount)),
+        {
+          shouldValidate: false,
+        },
+      );
     }
   }, [timeStart, capturesCount, form]);
 
@@ -151,7 +158,10 @@ export function NewBookingDialog() {
         New booking
       </Button>
 
-      <DialogContent showCloseButton className="sm:max-w-md">
+      <DialogContent
+        showCloseButton
+        className="sm:max-w-md max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>New booking</DialogTitle>
           <DialogDescription>
@@ -207,7 +217,10 @@ export function NewBookingDialog() {
                         aria-label="What is a capture?"
                         className="text-muted-foreground hover:text-foreground"
                       >
-                        <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
+                        <CircleHelp
+                          className="h-3.5 w-3.5"
+                          aria-hidden="true"
+                        />
                       </TooltipTrigger>
                       <TooltipContent>
                         Select how many avatar capture sessions are needed. Each
@@ -227,13 +240,14 @@ export function NewBookingDialog() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Array.from({ length: MAX_CAPTURES }, (_, i) => i + 1).map(
-                        (n) => (
-                          <SelectItem key={n} value={String(n)}>
-                            {n} {n === 1 ? "capture" : "captures"}
-                          </SelectItem>
-                        ),
-                      )}
+                      {Array.from(
+                        { length: MAX_CAPTURES },
+                        (_, i) => i + 1,
+                      ).map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n} {n === 1 ? "capture" : "captures"}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
