@@ -73,9 +73,8 @@ async function fetchBillingData(userId: string) {
         orderBy: { enterprise: { createdAt: "asc" } },
       }),
       // Payment history: subscription payments for this user's personal plan.
-      // TODO next milestone: also surface enterprise subscription payments for
-      // enterprises owned by this user, and add receipt links via
-      // stripe.invoices.retrieve(stripeInvoiceId).hosted_invoice_url.
+      // Receipt links resolve via /api/stripe/invoice-redirect/[invoiceId].
+      // Enterprise subscription payments (owned enterprises) are a future addition.
       prisma.payment.findMany({
         where: { subscription: { userId } },
         orderBy: { createdAt: "desc" },
@@ -503,10 +502,19 @@ function PaymentHistorySection({ payments }: { payments: PaymentRecord[] }) {
                       {payment.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {/* TODO: call stripe.invoices.retrieve(stripeInvoiceId) to get
-                        hosted_invoice_url, then render a clickable receipt link. */}
-                    {payment.stripeInvoiceId ?? "—"}
+                  <td className="px-4 py-3">
+                    {payment.stripeInvoiceId ? (
+                      <a
+                        href={`/api/stripe/invoice-redirect/${payment.stripeInvoiceId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary underline-offset-4 hover:underline"
+                      >
+                        View
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

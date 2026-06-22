@@ -1,5 +1,76 @@
 # HANDOFF.md
 
+## Session: API entitlement checks + payment receipt links — 2026-06-22
+
+### What was inspected
+
+- `app/api/bookings/route.ts` — POST handler had auth check only; no subscription enforcement.
+- `app/api/bookings/[id]/route.ts` — PATCH handler had auth + ownership + status checks; no subscription enforcement.
+- `app/api/bookings/[id]/cancel/route.ts` — POST handler; cancellation intentionally left without subscription check (consumer protection).
+- `lib/subscription.ts` — `userHasActiveSubscription` helper confirmed correct (`TRIALING | ACTIVE`, `findFirst` without `orderBy` is acceptable here since we need only existence, not a specific row).
+- `lib/stripe.ts` — singleton Stripe client confirmed; `stripe.invoices.retrieve(id)` returns `hosted_invoice_url`.
+- `app/(dashboard)/dashboard/billing/page.tsx` — `PaymentHistorySection` previously rendered `stripeInvoiceId` as plain text with a TODO comment.
+
+### What changed
+
+1. **`app/api/bookings/route.ts`** — Added `import { userHasActiveSubscription }` and a fresh DB entitlement check after the 401 auth guard. Returns 403 with `"An active subscription is required to create bookings"` if the check fails. This is the real security boundary: JWT state may be stale after Stripe events so the proxy guard alone is insufficient.
+
+2. **`app/api/bookings/[id]/route.ts`** — Same pattern added to the PATCH handler. Editing an existing booking is a paid-feature action; the check runs before the ownership/status guards. Returns 403 with `"An active subscription is required to edit bookings"`.
+
+3. **`app/api/bookings/[id]/cancel/route.ts`** — No change. Cancellation is consumer-protection (users must be able to clean up bookings even if their subscription lapses).
+
+4. **`app/api/stripe/invoice-redirect/[invoiceId]/route.ts`** (new) — GET handler. Auth check → Prisma ownership check (personal subscription userId or enterprise subscription ownerUserId) → `stripeClient.invoices.retrieve(invoiceId)` → `NextResponse.redirect(hosted_invoice_url)`. Returns 401 / 403 / 404 on failure. Opens the Stripe-hosted receipt PDF in a new tab.
+
+5. **`app/(dashboard)/dashboard/billing/page.tsx`** — Replaced the TODO invoice column in `PaymentHistorySection` with an anchor tag linking to `/api/stripe/invoice-redirect/{stripeInvoiceId}` (opens in new tab). Rows without a `stripeInvoiceId` still show `—`.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/api/bookings/route.ts` | Added `userHasActiveSubscription` import + 403 entitlement guard on POST |
+| `app/api/bookings/[id]/route.ts` | Added `userHasActiveSubscription` import + 403 entitlement guard on PATCH |
+| `app/api/stripe/invoice-redirect/[invoiceId]/route.ts` | **Created** — receipt redirect with auth + ownership verification |
+| `app/(dashboard)/dashboard/billing/page.tsx` | Invoice column: TODO text → `<a>` link to invoice-redirect route |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 22 routes; /api/stripe/invoice-redirect/[invoiceId] ƒ Dynamic; ƒ Proxy (Middleware) confirmed
+```
+
+### Authorization model — complete picture
+
+| Layer | Mechanism | Staleness risk |
+|---|---|---|
+| Page routing (`proxy.ts`) | JWT `hasActiveSubscription` — no DB | Yes — stale until re-auth after Stripe events |
+| API write protection | Fresh `userHasActiveSubscription()` DB call | None — always current |
+| Receipt access | Prisma ownership check per request | None |
+
+Stale JWT state is acceptable for navigation UX (proxy redirects browsers). It is **not** the enforcement boundary for paid API actions — the API routes carry their own fresh DB checks.
+
+### JWT freshness after Stripe events
+
+`hasActiveSubscription` in the JWT is set at sign-in and does not update mid-session. The Stripe webhook updates the DB but cannot invalidate existing JWTs. Affected scenarios:
+
+- Subscription lapses mid-session → user can still reach `/dashboard/bookings` UI until JWT expires, **but** any attempt to create or edit a booking via the API returns 403.
+- User subscribes mid-session → UI shows pricing gate, but they can bypass by calling the API directly (their fresh DB check will pass). Re-signing in corrects the UI.
+
+No per-request DB call in `proxy.ts`; the API-level check is the authoritative guard.
+
+### Unresolved issues
+
+1. **Enterprise subscription payments in history** — `PaymentHistorySection` queries `subscription.userId = userId` (personal plan only). Enterprise subscription payments for enterprises owned by this user are not yet shown.
+2. **Stripe env vars** — All previously-placeholder values are now filled in (`STRIPE_WEBHOOK_SECRET`, `STRIPE_CREATOR_PRICE_ID`, `STRIPE_ENTERPRISE_PRICE_ID`, `STRIPE_SECRET_KEY`). A new `STRIPE_AVATAR_CAPTURE_PRICE_ID` is present in `.env` but is not yet referenced in any code — wire it up when the avatar capture billing flow is implemented.
+3. **Invoice URLs on zero-amount invoices** — `hosted_invoice_url` may be null (Stripe only generates it for finalised non-zero invoices). The redirect route returns 404 in that case; no special UI handling yet.
+
+### Recommended next milestone
+
+**Enterprise payment history** — extend the payment history query to also surface payments for subscriptions owned by the user's enterprises (nested relation filter on `subscription.enterprise.ownerUserId`). Alternatively, segment into a "Personal" / "Enterprise" tab layout.
+
+---
+
 ## Session: JWT subscription gate + payment history scaffold — 2026-06-22
 
 ### What was inspected
