@@ -280,7 +280,7 @@ export default function SignupPage() {
                         >
                           I agree to the{" "}
                           <a
-                            href="/2026-05-07 Amended TOB.docx"
+                            href="/2026-05-07 Amended TOB.pdf"
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={handleTermsClick}
@@ -346,7 +346,7 @@ export default function SignupPage() {
                         >
                           I agree to the{" "}
                           <a
-                            href="/2026-05-07 YouMimic Privacy Policy.docx"
+                            href="/2026-05-07 YouMimic Privacy Policy.pdf"
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={handlePrivacyPolicyClick}
