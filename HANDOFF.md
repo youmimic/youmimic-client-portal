@@ -1,5 +1,53 @@
 # HANDOFF.md
 
+## Session: Prisma Payment.type fix + client regeneration — 2026-06-22
+
+### What was inspected
+
+- `prisma/schema.prisma` — `Payment.type PaymentType` is required with no default; `PaymentType` enum values: `booking`, `subscription`, `other`.
+- `app/generated/prisma/enums.ts` — stale client had no `PaymentType` or `PaymentStatus` entries (only `PlanType`, `SubscriptionStatus`, `BillingOwnerType`).
+- `app/generated/prisma/models/Payment.ts` — stale `PaymentCreateInput` had no `type` field; `status` typed as `string` instead of `PaymentStatus` enum.
+- `app/api/stripe/webhook/route.ts:111` — the only `payment.upsert` / `payment.create` call site in the codebase; `handleInvoicePaid` create payload was missing `type`.
+
+### Root cause
+
+The Prisma client had not been regenerated after the schema migration that added `type PaymentType` and `bookingId`/`booking` relation to the `Payment` model. Because the generated `PaymentCreateInput` had no `type` field, TypeScript did not flag the omission. The PostgreSQL column is `NOT NULL` with no default, so at runtime Prisma would throw a constraint error when inserting a Payment row via `invoice.payment_succeeded` webhook events.
+
+### What changed
+
+1. **`npx prisma generate`** — regenerated the Prisma client. `PaymentType` and `PaymentStatus` now appear in `app/generated/prisma/enums.ts`; `PaymentCreateInput` now requires `type`.
+
+2. **`app/api/stripe/webhook/route.ts`** — two changes:
+   - Added `PaymentType` and `PaymentStatus` to the existing enum import.
+   - In `handleInvoicePaid` upsert create payload: added `type: PaymentType.subscription` (this handler is triggered by `invoice.payment_succeeded`, which are subscription billing cycle events); changed `status: "paid"` string literal to `status: PaymentStatus.paid` for type safety.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/generated/prisma/*` | Regenerated — `PaymentType`/`PaymentStatus` enums added; `PaymentCreateInput` now requires `type` |
+| `app/api/stripe/webhook/route.ts` | `PaymentType`/`PaymentStatus` imports added; `type: PaymentType.subscription` and `status: PaymentStatus.paid` in upsert create payload |
+
+### Checks run
+
+```
+npx prisma generate → clean
+npm run typecheck   → clean
+npm run build       → clean; 23 routes; ƒ Proxy (Middleware) confirmed
+```
+
+### Unresolved issues
+
+1. **`take: 20` combined payment history limit** — add pagination or load-more for billing histories with many invoices.
+2. **Zero-amount invoice 404** — `hosted_invoice_url` is null for Stripe draft/zero-amount invoices; the redirect route returns 404; no in-page fallback message.
+3. **`STRIPE_AVATAR_CAPTURE_PRICE_ID`** — present in `.env`, unreferenced in code; wire up with the avatar capture billing flow when that feature is built.
+
+### Recommended next milestone
+
+**Pagination or load-more for payment history** — replace the hard `take: 20` cap with a cursor-based load-more button (server action) or a dedicated `/dashboard/billing/history` full-list route.
+
+---
+
 ## Session: Enterprise-owner payment history — 2026-06-22
 
 ### What was inspected

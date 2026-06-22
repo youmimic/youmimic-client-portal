@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import stripeClient from "@/lib/stripe";
 import prisma from "@/lib/prisma";
-import { PlanType, SubscriptionStatus } from "@/app/generated/prisma/enums";
+import {
+  PaymentStatus,
+  PaymentType,
+  PlanType,
+  SubscriptionStatus,
+} from "@/app/generated/prisma/enums";
 
 // Maps Stripe subscription.status to our DB SubscriptionStatus enum
 const STRIPE_STATUS_MAP: Record<string, SubscriptionStatus> = {
@@ -112,11 +117,12 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
     where: { stripeInvoiceId: invoice.id },
     update: {},
     create: {
+      type: PaymentType.subscription,
       subscriptionId: localSub.id,
       stripeInvoiceId: invoice.id,
       amount: invoice.amount_paid,
       currency: invoice.currency,
-      status: "paid",
+      status: PaymentStatus.paid,
     },
   });
 }
