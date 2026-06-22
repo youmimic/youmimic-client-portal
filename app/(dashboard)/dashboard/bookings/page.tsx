@@ -16,7 +16,15 @@ export const metadata = {
 async function fetchBookings(userId: string) {
   return prisma.booking.findMany({
     where: { userId },
-    include: { enterprise: { select: { name: true } } },
+    select: {
+      id: true,
+      requestedDate: true,
+      timeStart: true,
+      timeEnd: true,
+      status: true,
+      notes: true,
+      enterprise: { select: { name: true } },
+    },
     orderBy: { requestedDate: "desc" },
   });
 }

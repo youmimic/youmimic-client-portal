@@ -1,5 +1,105 @@
 # HANDOFF.md
 
+## Session: Schema drift migration + deployment hardening — 2026-06-22
+
+### What was inspected
+
+- `prisma/migrations/` — only two migrations existed; neither added `paymentStatus`,
+  the three enum types (`BookingStatus`, `PaymentStatus`, `PaymentType`), or the new
+  `Payment` columns (`type`, `updatedAt`, `bookingId`).
+- `prisma/schema.prisma` — `Booking.paymentStatus`, `payments.type`, `payments.updatedAt`,
+  `payments.bookingId`, and all three enum types were present but unmigrated.
+- `app/(dashboard)/dashboard/bookings/page.tsx` — `findMany` had no `select`; Prisma
+  was enumerating all scalar fields including the missing `paymentStatus` → P2022.
+- `package.json` — `build` script was `next build` only; `prisma migrate deploy` never ran.
+- Prisma CLI output confirmed 3 existing rows in `payments`, validating backfill strategy.
+
+### Root cause
+
+`schema.prisma` diverged from production over multiple sessions where `prisma db push`
+or manual schema edits were made without running `prisma migrate dev`. `postinstall`
+only regenerated the TypeScript client (`prisma generate`); the actual DB was never
+updated. `findMany` without `select` exposed the gap the moment a new schema field
+appeared.
+
+### What changed
+
+1. **`prisma/migrations/20260622120000_add_booking_payment_status_and_payment_enums/migration.sql`**
+   (new, handwritten) — applied to production Neon DB during the same `npm run build`.
+   Key safety decisions:
+   - Wrapped in a single `BEGIN` / `COMMIT` transaction.
+   - Pre-flight `DO $$` blocks validate all existing string values before any cast; bad
+     data raises inside the transaction so the DB is left in its original state.
+   - TEXT → enum conversions use `ALTER COLUMN TYPE ... USING "col"::"EnumType"` — no
+     DROP+ADD, no data loss. (Prisma's auto-generated SQL would have used DROP+ADD.)
+   - `payments.type` gets `DEFAULT 'subscription'` for backfill of the 3 existing rows,
+     then `DROP DEFAULT` so future inserts must explicitly set it.
+   - `payments.updatedAt` gets `DEFAULT CURRENT_TIMESTAMP` for backfill; default is kept
+     as a safety net for direct SQL access.
+
+2. **`app/(dashboard)/dashboard/bookings/page.tsx`** — `findMany` now uses an explicit
+   `select` listing only the 6 fields the page actually renders. Future schema additions
+   are invisible to this query unless the code explicitly opts in.
+
+3. **`package.json`** — `"build"` changed from `"next build"` to
+   `"prisma migrate deploy && next build"`. Every Vercel deploy now applies pending
+   migrations before the Next.js build, fail-fast if `DIRECT_URL` is not set.
+
+### Columns added / changed in production
+
+| Table | Column / Type | Change |
+|---|---|---|
+| `bookings` | `status` | `TEXT` → `BookingStatus` enum (USING cast) |
+| `bookings` | `paymentStatus` | **Added** `PaymentStatus NOT NULL DEFAULT 'unpaid'` |
+| `payments` | `status` | `TEXT` → `PaymentStatus` enum (USING cast) |
+| `payments` | `subscriptionId` | `NOT NULL` → nullable |
+| `payments` | `type` | **Added** `PaymentType NOT NULL` (backfilled 'subscription') |
+| `payments` | `updatedAt` | **Added** `TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP` |
+| `payments` | `bookingId` | **Added** nullable `TEXT` FK → `bookings.id` + index |
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `prisma/migrations/20260622120000_.../migration.sql` | New handwritten migration |
+| `app/(dashboard)/dashboard/bookings/page.tsx` | Explicit `select` on `findMany` |
+| `package.json` | `build` script includes `prisma migrate deploy` |
+
+### Vercel environment variable requirement
+
+`DIRECT_URL` must be set in Vercel → Settings → Environment Variables. `prisma migrate deploy`
+at build time needs a direct (non-pooled) Neon connection. If absent, the build fails
+before `next build` starts — explicit, not silent.
+
+Also verify Vercel's Build Command is `npm run build` (not `next build` directly).
+
+### Checks run
+
+```
+npx prisma migrate deploy → migration applied to production Neon DB (3 existing payment rows safe)
+npm run typecheck         → clean
+npm run build             → prisma migrate deploy (already applied, skipped) + next build clean
+                            23 routes; ƒ Proxy (Middleware) confirmed
+```
+
+### Unresolved issues
+
+1. `take: 20` combined payment history limit — pagination/load-more.
+2. Zero-amount invoice 404 — no in-page fallback when `hosted_invoice_url` is null.
+3. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — present in `.env`, not yet wired to code.
+4. Other `findMany` calls without explicit `select` (avatars page, settings page) —
+   same blast-radius risk if future schema fields are added to those models.
+5. Debug `console.log("form errors", ...)` in `new-booking-dialog.tsx` line 56 —
+   should be removed before production release.
+
+### Recommended next milestone
+
+**Explicit `select` audit** — add explicit `select` to the avatars and settings page
+`findMany`/`findUnique` calls for the same defensive reason (one line per field, only
+what the page renders). Low-risk, high-protection change.
+
+---
+
 ## Session: Prisma Payment.type fix + client regeneration — 2026-06-22
 
 ### What was inspected
