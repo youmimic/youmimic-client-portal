@@ -1,5 +1,33 @@
 # HANDOFF.md
 
+## Session: Shared PricingPlans component — 2026-06-27
+
+### What was done
+
+Extracted the homepage pricing card grid into a shared `PricingPlans` component and wired both the homepage and pricing page to use it. Plans data and card markup now live in one place.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `components/marketing/pricing-plans.tsx` | **Created** — plans data + card grid extracted from homepage |
+| `app/(marketing)/page.tsx` | Removed inline `plans` array, `CheckCircle2`/`Card*` imports; replaced grid with `<PricingPlans />` |
+| `app/(marketing)/pricing/page.tsx` | Replaced simple three-card stub with `<PricingPlans />`; aligned heading/layout style with homepage; kept `isGated` subscription banner |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 26 routes; ƒ Proxy confirmed
+```
+
+### Notes
+
+Future changes to plan names, prices, features, or CTA links only require editing `components/marketing/pricing-plans.tsx`.
+
+---
+
 ## Session: Solutions marketing page — 2026-06-27
 
 ### What was done
