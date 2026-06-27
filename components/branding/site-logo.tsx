@@ -52,7 +52,8 @@ export function SiteLogo({
           alt="YouMimic"
           width={120}
           height={40}
-          className={className ?? "h-6 w-auto sm:h-7 md:h-8"}
+          className={className ?? "h-6 sm:h-7 md:h-8"}
+          style={{ width: "auto" }}
           priority
         />
       ) : (
