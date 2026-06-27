@@ -3,12 +3,7 @@ import { auth } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SiteLogo } from "@/components/branding/site-logo";
-
-const navLinks = [
-  { href: "/solutions", label: "Solutions" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/contact", label: "Contact" },
-];
+import { MarketingNav } from "@/components/marketing/marketing-nav";
 
 export async function MarketingHeader() {
   const session = await auth();
@@ -21,17 +16,7 @@ export async function MarketingHeader() {
           className="flex items-center h-6 w-auto sm:h-7 md:h-8"
         />
 
-        <nav className="hidden items-center gap-6 sm:flex">
-          {navLinks.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <MarketingNav />
 
         <div className="flex items-center gap-1">
           <ThemeToggle />

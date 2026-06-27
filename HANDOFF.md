@@ -1,5 +1,65 @@
 # HANDOFF.md
 
+## Session: Active nav link state — 2026-06-27
+
+### What was done
+
+Extracted the marketing nav into a `"use client"` subcomponent (`MarketingNav`) that uses `usePathname()` to apply an active style to the current route. `MarketingHeader` remains an async server component — only the nav is a client boundary.
+
+### What was inspected
+
+- `components/marketing/marketing-header.tsx` — confirmed `navLinks` array and inline `<nav>` block; server component with `auth()`; all three routes (`/solutions`, `/pricing`, `/contact`) already confirmed present
+
+### Implementation
+
+**New file: `components/marketing/marketing-nav.tsx`** — `"use client"` component.
+- Owns the `navLinks` array (`/solutions`, `/pricing`, `/contact`).
+- Uses `usePathname()` to compare the current path against each `href`.
+- Active link: `text-foreground`; inactive: `text-muted-foreground hover:text-foreground`. Uses `cn()` for conditional class merge.
+- Renders the same `<nav className="hidden items-center gap-6 sm:flex">` wrapper as before — responsive behavior unchanged.
+
+**Updated: `components/marketing/marketing-header.tsx`**
+- Removed inline `navLinks` array and `<nav>` block.
+- Imports and renders `<MarketingNav />` in the same position.
+- All auth-aware CTA logic and `auth()` call unchanged.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `components/marketing/marketing-nav.tsx` | **Created** — `"use client"` nav with `usePathname()` active state |
+| `components/marketing/marketing-header.tsx` | Replaced inline nav with `<MarketingNav />` |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 26 routes; ƒ Proxy confirmed
+```
+
+### Caveats
+
+- Active state is an exact `pathname === href` match. Sub-paths (e.g. `/solutions/something`) would not highlight the parent nav link — not a concern for the current flat marketing routes.
+- Nav remains hidden below `sm`; no mobile menu introduced.
+
+### Remaining issues (carried forward)
+
+1. Mobile nav (hamburger/drawer) — nav still hidden on mobile; future milestone.
+2. `CONTACT_EMAIL` env var not yet set in Vercel.
+3. `take: 20` hard cap on payment history — add pagination.
+4. Zero-amount invoice 404 — no in-page fallback.
+5. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+6. Explicit `select` audit for avatars and settings pages.
+7. Create `production` GitHub environment in repo settings.
+8. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+### Recommended next milestone
+
+**Mobile nav** — add a simple sheet/drawer or collapsible menu triggered by a hamburger icon, visible only below `sm`. `MarketingNav` already owns the links data so it can be reused or extended for the mobile drawer without duplicating the route list.
+
+---
+
 ## Session: Marketing header nav expansion — 2026-06-27
 
 ### What was done
