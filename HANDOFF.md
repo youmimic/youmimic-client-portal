@@ -1,5 +1,70 @@
 # HANDOFF.md
 
+## Session: Marketing header nav expansion — 2026-06-27
+
+### What was done
+
+Added a lightweight `<nav>` to `MarketingHeader` with links to `/solutions`, `/pricing`, and `/contact`. The existing auth-aware CTA behavior is fully preserved. Nav is hidden on mobile and visible from the `sm` breakpoint upward.
+
+### What was inspected
+
+- `components/marketing/marketing-header.tsx` — server component, `justify-between` flex row, Logo left / auth right; no nav existed
+- `app/(marketing)/solutions/page.tsx`, `app/(marketing)/pricing/page.tsx`, `app/(marketing)/contact/page.tsx` — all three routes confirmed present
+
+### Implementation
+
+Single file change: `components/marketing/marketing-header.tsx`.
+
+- Added `navLinks` array (`/solutions`, `/pricing`, `/contact`) above the component.
+- Added `<nav className="hidden items-center gap-6 sm:flex">` as a middle flex child between Logo and the auth cluster. With the existing `justify-between` on the row, this naturally distributes: Logo (far left) | Nav (centre) | Auth (far right).
+- Each nav link is a plain `<Link>` styled `text-sm font-medium text-muted-foreground transition-colors hover:text-foreground` — visually lighter than the Button CTAs, clear hierarchy between navigation and action.
+- On mobile (`< sm`): nav is `hidden`, header reverts to the original Logo | Auth layout. No mobile menu system introduced.
+- Auth-aware CTA block (sign-in/get-started vs dashboard) is unchanged.
+
+### Responsive behavior
+
+| Breakpoint | Layout |
+|---|---|
+| `< sm` (mobile) | Logo — ThemeToggle + auth CTAs (nav hidden) |
+| `sm+` (tablet/desktop) | Logo — Solutions · Pricing · Contact — ThemeToggle + auth CTAs |
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `components/marketing/marketing-header.tsx` | Added `navLinks` array + `<nav>` between logo and auth cluster |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 26 routes; ƒ Proxy confirmed
+```
+
+### Caveats
+
+- No active-link highlighting — `MarketingHeader` is a server component and `usePathname()` requires a client component. Adding a client sub-component for active state is the natural follow-up.
+- Nav is hidden on mobile. If a hamburger/drawer mobile menu is needed later it should be a separate milestone.
+
+### Remaining issues (carried forward)
+
+1. Active nav link highlighting — requires a small client component using `usePathname`.
+2. Mobile nav (hamburger/drawer) — not yet implemented; noted as a future milestone.
+3. `CONTACT_EMAIL` env var not yet set in Vercel.
+4. `take: 20` hard cap on payment history — add pagination.
+5. Zero-amount invoice 404 — no in-page fallback.
+6. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+7. Explicit `select` audit for avatars and settings pages.
+8. Create `production` GitHub environment in repo settings.
+9. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+### Recommended next milestone
+
+**Active nav link highlighting** — extract the three nav links into a small `"use client"` component (`NavLinks`) that uses `usePathname()` to apply an `text-foreground` active style to the current route. Drop-in replacement for the static links in the header.
+
+---
+
 ## Session: Shared PricingPlans component — 2026-06-27
 
 ### What was done
