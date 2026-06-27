@@ -1,5 +1,64 @@
 # HANDOFF.md
 
+## Session: Solutions marketing page — 2026-06-27
+
+### What was done
+
+Added a `/solutions` marketing page inside `app/(marketing)/` so it automatically inherits `MarketingHeader` + `MarketingFooter`. The page uses the supplied content formatted into a four-section production-quality landing page, reusing every design token and layout pattern from the homepage.
+
+### What was inspected
+
+- `app/(marketing)/page.tsx` — homepage patterns: `bg-muted` alternating sections, `bg-card border border-border rounded-xl` cards, `bg-accent/10 border-accent/20` icon containers, hardcoded `#191818` final CTA with radial gradients
+- `app/(marketing)/layout.tsx` — confirms `(marketing)` route group provides header/footer automatically
+- `components/marketing/marketing-header.tsx` — current nav: ThemeToggle + auth CTAs only; no established multi-link nav pattern
+- `components/marketing/marketing-footer.tsx` — minimal footer
+- `app/(marketing)/pricing/page.tsx` and `app/(marketing)/contact/page.tsx` — confirmed `/pricing` and `/contact` exist as link targets
+- `components/ui/button.tsx` — `asChild` + `variant="outline"` / `variant="ghost"` patterns confirmed
+
+### Implementation
+
+Single new file: `app/(marketing)/solutions/page.tsx` — server component with `metadata`. Four sections:
+
+1. **Hero** (`bg-muted`) — "How our clients are using their avatars" with supporting copy about CEOs/executives/educators/creators. Two CTA buttons: "Book a demo" → `/contact`, "View pricing" → `/pricing`.
+2. **What you can create** (white) — 5 capability cards: Safety & Training Videos, 175+ Languages, User Generated Content, Investor Pitches & Market Reports, Team & Service Announcements. `lg:grid-cols-3` responsive grid, icon-led cards matching homepage features section.
+3. **Built for every industry** (`bg-muted`) — 13 industry cards in `lg:grid-cols-3` grid: Government, Energy/Mining/Utilities, Advertising Agencies, Tourism & Events, Finance & Insurance, Entrepreneurs & Startups, Small Business, Corporate, Education & Training, Retail & e-Commerce, Health & Aged Care, Technology/Science/Medicine, Creators.
+4. **Final CTA** (dark `#191818`) — "Ready to elevate your video messaging?" with radial ambient tints. "Book a demo" → `/contact`, "See pricing" → `/pricing`. Matches homepage final CTA palette exactly.
+
+### Nav link decision
+
+The `MarketingHeader` currently has no established multi-link nav (only auth CTAs). Adding a single `/solutions` link there without also adding `/pricing`, `/contact`, etc. would be inconsistent. Noted as a follow-up: expand header to a full nav row when the site has 3+ marketing routes worth surfacing.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/(marketing)/solutions/page.tsx` | **Created** — full solutions marketing page |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 26 routes; /solutions ƒ Dynamic; ƒ Proxy confirmed
+```
+
+### Remaining issues (carried forward)
+
+1. `MarketingHeader` has no nav links — expanding to Solutions / Pricing / Contact is a follow-up requiring a header redesign.
+2. `CONTACT_EMAIL` env var not yet set in Vercel.
+3. `take: 20` hard cap on payment history — add pagination.
+4. Zero-amount invoice 404 — no in-page fallback when `hosted_invoice_url` is null.
+5. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — in `.env`, not yet wired to code.
+6. Explicit `select` audit — avatars and settings pages still lack explicit selects.
+7. Create `production` GitHub environment in repo settings.
+8. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+### Recommended next milestone
+
+**Marketing header nav expansion** — add a `<nav>` row to `MarketingHeader` with links to `/solutions`, `/pricing`, and `/contact`. This is the natural follow-up now that three marketing destination pages exist. Use a ghost/link variant to keep the header visually lightweight.
+
+---
+
 ## Session: Contact page + Calendly embed + enterprise CTA wiring — 2026-06-27
 
 ### What was done
