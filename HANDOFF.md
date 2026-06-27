@@ -1,5 +1,148 @@
 # HANDOFF.md
 
+## Session: Contact page + Calendly embed + enterprise CTA wiring — 2026-06-27
+
+### What was done
+
+Added a `/contact` marketing page that inherits `MarketingHeader` + `MarketingFooter` via the existing `(marketing)` route group. The page has two sections side-by-side on desktop: a contact/demo form and a Calendly inline booking widget. Enterprise-intent pricing CTAs on the homepage now point to `/contact`.
+
+### What was inspected
+
+- `app/(marketing)/layout.tsx` — confirmed `MarketingHeader` + `MarketingFooter` wrappers; no changes needed
+- `components/marketing/marketing-header.tsx` — async server component; reused as-is
+- `app/(marketing)/page.tsx` — hero CTAs (individual-signup-oriented, kept); pricing section Enterprise + Custom cards had `href: "/signup"` — updated
+- `lib/mailer.ts` — existing `sendVerifyEmail` / `sendForgotPasswordEmail` pattern; extended with `sendContactNotificationEmail`
+- `lib/resend.ts` — singleton `resend` client
+- `lib/validations/auth.ts` + `lib/validations/booking.ts` — Zod + normalize transform pattern
+- `app/signup/page.tsx` — react-hook-form + zodResolver + shadcn Form/Input/Checkbox pattern; modal error banner with X dismiss
+- `emails/templates/verify-email.tsx` — React Email template shape and palette
+
+### Implementation
+
+**New files:**
+
+- `lib/validations/contact.ts` — Zod schema: `name`, `email` (with normalize transforms matching auth.ts), `companyName` (required), `message`
+- `emails/templates/contact-notification-email.tsx` — React Email template; uses the same brand palette (teal header gradient, cream background)
+- `app/api/contact/route.ts` — POST handler: JSON parse → Zod safeParse → `sendContactNotificationEmail` → `{ success: true }`. Returns `fieldErrors` on 400 for server-side field highlighting.
+- `components/marketing/contact-form.tsx` — `"use client"` component; react-hook-form + zodResolver + shadcn Form/Input/Textarea. Inline error banner + per-field messages. Shows a success state after submission (no redirect needed for a contact form).
+- `app/(marketing)/contact/page.tsx` — server component with `metadata`. Two-section layout: muted header section + two-column grid (form left, Calendly right). Calendly embed uses `next/script` with `strategy="lazyOnload"` so it does not block page render.
+
+**Modified files:**
+
+- `lib/mailer.ts` — added `sendContactNotificationEmail`; recipient is `CONTACT_EMAIL` env var with fallback to `EMAIL_FROM`
+- `app/(marketing)/page.tsx` — Enterprise pricing card `href: "/signup"` → `"/contact"`; Custom pricing card `href: "/signup"` → `"/contact"`. Hero and final CTA buttons unchanged (individual signup path).
+
+### Calendly embed notes
+
+- The `<div class="calendly-inline-widget">` is rendered server-side as static HTML. The Calendly script (`strategy="lazyOnload"`) queries for this div at idle time and hydrates it into the interactive widget.
+- `strategy="lazyOnload"` maps to the original `async` attribute in the Calendly snippet. The div is in the DOM before the script runs, so initialization is reliable.
+- The `Script` component is placed at page root (after the two-section layout), which is idiomatic for `lazyOnload`.
+
+### Route rendering change
+
+`/contact` renders as `ƒ Dynamic` because it inherits `MarketingHeader` which calls `auth()`. Expected behavior; same as all other marketing routes.
+
+### New env var
+
+`CONTACT_EMAIL` — optional recipient for contact form notifications. Falls back to `EMAIL_FROM` if unset. No migration, no schema change.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `lib/validations/contact.ts` | **Created** — Zod schema for contact form |
+| `emails/templates/contact-notification-email.tsx` | **Created** — React Email notification template |
+| `lib/mailer.ts` | Added `sendContactNotificationEmail` |
+| `app/api/contact/route.ts` | **Created** — POST handler |
+| `components/marketing/contact-form.tsx` | **Created** — client form component |
+| `app/(marketing)/contact/page.tsx` | **Created** — marketing contact page |
+| `app/(marketing)/page.tsx` | Enterprise + Custom pricing `href` → `/contact` |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 25 routes; /contact ƒ Dynamic, /api/contact ƒ Dynamic; ƒ Proxy confirmed
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel — add it pointing to the sales inbox.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback when `hosted_invoice_url` is null.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — in `.env`, not yet wired to code.
+5. Explicit `select` audit — avatars and settings pages still lack explicit selects.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+### Recommended next milestone
+
+**Pricing page real copy** — replace placeholder prices on `app/(marketing)/pricing/page.tsx` with confirmed tier pricing and wire its CTAs to `/contact` for enterprise tiers (same pattern applied here). Alternatively, add a confirmation/auto-reply email to the contact submitter using the existing `sendVerifyEmail` pattern as a template.
+
+---
+
+## Session: Marketing header on login and signup pages — 2026-06-27
+
+### What was done
+
+Added the `MarketingHeader` (logo + theme toggle + auth-aware nav) to `/login` and `/signup` via co-located layout files. The centered auth-card experience is preserved; no auth flow, form, validation, redirect, or callbackUrl handling was changed.
+
+### What was inspected
+
+- `app/(marketing)/layout.tsx` — confirms `MarketingHeader` + `MarketingFooter` wrappers
+- `components/marketing/marketing-header.tsx` — async server component, calls `auth()`, renders `SiteLogo` + `ThemeToggle` + auth-aware nav buttons; safe to reuse as-is
+- `app/login/page.tsx` — server component, two render paths: "already logged in" Card and `<LoginForm />`; no layout file existed
+- `app/login/login-form.tsx` — client component, renders its own `<main className="min-h-screen flex items-center justify-center">`
+- `app/signup/page.tsx` — client component (`"use client"`), renders its own `<main className="min-h-screen flex items-center justify-center">`
+- `app/layout.tsx` — root body: `min-h-full flex flex-col`; flex column is the centering axis
+
+### Implementation
+
+**New layout files (no route changes):**
+- `app/login/layout.tsx` — renders `<MarketingHeader /> + {children}`
+- `app/signup/layout.tsx` — renders `<MarketingHeader /> + {children}`
+
+**One-word layout class change per file (not auth logic):**
+- `app/login/login-form.tsx`, `app/login/page.tsx`, `app/signup/page.tsx` — `min-h-screen` → `flex-1` on `<main>`. With the root body's `flex flex-col`, `flex-1` makes the content area fill the remaining viewport height below the sticky header, keeping the card visually centered under the header rather than offset 64px below the raw viewport center.
+
+### Route rendering change
+
+`/signup` changed from `○ Static` to `ƒ Dynamic` because the new layout includes `MarketingHeader` which calls `auth()`. This is expected and matches `/login` (already dynamic) and `/` (already dynamic).
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/login/layout.tsx` | **Created** — injects `MarketingHeader` for all `/login` renders |
+| `app/signup/layout.tsx` | **Created** — injects `MarketingHeader` for all `/signup` renders |
+| `app/login/login-form.tsx` | `min-h-screen` → `flex-1` on `<main>` |
+| `app/login/page.tsx` | `min-h-screen` → `flex-1` on `<main>` (logged-in state) |
+| `app/signup/page.tsx` | `min-h-screen` → `flex-1` on `<main>` |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 23 routes; /login ƒ Dynamic, /signup ƒ Dynamic; ƒ Proxy confirmed
+```
+
+### Remaining issues (carried forward)
+
+1. `take: 20` hard cap on payment history — add pagination.
+2. Zero-amount invoice 404 — no in-page fallback when `hosted_invoice_url` is null.
+3. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — in `.env`, not yet wired to code.
+4. Explicit `select` audit — avatars and settings pages still lack explicit selects.
+5. Create `production` GitHub environment in repo settings.
+6. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+### Recommended next milestone
+
+**`/contact` or demo page** — a marketing form page at `app/(marketing)/contact/page.tsx` that automatically inherits `MarketingHeader` + `MarketingFooter`, collects name/email/company/message, and sends via the existing Resend mailer. Then wire up the hero CTA and final CTA to `/contact`.
+
+---
+
 ## Session: Replace native select with Base UI Select — 2026-06-22
 
 ### What was done

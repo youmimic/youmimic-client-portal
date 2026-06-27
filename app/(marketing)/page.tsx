@@ -152,7 +152,7 @@ const plans = [
       "Dedicated account manager",
     ],
     cta: "Get Started",
-    href: "/signup",
+    href: "/contact",
     highlight: true,
   },
   {
@@ -166,7 +166,7 @@ const plans = [
       "White-glove onboarding",
     ],
     cta: "Contact sales",
-    href: "/signup",
+    href: "/contact",
     highlight: false,
   },
 ];

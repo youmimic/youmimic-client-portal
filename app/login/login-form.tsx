@@ -81,7 +81,7 @@ export default function LoginForm() {
   }
 
   return (
-    <main className="container mx-auto flex min-h-screen max-w-lg items-center justify-center px-4 py-10">
+    <main className="container mx-auto flex flex-1 max-w-lg items-center justify-center px-4 py-10">
       <Card className="w-full">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Log in</CardTitle>
