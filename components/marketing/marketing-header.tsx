@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SiteLogo } from "@/components/branding/site-logo";
 import { MarketingNav } from "@/components/marketing/marketing-nav";
+import { HEADER_HEIGHT } from "@/components/marketing/marketing-header-config";
 
 export async function MarketingHeader() {
   const session = await auth();
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+      <div className={cn("mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6", HEADER_HEIGHT)}>
         <SiteLogo
           forceVariant="auto"
           className="flex items-center h-6 w-auto sm:h-7 md:h-8"

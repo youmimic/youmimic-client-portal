@@ -1,5 +1,53 @@
 # HANDOFF.md
 
+## Session: Header height drift-proofing — 2026-06-27
+
+### What was done
+
+Centralized the `h-16` / `top-16` header height tokens so they can never drift out of sync. A single plain `.ts` config file exports two string constants; both consumers import from it.
+
+### What was inspected
+
+- `components/marketing/marketing-header-config.ts` — new config file (already created at session start)
+- `components/marketing/marketing-header.tsx` — hardcoded `h-16` in inner div className
+- `components/marketing/marketing-nav.tsx` — hardcoded `top-16` in backdrop div and panel div (two occurrences)
+
+### Implementation
+
+**`components/marketing/marketing-header-config.ts`** (new) — exports `HEADER_HEIGHT = "h-16"` and `HEADER_OFFSET = "top-16"` as plain string constants. No `"use client"` directive, so both server and client components import it without crossing the module boundary.
+
+**`components/marketing/marketing-header.tsx`** — added `cn` and `HEADER_HEIGHT` imports; replaced `h-16` literal in inner div with `cn("mx-auto flex max-w-6xl ...", HEADER_HEIGHT)`.
+
+**`components/marketing/marketing-nav.tsx`** — added `HEADER_OFFSET` import; replaced both `top-16` occurrences in backdrop and panel divs with `cn("fixed inset-0 z-30 sm:hidden", HEADER_OFFSET)` and `cn("fixed left-0 right-0 z-40 ...", HEADER_OFFSET)`.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `components/marketing/marketing-header-config.ts` | Created — shared height constants |
+| `components/marketing/marketing-header.tsx` | Import + use `HEADER_HEIGHT` |
+| `components/marketing/marketing-nav.tsx` | Import + use `HEADER_OFFSET` (2 occurrences) |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 25 routes; ƒ Proxy confirmed
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+---
+
 ## Session: Mobile nav for marketing header — 2026-06-27
 
 ### What was done
