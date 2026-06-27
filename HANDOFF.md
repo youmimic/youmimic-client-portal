@@ -1,5 +1,70 @@
 # HANDOFF.md
 
+## Session: Mobile nav for marketing header — 2026-06-27
+
+### What was done
+
+Extended `MarketingNav` with a mobile hamburger toggle and dropdown panel. Desktop nav is unchanged. `MarketingHeader` remains a server component with no modifications.
+
+### What was inspected
+
+- `components/marketing/marketing-nav.tsx` — existing `"use client"` component; desktop `hidden sm:flex` nav with `usePathname` active state
+- `components/marketing/marketing-header.tsx` — server component, `<MarketingNav />` already in position between logo and auth cluster
+- `components/ui/` — no Sheet or Drawer primitive exists; Dialog is a centered modal (unsuitable for nav); bespoke approach required
+
+### Implementation
+
+Single file change: `components/marketing/marketing-nav.tsx`. Component now returns a fragment with three parts:
+
+1. **Desktop nav** (`hidden sm:flex`) — unchanged.
+2. **Hamburger button** (`sm:hidden`) — `Menu`/`X` icon toggle, `aria-label` and `aria-expanded` for accessibility. Visible only below `sm`, sits as a flex child between logo and auth cluster via `justify-between`.
+3. **Mobile dropdown panel** (`fixed top-16`, `z-40`, `sm:hidden`) — full-width panel flush below the `h-16` sticky header. Transparent backdrop (`z-30`) beneath it closes the menu on outside tap. Each nav link has an `onClick` to close immediately on tap; active state uses `bg-muted text-foreground` (same Tailwind tokens as dashboard nav).
+
+`useEffect` was intentionally avoided — the project's `react-hooks/set-state-in-effect` lint rule (same constraint documented in the SiteLogo session) blocks `setState` calls inside effect bodies. Close behavior is handled entirely by `onClick` on links and the backdrop.
+
+### Mobile layout
+
+| State | Mobile header row |
+|---|---|
+| Closed | Logo — ☰ — ThemeToggle + auth CTAs |
+| Open | Logo — ✕ — ThemeToggle + auth CTAs + dropdown panel below |
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `components/marketing/marketing-nav.tsx` | Added hamburger toggle + mobile dropdown panel |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 1 pre-existing warning in lib/prisma.ts (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 26 routes; ƒ Proxy confirmed
+```
+
+### Caveats
+
+- Dropdown is `fixed top-16`. If the header height ever changes from `h-16`, this value must be updated to match.
+- No animation on the dropdown open/close. Adding a CSS transition (e.g. `data-open:animate-in`) is a cosmetic follow-up.
+- Active state in the mobile panel uses `bg-muted text-foreground` (filled highlight); desktop uses `text-foreground` only (text-only). Both are intentionally different — the larger touch targets in the mobile panel benefit from a background fill.
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+### Recommended next milestone
+
+**Dropdown open/close animation** — add a subtle slide-down + fade-in transition to the mobile panel using Tailwind's `animate-in` / `slide-in-from-top-2` classes for a polished feel. Or move on to a higher-priority product milestone such as the payment history pagination or the `/contact` Vercel env var.
+
+---
+
 ## Session: Active nav link state — 2026-06-27
 
 ### What was done
