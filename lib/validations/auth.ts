@@ -27,6 +27,9 @@ const passwordSchema = z
     message: "Password must contain at least one number",
   });
 
+export const ACCOUNT_TYPES = ["INDIVIDUAL", "BUSINESS"] as const;
+export type AccountType = (typeof ACCOUNT_TYPES)[number];
+
 export const registerSchema = z.object({
   name: z
     .string()
@@ -49,6 +52,10 @@ export const registerSchema = z.object({
     }),
 
   password: passwordSchema,
+
+  accountType: z.enum(ACCOUNT_TYPES),
+
+  businessName: z.string().trim().max(200, "Business name must be 200 characters or less").optional(),
 
   acceptTerms: z.boolean().refine((value) => value === true, {
     message: "You must agree to the Terms and Conditions",
@@ -93,3 +100,4 @@ export const loginSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type RegisterOutput = z.output<typeof registerSchema>;

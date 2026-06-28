@@ -1,5 +1,103 @@
 # HANDOFF.md
 
+## Session: Individual / Business account type at signup — 2026-06-29
+
+### What was done
+
+Extended the existing signup flow so users choose Individual or Business before creating their account. No new auth routes, no new Prisma migrations — the `Enterprise` and `EnterpriseMember` tables already existed in the schema.
+
+### What was inspected
+
+- `app/signup/page.tsx` — single-page client form, react-hook-form + zodResolver, extends `registerSchema` with confirmPassword
+- `app/api/register/route.ts` — thin POST handler, delegates to `registerUser()`
+- `lib/auth/register-user.ts` — validates, checks duplicate email, creates user + verification token in one `$transaction`, sends verify email
+- `lib/validations/auth.ts` — `registerSchema` with name/email/password and legal consent fields
+- `prisma/schema.prisma` — `Enterprise` (ownerUserId FK), `EnterpriseMember` (enterpriseId + userId + roleId, all non-nullable), `Role` (name unique)
+- `app/api/verify-email/route.ts` — untouched; email verification flow unchanged
+- `auth.ts` — untouched; login flow unchanged
+- `components/ui/` — no RadioGroup or ToggleGroup installed; bespoke segmented control built
+
+### Implementation
+
+**`lib/validations/auth.ts`**
+- Added `ACCOUNT_TYPES = ["INDIVIDUAL", "BUSINESS"] as const` and `AccountType` type export.
+- Added `accountType: z.enum(ACCOUNT_TYPES)` (required, no default — avoids zodResolver input/output type mismatch).
+- Added `businessName: z.string().trim().max(200).optional()`.
+- Exported `RegisterOutput` for downstream type use.
+
+**`lib/auth/register-user.ts`**
+- Destructures `accountType` and `businessName` from `parsed.data`.
+- Server-side guard: if `accountType === "BUSINESS" && !businessName` → returns `fieldErrors.businessName` before touching the DB.
+- `$transaction` now branches: INDIVIDUAL path is unchanged; BUSINESS path additionally:
+  1. `upsert` the `"owner"` role (idempotent — safe whether role is seeded or not).
+  2. `create` an `Enterprise` with `ownerUserId = createdUser.id`.
+  3. `create` an `EnterpriseMember` linking the user as owner.
+  All three writes are atomic in the same transaction — no orphan risk on partial failure.
+
+**`app/signup/page.tsx`**
+- `signupFormSchema` replaces the old `.refine()` confirmPassword check with a single `.superRefine()` that handles both passwords-match and businessName-required-for-BUSINESS.
+- `KNOWN_FIELD_KEYS` Set replaces the previous manual key comparison for server error mapping — now includes `accountType` and `businessName`.
+- Account type segmented control: two `<button type="button">` elements styled with `cn()` using `bg-primary text-primary-foreground` for the active state, consistent with the existing palette. Switching to Individual clears `businessName` and re-triggers its validation.
+- `businessName` field rendered conditionally (`accountType === "BUSINESS"`) between email and password fields.
+- `aria-pressed` on each toggle button for accessibility.
+- `autoComplete="organization"` on `businessName` input.
+
+### TypeScript note
+
+`zodResolver` types the form `TFieldValues` against the schema's *input* type. A field with `.default()` becomes optional in the input type, causing a mismatch with `z.infer` (which returns the output type). Fixed by making `accountType` a plain required enum — the form's `defaultValues` always supplies it.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `lib/validations/auth.ts` | Added `ACCOUNT_TYPES`, `AccountType`, `accountType` field, `businessName` field, `RegisterOutput` export |
+| `lib/auth/register-user.ts` | Rewritten to handle BUSINESS path atomically; role upsert + enterprise + member in same transaction |
+| `app/signup/page.tsx` | Added account type toggle UI, conditional businessName field, updated schema + error mapping |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing: lib/prisma.ts unused directive, react-hooks/incompatible-library on form.watch)
+npm run typecheck → clean
+next build        → clean; 25 routes; ƒ Proxy confirmed
+npm run build     → fails at prisma migrate deploy (Neon unreachable from local machine — network issue only, not a code issue; no migration was required)
+```
+
+### Manual verification results (confirmed in running app — 2026-06-29)
+
+All six cases passed:
+
+1. **Individual signup** — creates only a `User` row and an `EmailVerificationToken`. No enterprise or enterprise-member records created. ✓
+2. **Business signup** — creates `User`, `Enterprise` (with `ownerUserId` set to the new user), and `EnterpriseMember` (owner role) atomically in a single transaction. ✓
+3. **Business signup with missing business name** — server returns `fieldErrors.businessName`; client renders the inline error beneath the field. ✓
+4. **Duplicate email** — returns 409 with `fieldErrors.email` as before. ✓
+5. **Email verification flow** — verification link works for both Individual and Business registrations; redirects to `/login?verified=1` unchanged. ✓
+6. **Login after verification** — credentials login succeeds and redirects to `/dashboard` for both account types. ✓
+
+### Notes and caveats
+
+- No Prisma schema migration was required. `Enterprise`, `EnterpriseMember`, and `Role` tables already existed.
+- The `"owner"` role is created via `role.upsert()` inside the BUSINESS transaction. This is idempotent — if the role is already seeded it is reused; if absent it is created. Confirmed working in the deployed environment.
+- `accountType` is **not stored** on the `User` model. The only DB signal for account type post-signup is whether the user owns an `Enterprise` row. Any future onboarding split must derive account type from this relationship, or persist it explicitly.
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+### Recommended next milestone
+
+- Post-signup onboarding split: redirect Individual users to a personal dashboard setup step, Business users to a team/enterprise setup step.
+- Enterprise invite flow: allow the owner to invite team members via the `Invite` model (already in schema).
+- Optional individual profile metadata (company name as display-only, not enterprise creation).
+
+---
+
 ## Session: Header height drift-proofing — 2026-06-27
 
 ### What was done
@@ -22,11 +120,11 @@ Centralized the `h-16` / `top-16` header height tokens so they can never drift o
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `components/marketing/marketing-header-config.ts` | Created — shared height constants |
-| `components/marketing/marketing-header.tsx` | Import + use `HEADER_HEIGHT` |
-| `components/marketing/marketing-nav.tsx` | Import + use `HEADER_OFFSET` (2 occurrences) |
+| File                                              | Change                                       |
+| ------------------------------------------------- | -------------------------------------------- |
+| `components/marketing/marketing-header-config.ts` | Created — shared height constants            |
+| `components/marketing/marketing-header.tsx`       | Import + use `HEADER_HEIGHT`                 |
+| `components/marketing/marketing-nav.tsx`          | Import + use `HEADER_OFFSET` (2 occurrences) |
 
 ### Checks run
 
@@ -72,15 +170,15 @@ Single file change: `components/marketing/marketing-nav.tsx`. Component now retu
 
 ### Mobile layout
 
-| State | Mobile header row |
-|---|---|
-| Closed | Logo — ☰ — ThemeToggle + auth CTAs |
-| Open | Logo — ✕ — ThemeToggle + auth CTAs + dropdown panel below |
+| State  | Mobile header row                                         |
+| ------ | --------------------------------------------------------- |
+| Closed | Logo — ☰ — ThemeToggle + auth CTAs                       |
+| Open   | Logo — ✕ — ThemeToggle + auth CTAs + dropdown panel below |
 
 ### Files changed
 
-| File | Change |
-|---|---|
+| File                                     | Change                                         |
+| ---------------------------------------- | ---------------------------------------------- |
 | `components/marketing/marketing-nav.tsx` | Added hamburger toggle + mobile dropdown panel |
 
 ### Checks run
@@ -126,22 +224,24 @@ Extracted the marketing nav into a `"use client"` subcomponent (`MarketingNav`) 
 ### Implementation
 
 **New file: `components/marketing/marketing-nav.tsx`** — `"use client"` component.
+
 - Owns the `navLinks` array (`/solutions`, `/pricing`, `/contact`).
 - Uses `usePathname()` to compare the current path against each `href`.
 - Active link: `text-foreground`; inactive: `text-muted-foreground hover:text-foreground`. Uses `cn()` for conditional class merge.
 - Renders the same `<nav className="hidden items-center gap-6 sm:flex">` wrapper as before — responsive behavior unchanged.
 
 **Updated: `components/marketing/marketing-header.tsx`**
+
 - Removed inline `navLinks` array and `<nav>` block.
 - Imports and renders `<MarketingNav />` in the same position.
 - All auth-aware CTA logic and `auth()` call unchanged.
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `components/marketing/marketing-nav.tsx` | **Created** — `"use client"` nav with `usePathname()` active state |
-| `components/marketing/marketing-header.tsx` | Replaced inline nav with `<MarketingNav />` |
+| File                                        | Change                                                             |
+| ------------------------------------------- | ------------------------------------------------------------------ |
+| `components/marketing/marketing-nav.tsx`    | **Created** — `"use client"` nav with `usePathname()` active state |
+| `components/marketing/marketing-header.tsx` | Replaced inline nav with `<MarketingNav />`                        |
 
 ### Checks run
 
@@ -196,15 +296,15 @@ Single file change: `components/marketing/marketing-header.tsx`.
 
 ### Responsive behavior
 
-| Breakpoint | Layout |
-|---|---|
-| `< sm` (mobile) | Logo — ThemeToggle + auth CTAs (nav hidden) |
+| Breakpoint             | Layout                                                         |
+| ---------------------- | -------------------------------------------------------------- |
+| `< sm` (mobile)        | Logo — ThemeToggle + auth CTAs (nav hidden)                    |
 | `sm+` (tablet/desktop) | Logo — Solutions · Pricing · Contact — ThemeToggle + auth CTAs |
 
 ### Files changed
 
-| File | Change |
-|---|---|
+| File                                        | Change                                                         |
+| ------------------------------------------- | -------------------------------------------------------------- |
 | `components/marketing/marketing-header.tsx` | Added `navLinks` array + `<nav>` between logo and auth cluster |
 
 ### Checks run
@@ -246,11 +346,11 @@ Extracted the homepage pricing card grid into a shared `PricingPlans` component 
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `components/marketing/pricing-plans.tsx` | **Created** — plans data + card grid extracted from homepage |
-| `app/(marketing)/page.tsx` | Removed inline `plans` array, `CheckCircle2`/`Card*` imports; replaced grid with `<PricingPlans />` |
-| `app/(marketing)/pricing/page.tsx` | Replaced simple three-card stub with `<PricingPlans />`; aligned heading/layout style with homepage; kept `isGated` subscription banner |
+| File                                     | Change                                                                                                                                  |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `components/marketing/pricing-plans.tsx` | **Created** — plans data + card grid extracted from homepage                                                                            |
+| `app/(marketing)/page.tsx`               | Removed inline `plans` array, `CheckCircle2`/`Card*` imports; replaced grid with `<PricingPlans />`                                     |
+| `app/(marketing)/pricing/page.tsx`       | Replaced simple three-card stub with `<PricingPlans />`; aligned heading/layout style with homepage; kept `isGated` subscription banner |
 
 ### Checks run
 
@@ -296,8 +396,8 @@ The `MarketingHeader` currently has no established multi-link nav (only auth CTA
 
 ### Files changed
 
-| File | Change |
-|---|---|
+| File                                 | Change                                      |
+| ------------------------------------ | ------------------------------------------- |
 | `app/(marketing)/solutions/page.tsx` | **Created** — full solutions marketing page |
 
 ### Checks run
@@ -373,15 +473,15 @@ Added a `/contact` marketing page that inherits `MarketingHeader` + `MarketingFo
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `lib/validations/contact.ts` | **Created** — Zod schema for contact form |
+| File                                              | Change                                          |
+| ------------------------------------------------- | ----------------------------------------------- |
+| `lib/validations/contact.ts`                      | **Created** — Zod schema for contact form       |
 | `emails/templates/contact-notification-email.tsx` | **Created** — React Email notification template |
-| `lib/mailer.ts` | Added `sendContactNotificationEmail` |
-| `app/api/contact/route.ts` | **Created** — POST handler |
-| `components/marketing/contact-form.tsx` | **Created** — client form component |
-| `app/(marketing)/contact/page.tsx` | **Created** — marketing contact page |
-| `app/(marketing)/page.tsx` | Enterprise + Custom pricing `href` → `/contact` |
+| `lib/mailer.ts`                                   | Added `sendContactNotificationEmail`            |
+| `app/api/contact/route.ts`                        | **Created** — POST handler                      |
+| `components/marketing/contact-form.tsx`           | **Created** — client form component             |
+| `app/(marketing)/contact/page.tsx`                | **Created** — marketing contact page            |
+| `app/(marketing)/page.tsx`                        | Enterprise + Custom pricing `href` → `/contact` |
 
 ### Checks run
 
@@ -425,10 +525,12 @@ Added the `MarketingHeader` (logo + theme toggle + auth-aware nav) to `/login` a
 ### Implementation
 
 **New layout files (no route changes):**
+
 - `app/login/layout.tsx` — renders `<MarketingHeader /> + {children}`
 - `app/signup/layout.tsx` — renders `<MarketingHeader /> + {children}`
 
 **One-word layout class change per file (not auth logic):**
+
 - `app/login/login-form.tsx`, `app/login/page.tsx`, `app/signup/page.tsx` — `min-h-screen` → `flex-1` on `<main>`. With the root body's `flex flex-col`, `flex-1` makes the content area fill the remaining viewport height below the sticky header, keeping the card visually centered under the header rather than offset 64px below the raw viewport center.
 
 ### Route rendering change
@@ -437,13 +539,13 @@ Added the `MarketingHeader` (logo + theme toggle + auth-aware nav) to `/login` a
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `app/login/layout.tsx` | **Created** — injects `MarketingHeader` for all `/login` renders |
-| `app/signup/layout.tsx` | **Created** — injects `MarketingHeader` for all `/signup` renders |
-| `app/login/login-form.tsx` | `min-h-screen` → `flex-1` on `<main>` |
-| `app/login/page.tsx` | `min-h-screen` → `flex-1` on `<main>` (logged-in state) |
-| `app/signup/page.tsx` | `min-h-screen` → `flex-1` on `<main>` |
+| File                       | Change                                                            |
+| -------------------------- | ----------------------------------------------------------------- |
+| `app/login/layout.tsx`     | **Created** — injects `MarketingHeader` for all `/login` renders  |
+| `app/signup/layout.tsx`    | **Created** — injects `MarketingHeader` for all `/signup` renders |
+| `app/login/login-form.tsx` | `min-h-screen` → `flex-1` on `<main>`                             |
+| `app/login/page.tsx`       | `min-h-screen` → `flex-1` on `<main>` (logged-in state)           |
+| `app/signup/page.tsx`      | `min-h-screen` → `flex-1` on `<main>`                             |
 
 ### Checks run
 
@@ -478,11 +580,11 @@ The `color-scheme: dark` CSS approach for the native `<select>` was insufficient
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `components/ui/select.tsx` | Full rewrite — exports `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem` as Base UI Select wrappers |
-| `components/dashboard/new-booking-dialog.tsx` | capturesCount field uses new components; `onValueChange={(val) => field.onChange(Number(val))}` |
-| `components/dashboard/booking-actions.tsx` | Same change in `EditDialog` capturesCount field |
+| File                                          | Change                                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `components/ui/select.tsx`                    | Full rewrite — exports `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem` as Base UI Select wrappers |
+| `components/dashboard/new-booking-dialog.tsx` | capturesCount field uses new components; `onValueChange={(val) => field.onChange(Number(val))}`                           |
+| `components/dashboard/booking-actions.tsx`    | Same change in `EditDialog` capturesCount field                                                                           |
 
 ### Key implementation details
 
@@ -535,8 +637,8 @@ npm run build     → next build clean; 23 routes; ƒ Proxy confirmed
 
 ### Files changed
 
-| File | Change |
-|---|---|
+| File                        | Change                                                                              |
+| --------------------------- | ----------------------------------------------------------------------------------- |
 | `components/ui/tooltip.tsx` | `z-60` moved from `Popup` (static, ignored) to `Positioner` (positioned, effective) |
 
 ---
@@ -569,10 +671,13 @@ The warning is **non-breaking**: theming works correctly, end users are not affe
 ### What changed
 
 **`package.json`** — build script updated from:
+
 ```
 "build": "prisma migrate deploy && next build"
 ```
+
 to:
+
 ```
 "build": "prisma generate && prisma migrate deploy && next build"
 ```
@@ -581,8 +686,8 @@ This ensures the Prisma client is always regenerated from the current schema dur
 
 ### Files changed
 
-| File | Change |
-|---|---|
+| File           | Change                                                                    |
+| -------------- | ------------------------------------------------------------------------- |
 | `package.json` | `build` script: added `prisma generate &&` before `prisma migrate deploy` |
 
 ### Checks run
@@ -641,19 +746,19 @@ Full captures-based booking upgrade across every booking surface:
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `prisma/schema.prisma` | `capturesCount` on `Booking`; new `BookingCaptureParticipant` model |
-| `prisma/migrations/20260622130000_.../migration.sql` | New safe-additive migration |
-| `lib/booking-time.ts` | **Created** — `addHoursToTime` utility |
-| `lib/validations/booking.ts` | `capturesCount`, `participants` array, updated refines |
-| `components/ui/select.tsx` | **Created** — styled native select |
-| `components/ui/tooltip.tsx` | **Created** — base-ui tooltip wrappers |
-| `components/dashboard/new-booking-dialog.tsx` | Full form update + debug log removed |
-| `components/dashboard/booking-actions.tsx` | EditDialog + `BookingForActions` type extended |
-| `app/api/bookings/route.ts` | `capturesCount`, participants, server-side timeEnd |
-| `app/api/bookings/[id]/route.ts` | Same + atomic participant replacement |
-| `app/(dashboard)/dashboard/bookings/page.tsx` | Query + table extended |
+| File                                                 | Change                                                              |
+| ---------------------------------------------------- | ------------------------------------------------------------------- |
+| `prisma/schema.prisma`                               | `capturesCount` on `Booking`; new `BookingCaptureParticipant` model |
+| `prisma/migrations/20260622130000_.../migration.sql` | New safe-additive migration                                         |
+| `lib/booking-time.ts`                                | **Created** — `addHoursToTime` utility                              |
+| `lib/validations/booking.ts`                         | `capturesCount`, `participants` array, updated refines              |
+| `components/ui/select.tsx`                           | **Created** — styled native select                                  |
+| `components/ui/tooltip.tsx`                          | **Created** — base-ui tooltip wrappers                              |
+| `components/dashboard/new-booking-dialog.tsx`        | Full form update + debug log removed                                |
+| `components/dashboard/booking-actions.tsx`           | EditDialog + `BookingForActions` type extended                      |
+| `app/api/bookings/route.ts`                          | `capturesCount`, participants, server-side timeEnd                  |
+| `app/api/bookings/[id]/route.ts`                     | Same + atomic participant replacement                               |
+| `app/(dashboard)/dashboard/bookings/page.tsx`        | Query + table extended                                              |
 
 ### Checks run
 
@@ -715,21 +820,23 @@ comments and in `docs/migrations.md`.
 
 ### Files added
 
-| File | Purpose |
-|---|---|
-| `.github/workflows/check-prisma-migration.yml` | PR guard |
-| `.github/workflows/prisma-migrate-prod.yml` | Production migration |
-| `docs/migrations.md` | Team migration process doc |
+| File                                           | Purpose                    |
+| ---------------------------------------------- | -------------------------- |
+| `.github/workflows/check-prisma-migration.yml` | PR guard                   |
+| `.github/workflows/prisma-migrate-prod.yml`    | Production migration       |
+| `docs/migrations.md`                           | Team migration process doc |
 
 ### Secrets that must be configured
 
 **GitHub** (one-time setup):
+
 ```
 Repository Settings → Environments → production → Secrets
   DIRECT_URL = <direct Neon connection string>
 ```
 
 **Vercel** (already required, unchanged):
+
 ```
 Project → Environment Variables → Production
   DATABASE_URL = <pooled Neon connection string>
@@ -805,23 +912,23 @@ appeared.
 
 ### Columns added / changed in production
 
-| Table | Column / Type | Change |
-|---|---|---|
-| `bookings` | `status` | `TEXT` → `BookingStatus` enum (USING cast) |
-| `bookings` | `paymentStatus` | **Added** `PaymentStatus NOT NULL DEFAULT 'unpaid'` |
-| `payments` | `status` | `TEXT` → `PaymentStatus` enum (USING cast) |
-| `payments` | `subscriptionId` | `NOT NULL` → nullable |
-| `payments` | `type` | **Added** `PaymentType NOT NULL` (backfilled 'subscription') |
-| `payments` | `updatedAt` | **Added** `TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP` |
-| `payments` | `bookingId` | **Added** nullable `TEXT` FK → `bookings.id` + index |
+| Table      | Column / Type    | Change                                                       |
+| ---------- | ---------------- | ------------------------------------------------------------ |
+| `bookings` | `status`         | `TEXT` → `BookingStatus` enum (USING cast)                   |
+| `bookings` | `paymentStatus`  | **Added** `PaymentStatus NOT NULL DEFAULT 'unpaid'`          |
+| `payments` | `status`         | `TEXT` → `PaymentStatus` enum (USING cast)                   |
+| `payments` | `subscriptionId` | `NOT NULL` → nullable                                        |
+| `payments` | `type`           | **Added** `PaymentType NOT NULL` (backfilled 'subscription') |
+| `payments` | `updatedAt`      | **Added** `TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`  |
+| `payments` | `bookingId`      | **Added** nullable `TEXT` FK → `bookings.id` + index         |
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `prisma/migrations/20260622120000_.../migration.sql` | New handwritten migration |
-| `app/(dashboard)/dashboard/bookings/page.tsx` | Explicit `select` on `findMany` |
-| `package.json` | `build` script includes `prisma migrate deploy` |
+| File                                                 | Change                                          |
+| ---------------------------------------------------- | ----------------------------------------------- |
+| `prisma/migrations/20260622120000_.../migration.sql` | New handwritten migration                       |
+| `app/(dashboard)/dashboard/bookings/page.tsx`        | Explicit `select` on `findMany`                 |
+| `package.json`                                       | `build` script includes `prisma migrate deploy` |
 
 ### Vercel environment variable requirement
 
@@ -881,9 +988,9 @@ The Prisma client had not been regenerated after the schema migration that added
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `app/generated/prisma/*` | Regenerated — `PaymentType`/`PaymentStatus` enums added; `PaymentCreateInput` now requires `type` |
+| File                              | Change                                                                                                                                  |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/generated/prisma/*`          | Regenerated — `PaymentType`/`PaymentStatus` enums added; `PaymentCreateInput` now requires `type`                                       |
 | `app/api/stripe/webhook/route.ts` | `PaymentType`/`PaymentStatus` imports added; `type: PaymentType.subscription` and `status: PaymentStatus.paid` in upsert create payload |
 
 ### Checks run
@@ -919,12 +1026,14 @@ npm run build       → clean; 23 routes; ƒ Proxy (Middleware) confirmed
 **`app/(dashboard)/dashboard/billing/page.tsx`** — single file changed.
 
 1. **Payment query (`fetchBillingData`)** — replaced the single `{ subscription: { userId } }` filter with:
+
    ```
    OR: [
      { subscription: { userId } },                               // personal
      { subscription: { enterprise: { ownerUserId: userId } } }, // enterprise-owner
    ]
    ```
+
    Added `subscription.enterprise.name` to the select to drive the new Plan column. Ordering and `take: 20` limit unchanged.
 
 2. **`PaymentHistorySection` UI** — added a "Plan" column between Date and Amount:
@@ -939,6 +1048,7 @@ The Prisma `OR` filter includes payments whose linked subscription has `enterpri
 ### How non-owner members are excluded
 
 Non-owner enterprise members have a `userId` that differs from `enterprise.ownerUserId`. Neither `OR` branch matches them:
+
 - Branch 1 (`subscription.userId = userId`) — enterprise subscriptions have `userId = null`, so this never matches any enterprise payment for any user.
 - Branch 2 (`subscription.enterprise.ownerUserId = userId`) — matches only the enterprise owner.
 
@@ -946,8 +1056,8 @@ The invoice redirect route has the same ownership check, so even if a member som
 
 ### Files changed
 
-| File | Change |
-|---|---|
+| File                                         | Change                                                                  |
+| -------------------------------------------- | ----------------------------------------------------------------------- |
 | `app/(dashboard)/dashboard/billing/page.tsx` | OR query for personal + enterprise-owner payments; Plan column in table |
 
 ### Checks run
@@ -995,12 +1105,12 @@ npm run build     → clean; 22 routes; ƒ Proxy (Middleware) confirmed
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `app/api/bookings/route.ts` | Added `userHasActiveSubscription` import + 403 entitlement guard on POST |
-| `app/api/bookings/[id]/route.ts` | Added `userHasActiveSubscription` import + 403 entitlement guard on PATCH |
-| `app/api/stripe/invoice-redirect/[invoiceId]/route.ts` | **Created** — receipt redirect with auth + ownership verification |
-| `app/(dashboard)/dashboard/billing/page.tsx` | Invoice column: TODO text → `<a>` link to invoice-redirect route |
+| File                                                   | Change                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `app/api/bookings/route.ts`                            | Added `userHasActiveSubscription` import + 403 entitlement guard on POST  |
+| `app/api/bookings/[id]/route.ts`                       | Added `userHasActiveSubscription` import + 403 entitlement guard on PATCH |
+| `app/api/stripe/invoice-redirect/[invoiceId]/route.ts` | **Created** — receipt redirect with auth + ownership verification         |
+| `app/(dashboard)/dashboard/billing/page.tsx`           | Invoice column: TODO text → `<a>` link to invoice-redirect route          |
 
 ### Checks run
 
@@ -1012,11 +1122,11 @@ npm run build     → clean; 22 routes; /api/stripe/invoice-redirect/[invoiceId]
 
 ### Authorization model — complete picture
 
-| Layer | Mechanism | Staleness risk |
-|---|---|---|
-| Page routing (`proxy.ts`) | JWT `hasActiveSubscription` — no DB | Yes — stale until re-auth after Stripe events |
-| API write protection | Fresh `userHasActiveSubscription()` DB call | None — always current |
-| Receipt access | Prisma ownership check per request | None |
+| Layer                     | Mechanism                                   | Staleness risk                                |
+| ------------------------- | ------------------------------------------- | --------------------------------------------- |
+| Page routing (`proxy.ts`) | JWT `hasActiveSubscription` — no DB         | Yes — stale until re-auth after Stripe events |
+| API write protection      | Fresh `userHasActiveSubscription()` DB call | None — always current                         |
+| Receipt access            | Prisma ownership check per request          | None                                          |
 
 Stale JWT state is acceptable for navigation UX (proxy redirects browsers). It is **not** the enforcement boundary for paid API actions — the API routes carry their own fresh DB checks.
 
@@ -1065,12 +1175,12 @@ No per-request DB call in `proxy.ts`; the API-level check is the authoritative g
 
 ### Files changed
 
-| File | Change |
-|---|---|
-| `next-auth.d.ts` | Added `hasActiveSubscription: boolean` to Session.user; `hasActiveSubscription?: boolean` to JWT |
-| `auth.ts` | SubscriptionStatus import; DB lookup + `token.hasActiveSubscription` in jwt callback; `Boolean(token.hasActiveSubscription)` in session callback |
-| `proxy.ts` | Removed lib/subscription import; replaced DB call with `!user.hasActiveSubscription` token read |
-| `app/(dashboard)/dashboard/billing/page.tsx` | Payment history query, formatAmount, PAYMENT_STATUS_STYLES, PaymentHistorySection, page section |
+| File                                         | Change                                                                                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `next-auth.d.ts`                             | Added `hasActiveSubscription: boolean` to Session.user; `hasActiveSubscription?: boolean` to JWT                                                 |
+| `auth.ts`                                    | SubscriptionStatus import; DB lookup + `token.hasActiveSubscription` in jwt callback; `Boolean(token.hasActiveSubscription)` in session callback |
+| `proxy.ts`                                   | Removed lib/subscription import; replaced DB call with `!user.hasActiveSubscription` token read                                                  |
+| `app/(dashboard)/dashboard/billing/page.tsx` | Payment history query, formatAmount, PAYMENT_STATUS_STYLES, PaymentHistorySection, page section                                                  |
 
 ### Checks run
 
@@ -1127,12 +1237,12 @@ There is no session refresh mechanism currently in the project. To close this ga
 
 ### Files changed
 
-| File | Status |
-|---|---|
-| `proxy.ts` | Updated — async callback, email-verified + subscription guards added |
-| `lib/subscription.ts` | Created — `userHasActiveSubscription` Prisma helper |
-| `app/verify-email/page.tsx` | Created — email verification gate landing page |
-| `app/(marketing)/pricing/page.tsx` | Created — pricing stub with subscription-gate banner |
+| File                               | Status                                                               |
+| ---------------------------------- | -------------------------------------------------------------------- |
+| `proxy.ts`                         | Updated — async callback, email-verified + subscription guards added |
+| `lib/subscription.ts`              | Created — `userHasActiveSubscription` Prisma helper                  |
+| `app/verify-email/page.tsx`        | Created — email verification gate landing page                       |
+| `app/(marketing)/pricing/page.tsx` | Created — pricing stub with subscription-gate banner                 |
 
 ### Checks run
 
@@ -1184,26 +1294,27 @@ Created a reusable `SiteLogo` client component and wired it into the marketing h
 **Hydration strategy**: `useSyncExternalStore` (returns `false` on server, `true` after client hydration) replaces the `useState`+`useEffect` pattern to satisfy the project's `react-hooks/set-state-in-effect` lint rule.
 
 **Variant logic**:
+
 - `forceVariant="dark"` — always renders `/youmimic-white-transparent.png`; `src` is determined at module eval, no hydration concern.
 - `forceVariant="light"` — always renders `/youmimic-green-transparent.png`; same reasoning.
 - `forceVariant="auto"` (default) — waits for `mounted = true` before rendering the `<Image>`; renders an `sr-only` span in the interim to keep layout stable.
 
 ### Files changed
 
-| File | Status |
-|---|---|
-| `components/branding/site-logo.tsx` | **Created** — `"use client"`, `SiteLogoProps`, `useSyncExternalStore` mount guard, `forceVariant` logic |
-| `components/marketing/marketing-header.tsx` | Updated — replaced `next/image` + `Link` logo block with `<SiteLogo forceVariant="dark" />`; removed `Image` import |
+| File                                        | Status                                                                                                                               |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `components/branding/site-logo.tsx`         | **Created** — `"use client"`, `SiteLogoProps`, `useSyncExternalStore` mount guard, `forceVariant` logic                              |
+| `components/marketing/marketing-header.tsx` | Updated — replaced `next/image` + `Link` logo block with `<SiteLogo forceVariant="dark" />`; removed `Image` import                  |
 | `components/dashboard/dashboard-header.tsx` | Updated — replaced `<span md:hidden>YouMimic</span>` with `<SiteLogo className="flex items-center md:hidden" forceVariant="auto" />` |
-| `components/dashboard/app-sidebar.tsx` | Updated — replaced text `Link` wordmark with `<SiteLogo href="/dashboard" onClick={onMobileClose} forceVariant="auto" />` |
+| `components/dashboard/app-sidebar.tsx`      | Updated — replaced text `Link` wordmark with `<SiteLogo href="/dashboard" onClick={onMobileClose} forceVariant="auto" />`            |
 
 ### Behavior expectations
 
-| Location | Variant | Light mode | Dark mode |
-|---|---|---|---|
-| Marketing header (`/`) | `forceVariant="dark"` | White logo | White logo |
+| Location                  | Variant               | Light mode | Dark mode  |
+| ------------------------- | --------------------- | ---------- | ---------- |
+| Marketing header (`/`)    | `forceVariant="dark"` | White logo | White logo |
 | Dashboard header (mobile) | `forceVariant="auto"` | Green logo | White logo |
-| Sidebar wordmark | `forceVariant="auto"` | Green logo | White logo |
+| Sidebar wordmark          | `forceVariant="auto"` | Green logo | White logo |
 
 ### Checks run
 
@@ -1238,14 +1349,14 @@ npm run build     → clean; 20 routes; / ƒ Dynamic (unchanged)
 
 New `globals.css` maps the YouMimic brand palette to semantic CSS variables:
 
-| Palette hex | oklch approx | Semantic role (light) | Semantic role (dark) |
-|---|---|---|---|
-| `#ECEAE9` | `oklch(0.934 0.005 78)` | `--background` | `--foreground`, `--primary-foreground` |
-| `#191818` | `oklch(0.130 0.003 30)` | `--foreground` | `--background` |
-| `#604B33` | `oklch(0.370 0.075 60)` | `--primary` (warm brown) | `--accent` |
-| `#60918C` | `oklch(0.590 0.068 178)` | `--accent` (dusty teal) | `--primary` |
-| `#9AB5C7` | `oklch(0.868 0.028 210)` | `--secondary` (steel blue derived) | muted palette |
-| `#ACC8CE` | `oklch(0.892 0.022 205)` | `--muted` (light teal surface) | — |
+| Palette hex | oklch approx             | Semantic role (light)              | Semantic role (dark)                   |
+| ----------- | ------------------------ | ---------------------------------- | -------------------------------------- |
+| `#ECEAE9`   | `oklch(0.934 0.005 78)`  | `--background`                     | `--foreground`, `--primary-foreground` |
+| `#191818`   | `oklch(0.130 0.003 30)`  | `--foreground`                     | `--background`                         |
+| `#604B33`   | `oklch(0.370 0.075 60)`  | `--primary` (warm brown)           | `--accent`                             |
+| `#60918C`   | `oklch(0.590 0.068 178)` | `--accent` (dusty teal)            | `--primary`                            |
+| `#9AB5C7`   | `oklch(0.868 0.028 210)` | `--secondary` (steel blue derived) | muted palette                          |
+| `#ACC8CE`   | `oklch(0.892 0.022 205)` | `--muted` (light teal surface)     | —                                      |
 
 **Light mode ring/ring**: teal `--accent`; **dark mode primary**: teal (teal reads warmer on charcoal than brown). Sidebar vars intentionally unchanged — dashboard has its own design language.
 
@@ -1262,6 +1373,7 @@ The hero is always dark (`#191818` base) regardless of the theme setting, so Pro
 ### ProductMockup update
 
 `ProductMockup` is now fully hardcoded to light cream palette colors so it reads as a floating bright panel against the always-dark hero:
+
 - Panel background: `#ECEAE9`
 - Status/action accents: `#60918C` teal
 - Typography: `#191818` near-black
@@ -1270,16 +1382,16 @@ The hero is always dark (`#191818` base) regardless of the theme setting, so Pro
 
 ### Section palette mapping
 
-| Section | Before | After |
-|---|---|---|
-| Stats numbers | `text-foreground` / `font-bold` | `text-primary` (brown in light, teal in dark) |
-| Feature icon containers | `bg-foreground/10`, icon `text-foreground` | `bg-accent/10 border-accent/20`, icon `text-accent` |
-| Step badges | neutral `bg-muted` | `bg-primary text-primary-foreground` (brown/cream) |
-| Avatar initials circle | neutral | `bg-accent/15 text-accent` (teal) |
-| Avatar Active dot | `emerald-500` | `bg-accent` (teal token) |
-| Pricing highlight ring | `ring-foreground` | `ring-primary` (brown in light, teal in dark) |
-| Final CTA | `bg-foreground text-background` | hardcoded `#191818` bg + ambient palette tints |
-| Final CTA primary button | default variant | hardcoded `#604B33` bg / `#ECEAE9` text |
+| Section                  | Before                                     | After                                               |
+| ------------------------ | ------------------------------------------ | --------------------------------------------------- |
+| Stats numbers            | `text-foreground` / `font-bold`            | `text-primary` (brown in light, teal in dark)       |
+| Feature icon containers  | `bg-foreground/10`, icon `text-foreground` | `bg-accent/10 border-accent/20`, icon `text-accent` |
+| Step badges              | neutral `bg-muted`                         | `bg-primary text-primary-foreground` (brown/cream)  |
+| Avatar initials circle   | neutral                                    | `bg-accent/15 text-accent` (teal)                   |
+| Avatar Active dot        | `emerald-500`                              | `bg-accent` (teal token)                            |
+| Pricing highlight ring   | `ring-foreground`                          | `ring-primary` (brown in light, teal in dark)       |
+| Final CTA                | `bg-foreground text-background`            | hardcoded `#191818` bg + ambient palette tints      |
+| Final CTA primary button | default variant                            | hardcoded `#604B33` bg / `#ECEAE9` text             |
 
 ### Hero placeholder asset
 
@@ -1287,9 +1399,9 @@ The hero is always dark (`#191818` base) regardless of the theme setting, so Pro
 
 ### What changed
 
-| File | Status |
-|---|---|
-| `app/globals.css` | Updated — full palette color token redesign, `:root` + `.dark` blocks rewritten |
+| File                       | Status                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `app/globals.css`          | Updated — full palette color token redesign, `:root` + `.dark` blocks rewritten                         |
 | `app/(marketing)/page.tsx` | Updated — hero 3-layer CSS background, ProductMockup explicit palette colors, all section token mapping |
 
 ### Checks run
@@ -1328,18 +1440,19 @@ npm run build     → clean; 20 routes; / ƒ Dynamic (unchanged, expected)
 
 Created `app/(marketing)/` route group:
 
-| Route | Layout | Result |
-|---|---|---|
-| `/` | `app/(marketing)/layout.tsx` → `MarketingHeader` + `MarketingFooter` | `ƒ Dynamic` (auth check) |
-| `/login` | root layout only | `ƒ Dynamic` (unchanged) |
-| `/signup` | root layout only | `○ Static` (unchanged) |
-| `/dashboard/*` | `app/(dashboard)/layout.tsx` → `DashboardShell` | `ƒ Dynamic` (unchanged) |
+| Route          | Layout                                                               | Result                   |
+| -------------- | -------------------------------------------------------------------- | ------------------------ |
+| `/`            | `app/(marketing)/layout.tsx` → `MarketingHeader` + `MarketingFooter` | `ƒ Dynamic` (auth check) |
+| `/login`       | root layout only                                                     | `ƒ Dynamic` (unchanged)  |
+| `/signup`      | root layout only                                                     | `○ Static` (unchanged)   |
+| `/dashboard/*` | `app/(dashboard)/layout.tsx` → `DashboardShell`                      | `ƒ Dynamic` (unchanged)  |
 
 `app/page.tsx` was deleted — the route is now handled by `app/(marketing)/page.tsx`.
 
 ### Auth-aware header
 
 `MarketingHeader` is an `async` server component that calls `auth()`:
+
 - **No session** → `ThemeToggle` | Sign in (ghost) | Get started (default)
 - **Session exists** → `ThemeToggle` | Dashboard (default)
 
@@ -1356,16 +1469,16 @@ Sign-out is not exposed in the marketing header; users sign out from within the 
 
 `app/(marketing)/page.tsx` now has 8 sections vs. the previous 6:
 
-| Section | What changed |
-|---|---|
-| **Hero** | Split two-column layout: copy left, `ProductMockup` right (desktop only). Mockup is a div-only product UI mock — window chrome, video preview area, status + language panel, script lines, action bar. No images. |
-| **Stats strip** | NEW — 4 stats bar (`3 min`, `12+`, `500+`, `99.9%`) on `bg-muted/30`. |
-| **Features** | Upgraded from 4-column icon cards to 2×2 horizontal `flex` cards with larger icons (size-10) and bolder treatment. |
-| **How it works** | Upgraded from plain numbered text to 3 bordered `bg-card` panels, each with step number badge + lucide icon in top-right. Icons: `Video`, `Cpu`, `Share2`. |
-| **Avatar showcase** | NEW — 3 example avatar cards showing deployed avatars: initial, name, role, `Active`/`Processing` status dot, language chip row. |
-| **Use cases** | Same content; icons upsized (size-10), font-weight boosted to `font-semibold`. |
-| **Pricing** | Unchanged — already clean. |
-| **Final CTA** | Unchanged — dark inverted section. |
+| Section             | What changed                                                                                                                                                                                                      |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hero**            | Split two-column layout: copy left, `ProductMockup` right (desktop only). Mockup is a div-only product UI mock — window chrome, video preview area, status + language panel, script lines, action bar. No images. |
+| **Stats strip**     | NEW — 4 stats bar (`3 min`, `125+`, `500+`, `99.9%`) on `bg-muted/30`.                                                                                                                                            |
+| **Features**        | Upgraded from 4-column icon cards to 2×2 horizontal `flex` cards with larger icons (size-10) and bolder treatment.                                                                                                |
+| **How it works**    | Upgraded from plain numbered text to 3 bordered `bg-card` panels, each with step number badge + lucide icon in top-right. Icons: `Video`, `Cpu`, `Share2`.                                                        |
+| **Avatar showcase** | NEW — 3 example avatar cards showing deployed avatars: initial, name, role, `Active`/`Processing` status dot, language chip row.                                                                                  |
+| **Use cases**       | Same content; icons upsized (size-10), font-weight boosted to `font-semibold`.                                                                                                                                    |
+| **Pricing**         | Unchanged — already clean.                                                                                                                                                                                        |
+| **Final CTA**       | Unchanged — dark inverted section.                                                                                                                                                                                |
 
 `ProductMockup` is a private function component inside the page file — it is desktop-only (`hidden lg:flex`).
 
@@ -1375,13 +1488,13 @@ Two semantic colors added for avatar status dots only (`emerald-500` for Active,
 
 ### What changed
 
-| File | Status |
-|---|---|
-| `app/page.tsx` | **Deleted** — route moved to route group |
-| `app/(marketing)/layout.tsx` | **Created** — `MarketingHeader` + `main.flex-1` wrapper + `MarketingFooter` |
-| `app/(marketing)/page.tsx` | **Created** — full enhanced landing page (8 sections) |
-| `components/marketing/marketing-header.tsx` | **Created** — async server component, auth-aware, ThemeToggle |
-| `components/marketing/marketing-footer.tsx` | **Created** — static server component |
+| File                                        | Status                                                                      |
+| ------------------------------------------- | --------------------------------------------------------------------------- |
+| `app/page.tsx`                              | **Deleted** — route moved to route group                                    |
+| `app/(marketing)/layout.tsx`                | **Created** — `MarketingHeader` + `main.flex-1` wrapper + `MarketingFooter` |
+| `app/(marketing)/page.tsx`                  | **Created** — full enhanced landing page (8 sections)                       |
+| `components/marketing/marketing-header.tsx` | **Created** — async server component, auth-aware, ThemeToggle               |
+| `components/marketing/marketing-footer.tsx` | **Created** — static server component                                       |
 
 ### Checks run
 
@@ -1435,9 +1548,9 @@ npm run build     → clean; / ƒ Dynamic; all 19 routes intact; dashboard/auth 
 
 ### Files changed
 
-| File             | Status                                   |
-| ---------------- | ---------------------------------------- |
-| `app/page.tsx`   | Replaced — full marketing landing page   |
+| File           | Status                                 |
+| -------------- | -------------------------------------- |
+| `app/page.tsx` | Replaced — full marketing landing page |
 
 ### Checks run
 

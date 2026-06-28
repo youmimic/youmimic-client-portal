@@ -8,7 +8,8 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { registerSchema } from "@/lib/validations/auth";
+import { registerSchema, ACCOUNT_TYPES } from "@/lib/validations/auth";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -32,9 +33,24 @@ const signupFormSchema = registerSchema
   .extend({
     confirmPassword: z.string().min(1, "Confirm password is required"),
   })
-  .refine((data) => data.password === data.confirmPassword, {
-    path: ["confirmPassword"],
-    message: "Passwords do not match",
+  .superRefine((data, ctx) => {
+    if (data.password !== data.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["confirmPassword"],
+        message: "Passwords do not match",
+      });
+    }
+    if (data.accountType === "BUSINESS") {
+      const biz = (data.businessName ?? "").trim();
+      if (biz.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["businessName"],
+          message: "Business name is required",
+        });
+      }
+    }
   });
 
 type SignupFormInput = z.infer<typeof signupFormSchema>;
@@ -44,6 +60,19 @@ type RegisterResponse = {
   fieldErrors?: Record<string, string[] | undefined>;
   message?: string;
 };
+
+const KNOWN_FIELD_KEYS = new Set<keyof SignupFormInput>([
+  "name",
+  "email",
+  "password",
+  "confirmPassword",
+  "accountType",
+  "businessName",
+  "acceptTerms",
+  "termsLinkClicked",
+  "acceptPrivacyPolicy",
+  "privacyPolicyLinkClicked",
+]);
 
 export default function SignupPage() {
   const router = useRouter();
@@ -57,6 +86,8 @@ export default function SignupPage() {
       email: "",
       password: "",
       confirmPassword: "",
+      accountType: "INDIVIDUAL",
+      businessName: "",
       acceptTerms: false,
       termsLinkClicked: false,
       acceptPrivacyPolicy: false,
@@ -64,6 +95,8 @@ export default function SignupPage() {
     },
     mode: "onBlur",
   });
+
+  const accountType = form.watch("accountType");
 
   function handleTermsClick() {
     form.setValue("termsLinkClicked", true, {
@@ -91,9 +124,7 @@ export default function SignupPage() {
 
     const response = await fetch("/api/register", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
 
@@ -103,17 +134,7 @@ export default function SignupPage() {
       if (data.fieldErrors) {
         for (const [key, messages] of Object.entries(data.fieldErrors)) {
           if (!messages?.length) continue;
-
-          if (
-            key === "name" ||
-            key === "email" ||
-            key === "password" ||
-            key === "confirmPassword" ||
-            key === "acceptTerms" ||
-            key === "termsLinkClicked" ||
-            key === "acceptPrivacyPolicy" ||
-            key === "privacyPolicyLinkClicked"
-          ) {
+          if (KNOWN_FIELD_KEYS.has(key as keyof SignupFormInput)) {
             form.setError(key as keyof SignupFormInput, {
               type: "server",
               message: messages[0],
@@ -161,12 +182,49 @@ export default function SignupPage() {
               className="space-y-5"
               noValidate
             >
+              {/* Account type toggle */}
+              <FormField
+                control={form.control}
+                name="accountType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account type</FormLabel>
+                    <div className="grid grid-cols-2 overflow-hidden rounded-md border">
+                      {ACCOUNT_TYPES.map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => {
+                            field.onChange(type);
+                            if (type === "INDIVIDUAL") {
+                              form.setValue("businessName", "");
+                              void form.trigger("businessName");
+                            }
+                          }}
+                          className={cn(
+                            "px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            field.value === type
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                            type === "INDIVIDUAL" ? "rounded-l-md" : "rounded-r-md",
+                          )}
+                          aria-pressed={field.value === type}
+                        >
+                          {type === "INDIVIDUAL" ? "Individual" : "Business"}
+                        </button>
+                      ))}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name</FormLabel>
+                    <FormLabel>Full name</FormLabel>
                     <FormControl>
                       <Input
                         type="text"
@@ -198,6 +256,28 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
+
+              {/* Business name — shown only when Business is selected */}
+              {accountType === "BUSINESS" && (
+                <FormField
+                  control={form.control}
+                  name="businessName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Business name</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="text"
+                          autoComplete="organization"
+                          placeholder="Your business name"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}

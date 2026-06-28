@@ -61,7 +61,15 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
     };
   }
 
-  const { name, email, password, acceptTerms, termsLinkClicked } = parsed.data;
+  const {
+    name,
+    email,
+    password,
+    acceptTerms,
+    termsLinkClicked,
+    accountType,
+    businessName,
+  } = parsed.data;
 
   if (!acceptTerms || !termsLinkClicked) {
     return {
@@ -73,6 +81,17 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
         termsLinkClicked: [
           "Please open the Terms and Conditions before continuing",
         ],
+      },
+    };
+  }
+
+  if (accountType === "BUSINESS" && !businessName) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Validation failed",
+      fieldErrors: {
+        businessName: ["Business name is required"],
       },
     };
   }
@@ -105,13 +124,11 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
         passwordHash,
         emailVerified: false,
       },
+      select: { id: true, email: true, name: true },
     });
 
     await tx.emailVerificationToken.deleteMany({
-      where: {
-        userId: createdUser.id,
-        used: false,
-      },
+      where: { userId: createdUser.id, used: false },
     });
 
     await tx.emailVerificationToken.create({
@@ -122,6 +139,33 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
         used: false,
       },
     });
+
+    if (accountType === "BUSINESS" && businessName) {
+      // Ensure the "owner" role exists — safe to upsert idempotently.
+      const ownerRole = await tx.role.upsert({
+        where: { name: "owner" },
+        create: { name: "owner" },
+        update: {},
+        select: { id: true },
+      });
+
+      const enterprise = await tx.enterprise.create({
+        data: {
+          name: businessName,
+          ownerUserId: createdUser.id,
+          status: "active",
+        },
+        select: { id: true },
+      });
+
+      await tx.enterpriseMember.create({
+        data: {
+          enterpriseId: enterprise.id,
+          userId: createdUser.id,
+          roleId: ownerRole.id,
+        },
+      });
+    }
 
     return createdUser;
   });
