@@ -122,6 +122,11 @@ function resolveAction(
   planType: "CREATOR" | "ENTERPRISE",
   enterpriseId?: string,
 ): { action: BillingAction; label: string; variant: "default" | "outline" } {
+  // Enterprise billing is B2B-managed — no self-serve portal or checkout.
+  if (enterpriseId !== undefined) {
+    return { action: { type: "managed" }, label: "", variant: "outline" };
+  }
+
   const noPortal =
     !sub ||
     !sub.stripeCustomerId ||
@@ -129,26 +134,22 @@ function resolveAction(
     sub.status === "INCOMPLETE_EXPIRED";
 
   if (noPortal) {
-    const action: BillingAction =
-      enterpriseId !== undefined
-        ? { type: "checkout", planType: "ENTERPRISE", enterpriseId }
-        : { type: "checkout", planType: "CREATOR" };
-    return { action, label: "Subscribe", variant: "default" };
+    return {
+      action: { type: "checkout", planType },
+      label: "Subscribe",
+      variant: "default",
+    };
   }
 
   if (sub.status === "INCOMPLETE") {
-    const action: BillingAction =
-      enterpriseId !== undefined
-        ? { type: "checkout", planType: "ENTERPRISE", enterpriseId }
-        : { type: "checkout", planType: "CREATOR" };
-    return { action, label: "Complete checkout", variant: "default" };
+    return {
+      action: { type: "checkout", planType },
+      label: "Complete checkout",
+      variant: "default",
+    };
   }
 
-  const action: BillingAction =
-    enterpriseId !== undefined
-      ? { type: "portal", enterpriseId }
-      : { type: "portal" };
-  return { action, label: "Manage billing", variant: "outline" };
+  return { action: { type: "portal" }, label: "Manage billing", variant: "outline" };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,51 @@
 # HANDOFF.md
 
+## Session: Enterprise billing suppression — 2026-06-29
+
+### What was done
+
+Enterprise-owned plans on `/dashboard/billing` no longer show a self-serve billing button. Billing for enterprise accounts is B2B-managed, so the "Subscribe", "Complete checkout", and "Manage billing" buttons are suppressed. In their place, the `EnterprisePlanCard` footer shows a short explanatory note with a `mailto:sales@youmimic.com` link.
+
+The change is in the action-resolution layer (`resolveAction`), not conditional JSX hiding. `resolveAction` returns a new `{ type: "managed" }` action when `enterpriseId` is present. `BillingActionButton` renders the support note for this action type. `PersonalPlanCard` and `MembershipNoticeCard` are completely unchanged.
+
+### Technical notes
+
+- Added `| { type: "managed" }` to the `BillingAction` discriminated union.
+- `resolveAction` now has an early return for `enterpriseId !== undefined` that returns `{ action: { type: "managed" }, label: "", variant: "outline" }`. The downstream checkout/portal logic is now personal-plan-only — no enterprise-specific branches remain in the lower half of the function.
+- `BillingActionButton` has an early return for `action.type === "managed"` (after hook declarations). TypeScript requires a narrowing guard inside the `handleClick` function declaration as well; a one-line `if (action.type === "managed") return;` inside the function body provides this (function declarations are hoisted and do not benefit from the outer early-return narrowing).
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `components/dashboard/billing-actions.tsx` | Added `{ type: "managed" }` to `BillingAction`; added managed rendering path and inner guard in `BillingActionButton` |
+| `app/(dashboard)/dashboard/billing/page.tsx` | `resolveAction`: early return for enterprise; simplified lower branches to personal-plan-only |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; routes unchanged; /dashboard/billing ƒ Dynamic
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+8. Invite acceptance page (`/invite/[token]`) not yet built.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — `/invite/[token]` page that resolves the token, verifies `status === "pending"`, then either adds an existing signed-in user to `EnterpriseMember` or redirects to `/signup?invite={token}` for new users.
+
+---
+
 ## Session: Capture location workflow — 2026-06-29
 
 ### What was done

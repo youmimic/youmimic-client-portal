@@ -6,7 +6,8 @@ import type { ButtonProps } from "@/components/ui/button";
 
 export type BillingAction =
   | { type: "checkout"; planType: "CREATOR" | "ENTERPRISE"; enterpriseId?: string }
-  | { type: "portal"; enterpriseId?: string };
+  | { type: "portal"; enterpriseId?: string }
+  | { type: "managed" }; // enterprise billing is handled by the YouMimic team
 
 export function BillingActionButton({
   action,
@@ -20,7 +21,23 @@ export function BillingActionButton({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  if (action.type === "managed") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Enterprise billing is managed by the YouMimic team.{" "}
+        <a
+          href="mailto:sales@youmimic.com"
+          className="underline underline-offset-4 hover:text-foreground"
+        >
+          Contact sales
+        </a>{" "}
+        to update your plan.
+      </p>
+    );
+  }
+
   async function handleClick() {
+    if (action.type === "managed") return;
     setBusy(true);
     setError(null);
 
