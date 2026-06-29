@@ -1,5 +1,53 @@
 # HANDOFF.md
 
+## Session: SubscriptionActivator crash fix — 2026-06-29
+
+### What was done
+
+Fixed a crash and a re-execution loop in `SubscriptionActivator` that occurred when the checkout success URL was visited directly (not via a Stripe redirect).
+
+### Two bugs fixed
+
+**Bug 1 — Re-execution loop:**
+`update` from `useSession()` was in the `useEffect` dependency array. After `update()` runs, NextAuth may return a new function reference on the next render. This caused the effect to fire again, calling `update()` a second time, which could loop. Fixed with an `activated` ref (`useRef(false)`) that gates the effect body — any run after the first exits immediately.
+
+**Bug 2 — Unhandled promise rejection → crash:**
+No `.catch()` was present on `update().then(...)`. Any rejection (network error, direct URL visit without a Stripe session, unexpected server error) became an unhandled promise rejection that React's error boundary caught as a hard crash — showing an error page instead of redirecting. Fixed by adding `.catch(() => router.replace(target))` so the page always navigates away cleanly regardless of whether the session refresh succeeded or failed.
+
+### Why redirect even on failure
+
+The API layer (`userHasActiveSubscription` in the bookings route) always does a fresh DB query regardless of JWT state. If the session refresh fails and the JWT is stale, the destination page's server-side checks remain the real enforcement boundary. Redirecting on catch is safe.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/(dashboard)/dashboard/checkout/success/subscription-activator.tsx` | Added `activated` ref guard; added `.catch()` to redirect regardless of `update()` result |
+
+### Checks run
+
+```
+npm run typecheck → clean
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+8. Invite acceptance page (`/invite/[token]`) not yet built.
+9. Enterprise member (non-owner) access to bookings — currently blocked by subscription gate; product decision needed.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — `/invite/[token]` page that resolves the token, verifies `status === "pending"`, then either adds the existing signed-in user to `EnterpriseMember` or redirects a new user to `/signup?invite={token}`.
+
+---
+
 ## Session: Subscription gate bug fixes — 2026-06-29
 
 ### What was done
