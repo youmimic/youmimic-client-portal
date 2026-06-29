@@ -1,5 +1,73 @@
 # HANDOFF.md
 
+## Session: External links section on dashboard — 2026-06-29
+
+### What was done
+
+Added an "External links" section below "Getting started" on the dashboard page. Five cards link to external tools. Hologram is marked "Coming soon" but still has a Vimeo preview link.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/(dashboard)/dashboard/page.tsx` | Added `ExternalLinksSection` + `ExternalLinkCard` components; new section in page JSX; added `Bot`, `ExternalLink`, `Languages`, `Presentation`, `Sparkles`, `Video` lucide imports |
+
+### URLs used
+
+| Card | URL |
+|---|---|
+| HeyGen | https://app.heygen.com |
+| Interactive Avatar | https://app.liveavatar.com/home |
+| Hologram (preview) | https://vimeo.com/1202651661/1f14b9b8a7?fl=ip&fe=ec |
+| PPT to Video | https://app.heygen.com/ppt-to-video |
+| Translate | https://app.heygen.com/video-translate |
+
+### Implementation detail
+
+- `ExternalLinkCard` mirrors `GettingStartedCard` exactly — same `Card/CardHeader/CardTitle/CardDescription/CardContent` structure, same `grid gap-4 sm:grid-cols-2 lg:grid-cols-3` grid.
+- Uses `<a target="_blank" rel="noopener noreferrer">` with a trailing `ExternalLink` icon (lucide, 3.5×3.5) instead of `<Link>`.
+- Optional `badge` prop: renders a muted rounded-full chip in `CardTitle` (right-aligned via `ml-auto`) — used for "Coming soon" on Hologram.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; routes unchanged
+```
+
+---
+
+## Session: Contact-sales email link + copy button — 2026-06-29
+
+### What was done
+
+Refined the 10+ contact-sales notice in both booking dialogs: the sales email is now a visually distinct `mailto:` link and has an inline copy-to-clipboard icon button. No business logic changed.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `components/dashboard/new-booking-dialog.tsx` | Added `Check`, `Copy` imports; `emailCopied` state; `copyEmail()` handler; replaced contact-sales block |
+| `components/dashboard/booking-actions.tsx` | Same changes in `EditDialog` |
+
+### Implementation detail
+
+- Email rendered as `<a href="mailto:...">` with `text-primary underline underline-offset-4` classes.
+- Copy button: `Button` (ghost, icon-xs) with `Copy` icon; on click calls `navigator.clipboard.writeText("sales@youmimic.com")`, then sets `emailCopied = true` for 2 seconds and reverts (icon swaps to `Check` in green).
+- `emailCopied` reset to `false` in `handleOpenChange` on close, so next open starts clean.
+- No toast system required; inline icon feedback is sufficient and consistent with the existing UI.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; routes unchanged
+```
+
+---
+
 ## Session: Timezone fix for booking date minimum — 2026-06-29
 
 ### What was done

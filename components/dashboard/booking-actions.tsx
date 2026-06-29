@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CircleHelp, Mail, Pencil, X, Ban } from "lucide-react";
+import { Ban, Check, CircleHelp, Copy, Mail, Pencil, X } from "lucide-react";
 
 import {
   updateBookingSchema,
@@ -112,6 +112,7 @@ function EditDialog({
   const router = useRouter();
   const [serverError, setServerError] = useState("");
   const [contactSales, setContactSales] = useState(false);
+  const [emailCopied, setEmailCopied] = useState(false);
 
   const form = useForm<UpdateBookingInput>({
     resolver: zodResolver(updateBookingSchema),
@@ -171,7 +172,15 @@ function EditDialog({
       form.reset();
       setServerError("");
       setContactSales(false);
+      setEmailCopied(false);
     }
+  }
+
+  function copyEmail() {
+    navigator.clipboard.writeText("sales@youmimic.com").then(() => {
+      setEmailCopied(true);
+      setTimeout(() => setEmailCopied(false), 2000);
+    });
   }
 
   async function onSubmit(values: UpdateBookingInput) {
@@ -334,9 +343,31 @@ function EditDialog({
                 aria-live="polite"
               >
                 <p className="text-sm text-muted-foreground">
-                  For 10+ avatar capture sessions, please contact sales at the
-                  email:{" "}
-                  <a href="mailto:sales@youmimic.com">sales@youmimic.com</a>
+                  For 10+ avatar capture sessions, please contact sales at:{" "}
+                  <span className="inline-flex items-center gap-1">
+                    <a
+                      href="mailto:sales@youmimic.com"
+                      className="text-primary underline underline-offset-4 hover:text-primary/80"
+                    >
+                      sales@youmimic.com
+                    </a>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Copy sales email"
+                      onClick={copyEmail}
+                    >
+                      {emailCopied ? (
+                        <Check
+                          className="text-green-600 dark:text-green-400"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <Copy aria-hidden="true" />
+                      )}
+                    </Button>
+                  </span>
                 </p>
                 <a
                   href="mailto:sales@youmimic.com"

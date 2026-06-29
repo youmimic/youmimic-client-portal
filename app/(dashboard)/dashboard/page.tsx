@@ -1,5 +1,16 @@
 import Link from "next/link";
-import { Building2, CalendarDays, CreditCard, UserCircle2 } from "lucide-react";
+import {
+  Bot,
+  Building2,
+  CalendarDays,
+  CreditCard,
+  ExternalLink,
+  Languages,
+  Presentation,
+  Sparkles,
+  UserCircle2,
+  Video,
+} from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import {
@@ -44,6 +55,13 @@ export default async function DashboardPage() {
         ) : (
           <IndividualGettingStarted />
         )}
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight mb-4">
+          External links
+        </h2>
+        <ExternalLinksSection />
       </div>
     </div>
   );
@@ -134,6 +152,93 @@ function GettingStartedCard({
         >
           {linkLabel} →
         </Link>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExternalLinksSection() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ExternalLinkCard
+        icon={<Video className="h-5 w-5 shrink-0" />}
+        title="HeyGen"
+        description="Open HeyGen in a new tab."
+        href="https://app.heygen.com"
+        linkLabel="Open HeyGen"
+      />
+      <ExternalLinkCard
+        icon={<Bot className="h-5 w-5 shrink-0" />}
+        title="Interactive Avatar"
+        description="Launch the interactive avatar experience."
+        href="https://app.liveavatar.com/home"
+        linkLabel="Launch LiveAvatar"
+      />
+      <ExternalLinkCard
+        icon={<Sparkles className="h-5 w-5 shrink-0" />}
+        title="Hologram"
+        description="Watch the sneak peek while we get this ready."
+        href="https://vimeo.com/1202651661/1f14b9b8a7?fl=ip&fe=ec"
+        linkLabel="Watch preview"
+        badge="Coming soon"
+      />
+      <ExternalLinkCard
+        icon={<Presentation className="h-5 w-5 shrink-0" />}
+        title="PPT to Video"
+        description="Turn presentations into video."
+        href="https://app.heygen.com/ppt-to-video"
+        linkLabel="Open PPT to Video"
+      />
+      <ExternalLinkCard
+        icon={<Languages className="h-5 w-5 shrink-0" />}
+        title="Translate"
+        description="Open HeyGen Translate."
+        href="https://app.heygen.com/video-translate"
+        linkLabel="Open Translate"
+      />
+    </div>
+  );
+}
+
+function ExternalLinkCard({
+  icon,
+  title,
+  description,
+  href,
+  linkLabel,
+  badge,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  href: string;
+  linkLabel: string;
+  badge?: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <span className="text-primary">{icon}</span>
+          {title}
+          {badge && (
+            <span className="ml-auto inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              {badge}
+            </span>
+          )}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+        >
+          {linkLabel}
+          <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        </a>
       </CardContent>
     </Card>
   );
