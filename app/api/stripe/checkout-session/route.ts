@@ -123,12 +123,19 @@ export async function POST(req: Request) {
       });
     }
 
+    // After checkout, send users to the session-refresh route so the JWT
+    // is updated before they land on a subscription-gated page.
+    // CREATOR plans go to bookings (the primary gated feature).
+    // ENTERPRISE plans go to billing (subscription is B2B-managed, not user-facing gated).
+    const redirectAfterCheckout =
+      planType === "CREATOR" ? "/dashboard/bookings" : "/dashboard/billing";
+
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${appUrl}/dashboard?billing=success`,
-      cancel_url: `${appUrl}/dashboard?billing=canceled`,
+      success_url: `${appUrl}/dashboard/checkout/success?redirect=${encodeURIComponent(redirectAfterCheckout)}`,
+      cancel_url: `${appUrl}/dashboard/billing`,
       metadata: {
         planType,
         userId: planType === "CREATOR" ? session.user.id : "",

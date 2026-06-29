@@ -1,5 +1,131 @@
 # HANDOFF.md
 
+## Session: Subscription gate bug fixes — 2026-06-29
+
+### What was done
+
+Fixed three related bugs discovered after the post-checkout session refresh feature shipped:
+
+### Bug 1: `useSession` must be wrapped in `<SessionProvider />`
+
+`useSession()` in `SubscriptionActivator` threw at runtime because no `SessionProvider` existed in the tree. Added `SessionProvider` to `app/layout.tsx` as an initial fix, then immediately refined (see Bug 3).
+
+### Bug 2: Enterprise owners always redirected from bookings
+
+`/dashboard/bookings` was redirecting enterprise owners even after they subscribed. Root cause: `Subscription` records for ENTERPRISE plans have `userId = null` (they link via `enterpriseId` instead). Both `lib/subscription.ts` and `auth.ts` only queried by `userId`, so enterprise subscriptions were never found → `hasActiveSubscription` was always `false`.
+
+**Fix in `lib/subscription.ts`:** `userHasActiveSubscription` now runs two sequential checks:
+1. Personal subscription by `userId` (CREATOR plan)
+2. Owned-enterprise subscription via `enterprise: { ownerUserId: userId }` (ENTERPRISE plan)
+
+**Fix in `auth.ts`:** Both the sign-in block and `trigger === "update"` block now call `userHasActiveSubscription` from `lib/subscription.ts` instead of their own inline Prisma queries. The now-unused `SubscriptionStatus` import was removed. This ensures `auth.ts` and the bookings API use identical logic.
+
+### Bug 3: `SessionProvider` at root causing app-wide session polling
+
+Moving `SessionProvider` to `app/layout.tsx` caused `/api/auth/session` to be polled on every client navigation and window focus event across the entire app. Only one page (`/dashboard/checkout/success`) actually calls `useSession()`.
+
+**Fix:** Removed `SessionProvider` from `app/layout.tsx`. Added it scoped directly in `app/(dashboard)/dashboard/checkout/success/page.tsx`, wrapping the `Suspense` boundary. The server component renders it as a client boundary — valid in App Router. The session polling now only occurs when a user lands on the checkout success route.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `lib/subscription.ts` | Added owned-enterprise subscription check alongside personal subscription check |
+| `auth.ts` | Replaced inline Prisma queries with `userHasActiveSubscription`; removed unused `SubscriptionStatus` import |
+| `app/layout.tsx` | Removed `SessionProvider` (was added then removed in same session) |
+| `app/(dashboard)/dashboard/checkout/success/page.tsx` | Added scoped `SessionProvider` wrapping the Suspense boundary |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+8. Invite acceptance page (`/invite/[token]`) not yet built.
+9. Enterprise member (non-owner) access to bookings — currently they would be blocked by the subscription gate since `userHasActiveSubscription` only checks the owner. Product decision needed.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — `/invite/[token]` page that resolves the token, verifies `status === "pending"`, then either adds the existing signed-in user to `EnterpriseMember` or redirects a new user to `/signup?invite={token}`.
+
+---
+
+## Session: Post-checkout session refresh — 2026-06-29
+
+### What was done
+
+Implemented the post-subscription session refresh flow so that users are not blocked by a stale JWT after completing a Stripe checkout. Before this change, `hasActiveSubscription` was stamped into the JWT only at sign-in; after a successful checkout the token still read `false`, so the proxy gate on `/dashboard/bookings` redirected the user back to billing until they re-logged in.
+
+### What changed
+
+**`auth.ts`** — Added `trigger` to the `jwt` callback destructuring and a new `trigger === "update"` branch. When the client calls `useSession().update()`, this branch re-queries the DB for the user's subscription status (same query as sign-in) and updates `token.hasActiveSubscription`. Fails closed: if `token.id` is absent, the flag is left unchanged.
+
+**`app/api/stripe/checkout-session/route.ts`** — Changed `success_url` from `/dashboard?billing=success` to `/dashboard/checkout/success?redirect=<encoded-target>`. CREATOR plans target `/dashboard/bookings`; ENTERPRISE plans target `/dashboard/billing`. Also changed `cancel_url` to `/dashboard/billing`.
+
+**`app/(dashboard)/dashboard/checkout/success/page.tsx`** (new) — Server component with Suspense boundary and spinner fallback, satisfying the `useSearchParams()` App Router requirement.
+
+**`app/(dashboard)/dashboard/checkout/success/subscription-activator.tsx`** (new) — `"use client"` component. On mount: reads `redirect` query param, validates it starts with `/dashboard` (prevents open redirect), calls `useSession().update()` to force a JWT re-query, then navigates with `router.replace(target)`.
+
+### Design decisions
+
+- **`useSession().update()` over `unstable_update`**: Client-side `update()` is the documented Auth.js v5 mechanism; `unstable_update` is explicitly marked unstable.
+- **Webhook race condition**: Stripe fires `checkout.session.completed` before the browser redirect. In the rare lag case, the proxy may redirect once more to billing; the API-level `userHasActiveSubscription()` DB check is the real enforcement boundary and always correct.
+- **Open redirect protection**: `redirect` param validated with `startsWith("/dashboard")`.
+- **Enterprise path**: ENTERPRISE checkout returns to `/dashboard/billing`, not `/dashboard/bookings`. Enterprise `hasActiveSubscription` tracks personal subs only — unchanged by design.
+
+### Scenario verification (code-inspection)
+
+| Scenario | Flow |
+|---|---|
+| CREATOR checkout success | `update()` re-queries DB → `hasActiveSubscription=true` → `/dashboard/bookings` |
+| ENTERPRISE checkout success | `update()` → `/dashboard/billing` |
+| Unsubscribed user hits bookings | Proxy gate still redirects → `/dashboard/billing?reason=subscription-required` |
+| Crafted external `redirect` | Clamped to `/dashboard` |
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `auth.ts` | Added `trigger`; `trigger === "update"` re-queries subscription |
+| `app/api/stripe/checkout-session/route.ts` | `success_url` → `/dashboard/checkout/success?redirect=...`; `cancel_url` → `/dashboard/billing` |
+| `app/(dashboard)/dashboard/checkout/success/page.tsx` | **Created** — server component + Suspense |
+| `app/(dashboard)/dashboard/checkout/success/subscription-activator.tsx` | **Created** — client activator |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; /dashboard/checkout/success ƒ Dynamic added
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+8. Invite acceptance page (`/invite/[token]`) not yet built.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — `/invite/[token]` page that resolves the token, verifies `status === "pending"`, then either adds the existing signed-in user to `EnterpriseMember` or redirects a new user to `/signup?invite={token}` with the invited email pre-filled.
+
+---
+
 ## Session: Billing redirect notice — 2026-06-29
 
 ### What was done

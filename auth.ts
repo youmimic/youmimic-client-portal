@@ -3,9 +3,9 @@ import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import type { Prisma } from "@/app/generated/prisma/client";
-import { SubscriptionStatus } from "@/app/generated/prisma/enums";
 import prisma from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
+import { userHasActiveSubscription } from "@/lib/subscription";
 
 class InvalidLoginError extends CredentialsSignin {
   code = "invalid_credentials";
@@ -86,7 +86,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.roles = (user as { roles?: string[] }).roles ?? [];
@@ -95,19 +95,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         // Populate subscription state at sign-in so proxy.ts can read from
         // the token instead of querying the DB on every /dashboard/bookings request.
+        // Checks both personal (CREATOR) and owned-enterprise (ENTERPRISE) subscriptions.
         const userId = user.id;
         if (userId) {
-          const activeSub = await prisma.subscription.findFirst({
-            where: {
-              userId,
-              status: { in: [SubscriptionStatus.TRIALING, SubscriptionStatus.ACTIVE] },
-            },
-            orderBy: { updatedAt: "desc" },
-            select: { id: true },
-          });
-          token.hasActiveSubscription = activeSub !== null;
+          token.hasActiveSubscription = await userHasActiveSubscription(userId);
         } else {
           token.hasActiveSubscription = false;
+        }
+      }
+
+      // Re-query subscription when the client explicitly requests a session
+      // refresh (trigger === "update"), e.g. from the post-checkout success page.
+      // Uses the same query as sign-in so the proxy gate stays consistent.
+      // Fail closed: if token.id is absent, leave hasActiveSubscription unchanged.
+      if (trigger === "update") {
+        const userId = token.id as string | undefined;
+        if (userId) {
+          token.hasActiveSubscription = await userHasActiveSubscription(userId);
         }
       }
 
