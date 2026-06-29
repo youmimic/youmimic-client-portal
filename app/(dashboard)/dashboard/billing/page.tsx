@@ -577,6 +577,8 @@ export default async function BillingPage() {
   const { personalSub, ownedEnterprises, memberEnterprises, recentPayments } =
     await fetchBillingData(session.user.id);
 
+  const isEnterpriseOwner = ownedEnterprises.length > 0;
+
   return (
     <div className="space-y-8">
       <div>
@@ -586,13 +588,15 @@ export default async function BillingPage() {
         </p>
       </div>
 
-      {/* Personal plan */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Personal plan
-        </h2>
-        <PersonalPlanCard sub={personalSub} />
-      </section>
+      {/* Personal plan — hidden for enterprise-owner accounts */}
+      {!isEnterpriseOwner && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Personal plan
+          </h2>
+          <PersonalPlanCard sub={personalSub} />
+        </section>
+      )}
 
       {/* Owned enterprises */}
       {ownedEnterprises.length > 0 && (

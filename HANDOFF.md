@@ -1,5 +1,63 @@
 # HANDOFF.md
 
+## Session: Billing plan visibility gating — 2026-06-29
+
+### What was done
+
+Added section-level plan visibility gating to `/dashboard/billing` and a matching server-side guard in the checkout-session API.
+
+**UI gating (section-level):**
+- Enterprise owners (`ownedEnterprises.length > 0`) no longer see the "Personal plan" section at all.
+- Personal users already couldn't see the "Enterprise plans" section (gated by `ownedEnterprises.length > 0` — no change needed).
+- Enterprise members (non-owners) are unchanged: they continue to see the read-only membership cards and (if applicable) a personal plan section with no enterprise purchase controls.
+
+**API guard:**
+- `/api/stripe/checkout-session` now rejects `CREATOR` plan checkout requests from users who own any enterprise. Returns 403 with `"Enterprise accounts cannot subscribe to personal plans"`. This mirrors the existing `ENTERPRISE` plan guard pattern (which already rejects non-owners from subscribing to enterprise plans). Both guards now live together in the account-type validation block at the top of the handler.
+
+**What was already handled:**
+- Personal-only users couldn't reach enterprise plans in the UI (the enterprise sections are already gated on `ownedEnterprises.length > 0`). No UI change needed for that case.
+- Enterprise member read-only cards were already working correctly from the previous session.
+
+### Scenario verification (code-inspection)
+
+| Scenario | Personal plan section | Enterprise plan section | Membership section | API: CREATOR checkout | API: ENTERPRISE checkout |
+|---|---|---|---|---|---|
+| Personal-only user | ✓ Shown | Hidden | Hidden | ✓ Allowed | 403 Forbidden (no owned enterprise) |
+| Enterprise owner | **Hidden** | ✓ Shown (managed note) | Hidden | **403 Forbidden** | ✓ Allowed (ownership verified) |
+| Enterprise member (non-owner) | ✓ Shown | Hidden | ✓ Shown (read-only) | ✓ Allowed | 403 Forbidden |
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/(dashboard)/dashboard/billing/page.tsx` | Added `isEnterpriseOwner` flag; wrapped personal plan section in `{!isEnterpriseOwner && ...}` |
+| `app/api/stripe/checkout-session/route.ts` | Added CREATOR plan guard: rejects enterprise owners attempting personal plan checkout |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; routes unchanged; /dashboard/billing ƒ Dynamic
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+8. Invite acceptance page (`/invite/[token]`) not yet built.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — `/invite/[token]` page that resolves the token, verifies `status === "pending"`, then either adds an existing signed-in user to `EnterpriseMember` or redirects to `/signup?invite={token}` for new users.
+
+---
+
 ## Session: Enterprise billing suppression — 2026-06-29
 
 ### What was done

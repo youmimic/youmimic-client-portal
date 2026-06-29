@@ -55,6 +55,19 @@ export async function POST(req: Request) {
     }
   }
 
+  if (planType === "CREATOR") {
+    const ownedEnterprise = await prisma.enterprise.findFirst({
+      where: { ownerUserId: session.user.id },
+      select: { id: true },
+    });
+    if (ownedEnterprise) {
+      return NextResponse.json(
+        { error: "Enterprise accounts cannot subscribe to personal plans" },
+        { status: 403 },
+      );
+    }
+  }
+
   const priceId = PLAN_PRICE_MAP[planType];
   if (!priceId || priceId === "price_...") {
     return NextResponse.json(
