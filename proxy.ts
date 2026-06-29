@@ -35,11 +35,13 @@ export const proxy = auth(async (req) => {
     // requireSubscription: /dashboard/bookings requires an active subscription.
     // hasActiveSubscription is written into the JWT at sign-in; undefined on
     // pre-migration tokens which are treated as false (fail closed).
+    // Authenticated users without a subscription are sent to billing, not the
+    // public pricing page, so they can subscribe from within the dashboard.
     if (
       matchesPrefix(pathname, "/dashboard/bookings") &&
       !user.hasActiveSubscription
     ) {
-      const url = new URL("/pricing", nextUrl.origin);
+      const url = new URL("/dashboard/billing", nextUrl.origin);
       url.searchParams.set("reason", "subscription-required");
       return NextResponse.redirect(url);
     }

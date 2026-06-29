@@ -595,7 +595,18 @@ function PaymentHistorySection({ payments }: { payments: PaymentRecord[] }) {
 // Page
 // ---------------------------------------------------------------------------
 
-export default async function BillingPage() {
+// Maps known redirect reasons to fixed user-facing copy.
+// Only values present here are rendered — arbitrary query text is never displayed.
+const REDIRECT_NOTICES: Record<string, string> = {
+  "subscription-required":
+    "A subscription is required to access Bookings. Subscribe below to get started.",
+};
+
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reason?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
@@ -603,6 +614,8 @@ export default async function BillingPage() {
     await fetchBillingData(session.user.id);
 
   const isEnterpriseOwner = ownedEnterprises.length > 0;
+  const { reason } = await searchParams;
+  const redirectNotice = (reason && REDIRECT_NOTICES[reason]) ?? null;
 
   return (
     <div className="space-y-8">
@@ -612,6 +625,13 @@ export default async function BillingPage() {
           Manage your subscriptions and billing details.
         </p>
       </div>
+
+      {redirectNotice && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>{redirectNotice}</span>
+        </div>
+      )}
 
       {/* Personal plan — hidden for enterprise-owner accounts */}
       {!isEnterpriseOwner && (

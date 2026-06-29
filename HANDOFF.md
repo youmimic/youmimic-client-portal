@@ -1,5 +1,137 @@
 # HANDOFF.md
 
+## Session: Billing redirect notice — 2026-06-29
+
+### What was done
+
+Added a `reason=subscription-required` query param to the bookings subscription-gate redirect in `proxy.ts`, and a whitelist-driven notice banner on the billing page that renders only when a known `reason` value is present.
+
+### Changes
+
+**`proxy.ts`** — redirect now includes a `reason` param:
+```ts
+const url = new URL("/dashboard/billing", nextUrl.origin);
+url.searchParams.set("reason", "subscription-required");
+return NextResponse.redirect(url);
+```
+
+**`app/(dashboard)/dashboard/billing/page.tsx`**:
+- Added `REDIRECT_NOTICES` record mapping known reason strings to fixed copy. Arbitrary query values produce no output.
+- `BillingPage` now accepts `{ searchParams: Promise<{ reason?: string }> }` (matching the async searchParams pattern used by `verify-email/page.tsx`).
+- `reason` is awaited and looked up in `REDIRECT_NOTICES`; the result is `null` for unknown/absent values.
+- Notice banner (amber, `AlertTriangle` icon) is rendered between the page header and the first billing section when `redirectNotice` is non-null.
+
+### Design decisions
+
+- **Whitelist only**: `REDIRECT_NOTICES` is the single source of truth. Unknown `reason` values (typos, future values not yet in the map, anything injected) produce no visible output.
+- **Existing style**: The amber `flex items-start gap-2 rounded-md border` alert is the same pattern already used by `SubscriptionDetails` for PAST_DUE / UNPAID / canceledAt warnings. No new design patterns introduced.
+- **No new imports**: `AlertTriangle` was already imported.
+- **Normal billing visits**: `reason` absent → `redirectNotice = null` → notice not rendered. Behaviour is identical to before.
+
+### Scenario verification (code-inspection)
+
+| Scenario | `reason` param | Notice shown |
+|---|---|---|
+| Redirected from `/dashboard/bookings` (no sub) | `subscription-required` | ✓ "A subscription is required to access Bookings. Subscribe below to get started." |
+| Direct visit to `/dashboard/billing` | absent | ✗ |
+| Unknown / injected `reason` value | e.g. `xss-attempt` | ✗ (not in whitelist) |
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `proxy.ts` | Bookings redirect: add `reason=subscription-required` query param |
+| `app/(dashboard)/dashboard/billing/page.tsx` | `REDIRECT_NOTICES` map; async `searchParams`; amber notice banner |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; routes unchanged; /dashboard/billing ƒ Dynamic
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+8. Invite acceptance page (`/invite/[token]`) not yet built.
+9. `hasActiveSubscription` in JWT is stamped at sign-in only — post-checkout session refresh not yet implemented.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — `/invite/[token]` page that resolves the token, verifies `status === "pending"`, then either adds an existing signed-in user to `EnterpriseMember` or redirects to `/signup?invite={token}` for new users.
+
+---
+
+## Session: Bookings subscription gate — 2026-06-29
+
+### What was done
+
+Changed the redirect destination for unauthenticated bookings access from `/pricing?reason=subscription-required` to `/dashboard/billing`.
+
+### What was inspected
+
+- **`proxy.ts`** — the root-level Next.js middleware handler. Three sequential guards:
+  1. `isProtected && !session` → `/login?callbackUrl=<pathname>` (unauthenticated)
+  2. `/dashboard/avatars` + `!user.isEmailVerified` → `/verify-email?next=<pathname>`
+  3. `/dashboard/bookings` + `!user.hasActiveSubscription` → previously `/pricing?reason=subscription-required`
+- **`auth.ts`** — `hasActiveSubscription` is stamped into the JWT at sign-in via a `prisma.subscription.findFirst` for TRIALING/ACTIVE status. The proxy reads from the token on every request, so no DB query per request.
+- **`app/(dashboard)/dashboard/bookings/page.tsx`** — no additional subscription check in the page itself; enforcement is layered (middleware gate + API-level DB check on create/edit routes).
+
+### What changed
+
+Single redirect URL in `proxy.ts` line 41–44:
+- Before: `new URL("/pricing", nextUrl.origin)` + `url.searchParams.set("reason", "subscription-required")`
+- After: `new URL("/dashboard/billing", nextUrl.origin)` (no query param needed; billing page is self-explanatory)
+
+The `reason` query param was only consumed by the public pricing page. The billing page does not read it and the unauthenticated path still carries `callbackUrl` to login, so no information is lost.
+
+### Scenario verification (code-inspection)
+
+| Scenario | Guard triggered | Redirect destination |
+|---|---|---|
+| Unauthenticated user hits `/dashboard/bookings` | `isProtected && !session` | `/login?callbackUrl=/dashboard/bookings` |
+| Authenticated, no active sub | `!user.hasActiveSubscription` | `/dashboard/billing` |
+| Authenticated, active sub | No guard triggered | `/dashboard/bookings` (pass-through) |
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `proxy.ts` | Redirect target for unsubscribed bookings access: `/pricing` → `/dashboard/billing`; removed `reason` query param |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; routes unchanged; ƒ Proxy (Middleware) confirmed
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+8. Invite acceptance page (`/invite/[token]`) not yet built.
+9. `hasActiveSubscription` in the JWT is stamped at sign-in and does not refresh mid-session. Users who subscribe without re-logging-in will still be gated until their next session. A future milestone could add a session refresh trigger after a successful Stripe checkout.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — `/invite/[token]` page that resolves the token, verifies `status === "pending"`, then either adds an existing signed-in user to `EnterpriseMember` or redirects to `/signup?invite={token}` for new users.
+
+---
+
 ## Session: Enterprise subscribe button in resolveAction — 2026-06-29
 
 ### What was done
