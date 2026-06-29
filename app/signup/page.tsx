@@ -86,7 +86,7 @@ export default function SignupPage() {
       email: "",
       password: "",
       confirmPassword: "",
-      accountType: "INDIVIDUAL",
+      accountType: "BUSINESS",
       businessName: "",
       acceptTerms: false,
       termsLinkClicked: false,
@@ -190,7 +190,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Account type</FormLabel>
                     <div className="grid grid-cols-2 overflow-hidden rounded-md border">
-                      {ACCOUNT_TYPES.map((type) => (
+                      {[...ACCOUNT_TYPES].reverse().map((type) => (
                         <button
                           key={type}
                           type="button"
@@ -206,7 +206,7 @@ export default function SignupPage() {
                             field.value === type
                               ? "bg-primary text-primary-foreground"
                               : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
-                            type === "INDIVIDUAL" ? "rounded-l-md" : "rounded-r-md",
+                            type === "BUSINESS" ? "rounded-l-md" : "rounded-r-md",
                           )}
                           aria-pressed={field.value === type}
                         >
