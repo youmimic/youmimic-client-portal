@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CircleHelp, Pencil, X, Ban } from "lucide-react";
+import { CircleHelp, Mail, Pencil, X, Ban } from "lucide-react";
 
 import {
   updateBookingSchema,
@@ -57,11 +57,25 @@ export type BookingForActions = {
 };
 
 const EDITABLE_STATUSES = ["pending", "confirmed"];
+const CONTACT_SALES_SENTINEL = "contact-sales";
 
+// Returns the earliest bookable date as a YYYY-MM-DD string.
+// Advances 3 business days from today, skipping Sat/Sun (no holiday logic).
 function minBookingDateISO(): string {
   const d = new Date();
-  d.setDate(d.getDate() + 7);
-  return d.toISOString().split("T")[0];
+  d.setHours(0, 0, 0, 0);
+  let businessDaysAdded = 0;
+  while (businessDaysAdded < 3) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay(); // 0 = Sun, 6 = Sat
+    if (day !== 0 && day !== 6) {
+      businessDaysAdded++;
+    }
+  }
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function ErrorBanner({
@@ -97,6 +111,7 @@ function EditDialog({
 }) {
   const router = useRouter();
   const [serverError, setServerError] = useState("");
+  const [contactSales, setContactSales] = useState(false);
 
   const form = useForm<UpdateBookingInput>({
     resolver: zodResolver(updateBookingSchema),
@@ -133,9 +148,7 @@ function EditDialog({
       form.setValue(
         "timeEnd",
         addHoursToTime(timeStart, Number(capturesCount)),
-        {
-          shouldValidate: false,
-        },
+        { shouldValidate: false },
       );
     }
   }, [timeStart, capturesCount, form]);
@@ -157,10 +170,12 @@ function EditDialog({
     if (!nextOpen) {
       form.reset();
       setServerError("");
+      setContactSales(false);
     }
   }
 
   async function onSubmit(values: UpdateBookingInput) {
+    if (contactSales) return;
     setServerError("");
 
     const res = await fetch(`/api/bookings/${booking.id}`, {
@@ -222,19 +237,22 @@ function EditDialog({
             className="space-y-4"
             noValidate
           >
-            <FormField
-              control={form.control}
-              name="requestedDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date</FormLabel>
-                  <FormControl>
-                    <Input type="date" min={minBookingDateISO()} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Date is hidden in contact-sales mode */}
+            {!contactSales && (
+              <FormField
+                control={form.control}
+                name="requestedDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date</FormLabel>
+                    <FormControl>
+                      <Input type="date" min={minBookingDateISO()} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
@@ -262,8 +280,27 @@ function EditDialog({
                     </Tooltip>
                   </div>
                   <Select
-                    value={String(field.value)}
-                    onValueChange={(val) => field.onChange(Number(val))}
+                    value={
+                      contactSales
+                        ? CONTACT_SALES_SENTINEL
+                        : String(field.value)
+                    }
+                    onValueChange={(val) => {
+                      if (val === CONTACT_SALES_SENTINEL) {
+                        setContactSales(true);
+                        form.reset({
+                          requestedDate: "",
+                          capturesCount: 1,
+                          timeStart: "09:00",
+                          timeEnd: "10:00",
+                          notes: "",
+                          participants: [{ firstName: "", contactNumber: "" }],
+                        });
+                      } else {
+                        setContactSales(false);
+                        field.onChange(Number(val));
+                      }
+                    }}
                     name={field.name}
                   >
                     <FormControl>
@@ -280,6 +317,9 @@ function EditDialog({
                           {n} {n === 1 ? "capture" : "captures"}
                         </SelectItem>
                       ))}
+                      <SelectItem value={CONTACT_SALES_SENTINEL}>
+                        10+ (Contact sales)
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -287,128 +327,153 @@ function EditDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="timeStart"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Start time</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="timeEnd"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>End time</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="time"
-                        disabled
-                        aria-label="End time (auto-calculated)"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Participant sub-forms — one block per capture */}
-            <div className="space-y-3">
-              <p className="text-sm font-medium">Participants</p>
-              {fields.map((fieldItem, index) => (
-                <div
-                  key={fieldItem.id}
-                  className="space-y-3 rounded-lg border border-border p-3"
+            {contactSales ? (
+              <div
+                className="rounded-lg border border-border bg-muted/50 p-4 space-y-3"
+                role="status"
+                aria-live="polite"
+              >
+                <p className="text-sm text-muted-foreground">
+                  For 10+ avatar capture sessions, please contact sales at the
+                  email:{" "}
+                  <a href="mailto:sales@youmimic.com">sales@youmimic.com</a>
+                </p>
+                <a
+                  href="mailto:sales@youmimic.com"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                 >
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Capture {index + 1}
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                      control={form.control}
-                      name={`participants.${index}.firstName`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>First name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Jane" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`participants.${index}.contactNumber`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Contact number</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="tel"
-                              placeholder="+61 4xx xxx xxx"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                  <Mail className="h-4 w-4" aria-hidden="true" />
+                  Contact sales
+                </a>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="timeStart"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start time</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <div className="flex items-baseline justify-between">
-                    <FormLabel>
-                      Notes{" "}
-                      <span className="text-muted-foreground font-normal">
-                        (optional)
-                      </span>
-                    </FormLabel>
-                    <span
-                      className={`text-xs tabular-nums ${
-                        notesLength > NOTES_MAX
-                          ? "text-destructive"
-                          : "text-muted-foreground"
-                      }`}
-                      aria-live="polite"
+                  <FormField
+                    control={form.control}
+                    name="timeEnd"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>End time</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="time"
+                            disabled
+                            aria-label="End time (auto-calculated)"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Participant sub-forms — one block per capture */}
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Participants</p>
+                  {fields.map((fieldItem, index) => (
+                    <div
+                      key={fieldItem.id}
+                      className="space-y-3 rounded-lg border border-border p-3"
                     >
-                      {notesLength}/{NOTES_MAX}
-                    </span>
-                  </div>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Any context or requests for this session…"
-                      className="resize-none"
-                      rows={3}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        Capture {index + 1}
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField
+                          control={form.control}
+                          name={`participants.${index}.firstName`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>First name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Jane" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`participants.${index}.contactNumber`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Contact number</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="tel"
+                                  placeholder="+61 4xx xxx xxx"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-baseline justify-between">
+                        <FormLabel>
+                          Notes{" "}
+                          <span className="text-muted-foreground font-normal">
+                            (optional)
+                          </span>
+                        </FormLabel>
+                        <span
+                          className={`text-xs tabular-nums ${
+                            notesLength > NOTES_MAX
+                              ? "text-destructive"
+                              : "text-muted-foreground"
+                          }`}
+                          aria-live="polite"
+                        >
+                          {notesLength}/{NOTES_MAX}
+                        </span>
+                      </div>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Any context or requests for this session…"
+                          className="resize-none"
+                          rows={3}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
 
             <DialogFooter showCloseButton>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Saving…" : "Save changes"}
-              </Button>
+              {!contactSales && (
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? "Saving…" : "Save changes"}
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </Form>

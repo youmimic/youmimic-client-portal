@@ -6,24 +6,35 @@ export const NOTES_MAX = 500;
 export const MAX_CAPTURES = 10;
 
 function todayISODate(): string {
-  return new Date().toISOString().split("T")[0];
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function notInPast(val: string) {
   return val >= todayISODate();
 }
 
-function isAtLeastAWeekAway(val: string) {
+function isAtLeast3BusinessDaysAway(val: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const date = new Date(val);
   date.setHours(0, 0, 0, 0);
 
-  const diffMs = date.getTime() - today.getTime();
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-  return diffDays >= 7;
+  // Count business days from today (exclusive) to date (inclusive).
+  let businessDays = 0;
+  const cursor = new Date(today);
+  while (cursor < date) {
+    cursor.setDate(cursor.getDate() + 1);
+    const day = cursor.getDay(); // 0 = Sun, 6 = Sat
+    if (day !== 0 && day !== 6) {
+      businessDays++;
+    }
+  }
+  return businessDays >= 3;
 }
 
 function isWeekday(val: string) {
@@ -46,7 +57,7 @@ const bookingBaseSchema = z
       .min(1, "Date is required")
       .refine((val) => !isNaN(Date.parse(val)), "Invalid date")
       .refine(notInPast, "Date cannot be in the past")
-      .refine(isAtLeastAWeekAway, "Date must be at least 7 days from today")
+      .refine(isAtLeast3BusinessDaysAway, "Date must be at least 3 business days from today")
       .refine(isWeekday, "Date must be a weekday (Mon–Fri)"),
     capturesCount: z
       .number()

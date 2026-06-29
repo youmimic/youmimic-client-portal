@@ -1,5 +1,122 @@
 # HANDOFF.md
 
+## Session: Timezone fix for booking date minimum — 2026-06-29
+
+### What was done
+
+Fixed a timezone bug in the booking lead-time calculation. `minBookingDateISO()` (in both dialog files) called `d.setHours(0,0,0,0)` to get local midnight, then formatted via `toISOString().split("T")[0]`. In UTC+ timezones (e.g. UTC+5:45 Nepal), local midnight is the previous day in UTC, so the formatted string came out one day early — returning Wednesday instead of Thursday as the minimum when today is Monday. Also fixed the same pattern in `todayISODate()` in the validation schema for consistency.
+
+### What was inspected
+
+- `components/dashboard/new-booking-dialog.tsx` — `minBookingDateISO()` used `toISOString().split("T")[0]`.
+- `components/dashboard/booking-actions.tsx` — identical pattern in `EditDialog`.
+- `lib/validations/booking.ts` — `todayISODate()` had the same `toISOString()` pattern.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `components/dashboard/new-booking-dialog.tsx` | `minBookingDateISO`: replaced `toISOString().split("T")[0]` with `getFullYear()/getMonth()/getDate()` local formatting |
+| `components/dashboard/booking-actions.tsx` | Same fix in `EditDialog` |
+| `lib/validations/booking.ts` | `todayISODate`: same fix |
+
+### Root cause
+
+`Date.prototype.toISOString()` always returns UTC. For any UTC+ timezone, midnight local time is earlier than UTC midnight, so the date string is one calendar day behind the correct local date. Replacing with `getFullYear()` / `getMonth()` / `getDate()` reads local date components directly.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; routes unchanged
+```
+
+---
+
+## Session: Booking lead time + 10+ contact-sales flow — 2026-06-29
+
+### What was done
+
+Updated the booking flow with two product changes:
+1. **Lead time reduced from 7 calendar days to 3 business days** — enforced in both the UI date input minimum and the Zod server-side validation.
+2. **"10+ (Contact sales)" option added** — a UI-only sentinel in the capture-count select; selecting it clears the self-serve form fields, hides the submit button, and shows a contact notice + `mailto:sales@youmimic.com` link. The sentinel is never submitted to the API.
+
+### What was inspected
+
+- `components/dashboard/new-booking-dialog.tsx` — `minBookingDateISO()` used `d.setDate(d.getDate() + 7)` (calendar days). Captures select rendered `1–MAX_CAPTURES` numeric items only with `onValueChange` doing `Number(val)` directly.
+- `components/dashboard/booking-actions.tsx` — identical `minBookingDateISO()` in `EditDialog`. Same numeric-only captures select.
+- `lib/validations/booking.ts` — `isAtLeastAWeekAway()` function: `diffDays >= 7`. Error message: `"Date must be at least 7 days from today"`. `isWeekday` check also present and kept.
+- `app/api/bookings/route.ts` and `app/api/bookings/[id]/route.ts` — no lead-time enforcement here; Zod schema handles it. No changes needed to API routes.
+- `lib/booking-time.ts` — `addHoursToTime` utility; unchanged.
+
+### Implementation
+
+**`lib/validations/booking.ts`**
+- Replaced `isAtLeastAWeekAway` with `isAtLeast3BusinessDaysAway`: counts business days (Mon–Fri) from today (exclusive) to the target date (inclusive); requires `businessDays >= 3`.
+- Updated `.refine()` error message to `"Date must be at least 3 business days from today"`.
+- `isWeekday`, `notInPast`, and all other validation unchanged.
+
+**`components/dashboard/new-booking-dialog.tsx`**
+- Updated `minBookingDateISO()`: advances one day at a time, skipping Sat/Sun, until 3 business days have been added. Same `toISOString().split("T")[0]` pattern as before.
+- Added `const CONTACT_SALES_SENTINEL = "contact-sales"` (file-level constant).
+- Added `const [contactSales, setContactSales] = useState(false)`.
+- Updated `handleOpenChange` to reset `contactSales` on close.
+- Added `if (contactSales) return;` guard at start of `onSubmit`.
+- Captures `Select.value`: `contactSales ? CONTACT_SALES_SENTINEL : String(field.value)`.
+- Captures `onValueChange`: sentinel path → `setContactSales(true)` + `form.reset(defaults)`; numeric path → `setContactSales(false)` + `field.onChange(Number(val))`.
+- Added `<SelectItem value={CONTACT_SALES_SENTINEL}>10+ (Contact sales)</SelectItem>` after numeric items.
+- Date field: `{!contactSales && <FormField name="requestedDate" ...>}`.
+- Times + Participants + Notes: wrapped in `{contactSales ? <ContactSalesNotice> : <> ...all fields... </>}`.
+- `DialogFooter`: `{!contactSales && <Button type="submit">}` — submit hidden in contact-sales mode.
+
+**`components/dashboard/booking-actions.tsx`** (`EditDialog` only)
+- Identical changes to above. `CancelDialog` and `BookingActions` are byte-for-byte unchanged.
+- `contactSales` state is also reset in `handleOpenChange` when the edit dialog closes.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `lib/validations/booking.ts` | `isAtLeastAWeekAway` → `isAtLeast3BusinessDaysAway`; error message updated |
+| `components/dashboard/new-booking-dialog.tsx` | `minBookingDateISO` → 3 business days; contactSales state + 10+ option |
+| `components/dashboard/booking-actions.tsx` | Same changes in `EditDialog`; `CancelDialog`/`BookingActions` unchanged |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; 27 routes; ƒ Proxy confirmed
+```
+
+### Manual verification (code-inspection level)
+
+Full runtime testing requires a running app with a live DB. Code-inspection verification:
+
+- **Lead time enforcement**: `isAtLeast3BusinessDaysAway` counts Mon–Fri days only; e.g. today=Monday → earliest valid date is Thursday (3 business days). `isWeekday` still prevents Saturday/Sunday selection. UI `minBookingDateISO()` computes the same date for the HTML `min` attribute.
+- **10 captures still valid**: `MAX_CAPTURES = 10` generates numeric items `1–10`; `capturesCount.max(10)` unchanged. A user can still select "10 captures" as a numeric self-serve option.
+- **CONTACT_SALES_SENTINEL never reaches API**: `onSubmit` returns early if `contactSales === true`; the submit button is not rendered; sentinel is never serialized into the API payload.
+- **Form reset on sentinel selection**: `form.reset({ requestedDate: "", capturesCount: 1, ... })` clears all self-serve fields when 10+ is selected.
+- **Edit dialog safety**: selecting 10+ in edit mode shows the notice and hides "Save changes"; closing the dialog resets `contactSales = false` so the next open starts clean.
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+8. Invite acceptance page (`/invite/[token]`) not yet built — accept links in invite emails lead to 404.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — `/invite/[token]` page that resolves the token, verifies it is `pending` and not expired, then either: (a) adds an existing signed-in user to `EnterpriseMember`; or (b) redirects a new user to `/signup?invite={token}` pre-filled with the invited email so registration completes membership linkage.
+
+---
+
 ## Session: Enterprise invite flow — 2026-06-29
 
 ### What was done
