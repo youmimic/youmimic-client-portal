@@ -122,11 +122,36 @@ function resolveAction(
   planType: "CREATOR" | "ENTERPRISE",
   enterpriseId?: string,
 ): { action: BillingAction; label: string; variant: "default" | "outline" } {
-  // Enterprise billing is B2B-managed — no self-serve portal or checkout.
   if (enterpriseId !== undefined) {
+    // Enterprise: self-serve checkout for initial setup only.
+    // Once an active subscription exists, changes go through the YouMimic team.
+    const noSub =
+      !sub ||
+      !sub.stripeCustomerId ||
+      sub.status === "CANCELED" ||
+      sub.status === "INCOMPLETE_EXPIRED";
+
+    if (noSub) {
+      return {
+        action: { type: "checkout", planType: "ENTERPRISE", enterpriseId },
+        label: "Subscribe",
+        variant: "default",
+      };
+    }
+
+    if (sub.status === "INCOMPLETE") {
+      return {
+        action: { type: "checkout", planType: "ENTERPRISE", enterpriseId },
+        label: "Complete checkout",
+        variant: "default",
+      };
+    }
+
+    // Active subscription — ongoing changes via YouMimic sales team.
     return { action: { type: "managed" }, label: "", variant: "outline" };
   }
 
+  // Personal plan (CREATOR) — fully self-serve.
   const noPortal =
     !sub ||
     !sub.stripeCustomerId ||

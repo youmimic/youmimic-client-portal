@@ -1,5 +1,66 @@
 # HANDOFF.md
 
+## Session: Enterprise subscribe button in resolveAction — 2026-06-29
+
+### What was done
+
+Updated `resolveAction` in `/dashboard/billing` so enterprise owners see a Subscribe button when their enterprise has no active subscription, and a contact-sales note only once a subscription exists.
+
+**Previous behaviour:** `resolveAction` returned `{ type: "managed" }` for all enterprise cases unconditionally, so an enterprise owner with no subscription saw the contact-sales note and had no way to start a subscription from the billing page.
+
+**New behaviour (all driven by `resolveAction`, no new JSX conditionals):**
+
+| Enterprise subscription state | Action returned | UI shown |
+|---|---|---|
+| None / CANCELED / INCOMPLETE_EXPIRED | `{ type: "checkout", planType: "ENTERPRISE", enterpriseId }` | Subscribe button |
+| INCOMPLETE | `{ type: "checkout", planType: "ENTERPRISE", enterpriseId }` | Complete checkout button |
+| ACTIVE / TRIALING / PAST_DUE / UNPAID / PAUSED | `{ type: "managed" }` | Contact-sales note |
+
+**Personal plan section gate** (`!isEnterpriseOwner`) from the previous session is preserved — enterprise owners still cannot see or interact with personal plan choices.
+
+**Enterprise member read-only** (`MembershipNoticeCard`) is unchanged.
+
+### Scenario verification (code-inspection)
+
+| User scenario | Personal plan section | Enterprise plan section | Checkout action visible |
+|---|---|---|---|
+| Personal-only, no sub | ✓ Shown, Subscribe | Hidden | ✓ Yes (CREATOR) |
+| Personal-only, active sub | ✓ Shown, Manage billing | Hidden | No (portal) |
+| Enterprise owner, no sub | Hidden | ✓ Shown, **Subscribe** | ✓ Yes (ENTERPRISE) |
+| Enterprise owner, active sub | Hidden | ✓ Shown, contact-sales note | No |
+| Enterprise member, non-owner | ✓ Shown (own plan) | Hidden | Membership card only |
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/(dashboard)/dashboard/billing/page.tsx` | `resolveAction`: enterprise branch now checks subscription state before returning `managed`; checkout returned for no-sub and INCOMPLETE cases |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; routes unchanged; /dashboard/billing ƒ Dynamic
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+8. Invite acceptance page (`/invite/[token]`) not yet built.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — `/invite/[token]` page that resolves the token, verifies `status === "pending"`, then either adds an existing signed-in user to `EnterpriseMember` or redirects to `/signup?invite={token}` for new users.
+
+---
+
 ## Session: Billing plan visibility gating — 2026-06-29
 
 ### What was done
