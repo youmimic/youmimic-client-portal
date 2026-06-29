@@ -1,17 +1,21 @@
 import { redirect } from "next/navigation";
-import { CheckCircle2, ShieldAlert } from "lucide-react";
+import { CheckCircle2, ShieldAlert, Users } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { InviteForm } from "@/components/dashboard/invite-form";
 
 export const metadata = {
   title: "Settings — YouMimic Portal",
 };
+
+export const dynamic = "force-dynamic";
 
 async function fetchUser(userId: string) {
   return prisma.user.findUnique({
@@ -30,6 +34,13 @@ async function fetchUser(userId: string) {
 }
 
 type UserData = NonNullable<Awaited<ReturnType<typeof fetchUser>>>;
+
+async function fetchOwnedEnterprise(userId: string) {
+  return prisma.enterprise.findFirst({
+    where: { ownerUserId: userId },
+    select: { id: true, name: true },
+  });
+}
 
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -128,11 +139,34 @@ function AccessCard({ user }: { user: UserData }) {
   );
 }
 
+function TeamCard({ enterprise }: { enterprise: { id: string; name: string } }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          {enterprise.name} — Team
+        </CardTitle>
+        <CardDescription>
+          Invite team members to join your workspace. They will receive an email
+          with a link to accept the invitation.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <InviteForm enterpriseName={enterprise.name} />
+      </CardContent>
+    </Card>
+  );
+}
+
 export default async function SettingsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const user = await fetchUser(session.user.id);
+  const [user, enterprise] = await Promise.all([
+    fetchUser(session.user.id),
+    fetchOwnedEnterprise(session.user.id),
+  ]);
   if (!user) redirect("/login");
 
   return (
@@ -147,6 +181,7 @@ export default async function SettingsPage() {
       <div className="space-y-4">
         <AccountCard user={user} />
         <AccessCard user={user} />
+        {enterprise && <TeamCard enterprise={enterprise} />}
       </div>
     </div>
   );

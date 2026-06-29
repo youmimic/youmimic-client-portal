@@ -4,6 +4,7 @@ import { resend } from "./resend";
 import { VerifyEmailTemplate } from "@/emails/templates/verify-email";
 import { ForgotPasswordEmail } from "@/emails/templates/forgot-password-email";
 import { ContactNotificationEmail } from "@/emails/templates/contact-notification-email";
+import { InviteEmail } from "@/emails/templates/invite-email";
 import type { ContactInput } from "@/lib/validations/contact";
 
 type SendVerifyEmailParams = {
@@ -106,4 +107,39 @@ export async function sendContactNotificationEmail(data: ContactInput) {
   }
 
   return emailData;
+}
+
+type SendInviteEmailParams = {
+  to: string;
+  inviterName: string;
+  enterpriseName: string;
+  acceptUrl: string;
+  idempotencyKey: string;
+};
+
+export async function sendInviteEmail({
+  to,
+  inviterName,
+  enterpriseName,
+  acceptUrl,
+  idempotencyKey,
+}: SendInviteEmailParams) {
+  const from = getFromEmail();
+
+  const { data, error } = await resend.emails.send(
+    {
+      from,
+      to: [to],
+      subject: `You've been invited to join ${enterpriseName} on youmimic`,
+      react: InviteEmail({ enterpriseName, inviterName, acceptUrl }),
+      tags: [{ name: "category", value: "team_invite" }],
+    },
+    { idempotencyKey },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
 }

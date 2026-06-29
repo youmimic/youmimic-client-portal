@@ -1,5 +1,120 @@
 # HANDOFF.md
 
+## Session: Enterprise invite flow — 2026-06-29
+
+### What was done
+
+Implemented the first slice of the enterprise invite flow. Business owners now see a "Team" card on `/dashboard/settings` with an email invite form. Submitting the form creates an `Invite` record in the DB and sends an invite email via Resend. No invite acceptance page yet — that is the next milestone.
+
+### What was inspected
+
+- `prisma/schema.prisma` — `Invite` model confirmed: `enterpriseId`, `email`, `roleId`, `token` (unique), `status` (default "pending"), `invitedById`, `createdAt`. All fields usable without a schema change.
+- `emails/templates/verify-email.tsx` + `emails/config.ts` — React Email template shape and brand palette (teal gradient header, `#ECEAE9` background).
+- `lib/mailer.ts` — `sendVerifyEmail` / `sendContactNotificationEmail` pattern: `getFromEmail()`, `resend.emails.send()`, optional `idempotencyKey`.
+- `lib/validations/contact.ts` — Zod schema + `normalizeEmail` transform pattern.
+- `components/marketing/contact-form.tsx` — client form pattern: react-hook-form + zodResolver + `fieldErrors` mapping + success state.
+- `app/api/bookings/route.ts` — authenticated POST pattern: `auth()` → 401; ownership/entitlement check → 403; Zod parse → 422; Prisma write.
+- `app/(dashboard)/dashboard/settings/page.tsx` — two `Card` sections; `Promise.all` query pattern not yet present (sequential).
+- `components/ui/button.tsx` — `size="sm"` and `variant="outline"` confirmed valid.
+- No existing invite routes, email templates, or validation schemas existed.
+
+### Implementation
+
+**`lib/validations/invite.ts`** (new)
+- Single field: `email` with `normalizeEmail` transform + regex refine, matching the existing email validation pattern.
+
+**`emails/templates/invite-email.tsx`** (new)
+- React Email template matching the brand palette: teal gradient header, `#ECEAE9` body background, teal CTA button.
+- Props: `enterpriseName`, `inviterName`, `acceptUrl`.
+- Accept link points to `{BASE_URL}/invite/{token}` — route not yet built, but token is stored in DB so the link is future-safe.
+
+**`lib/mailer.ts`** (updated)
+- Added `sendInviteEmail({ to, inviterName, enterpriseName, acceptUrl, idempotencyKey })`.
+- Uses `idempotencyKey: invite/${invite.id}` to prevent duplicate sends if the handler is retried.
+
+**`app/api/invites/route.ts`** (new)
+- `auth()` → 401 if unauthenticated.
+- `prisma.enterprise.findFirst({ where: { ownerUserId } })` → 403 if user owns no enterprise.
+- JSON parse → Zod `inviteSchema.safeParse` → 422 on failure.
+- Duplicate pending invite check for same `(enterpriseId, email)` → 409.
+- `role.upsert({ where: { name: "member" } })` — idempotent, same pattern as the "owner" role upsert during signup.
+- `crypto.randomUUID()` for the invite token.
+- `invite.create(...)` then `sendInviteEmail(...)` best-effort (email failure is logged but does not fail the request).
+- `revalidatePath("/dashboard/settings")`.
+- Returns `201` with `{ invite: { id, email, createdAt } }`.
+
+**`components/dashboard/invite-form.tsx`** (new)
+- `"use client"` component; react-hook-form + zodResolver.
+- Success state: shows confirmed email + "Invite another member" button (resets form).
+- Error banner with dismiss (X) button, matching contact-form.tsx pattern.
+- `form.setError("email", ...)` for server-side field errors (e.g., duplicate pending invite).
+
+**`app/(dashboard)/dashboard/settings/page.tsx`** (updated)
+- Added `export const dynamic = "force-dynamic"`.
+- Added `fetchOwnedEnterprise(userId)` helper.
+- Converted sequential queries to `Promise.all([fetchUser, fetchOwnedEnterprise])`.
+- Added `TeamCard` component (visible only when `enterprise !== null`): shows workspace name + `<InviteForm enterpriseName={...} />`.
+- Individual users see no change — `enterprise` is `null`, `TeamCard` is not rendered.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `lib/validations/invite.ts` | **Created** — Zod invite email schema |
+| `emails/templates/invite-email.tsx` | **Created** — React Email invite template |
+| `lib/mailer.ts` | Added `sendInviteEmail` |
+| `app/api/invites/route.ts` | **Created** — POST invite handler |
+| `components/dashboard/invite-form.tsx` | **Created** — client invite form |
+| `app/(dashboard)/dashboard/settings/page.tsx` | Added `force-dynamic`, `fetchOwnedEnterprise`, parallel queries, `TeamCard` |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; 27 routes; /api/invites ƒ Dynamic; /dashboard/settings ƒ Dynamic; ƒ Proxy confirmed
+```
+
+### Manual verification
+
+Full runtime verification requires a live Neon connection. Code-inspection verification:
+
+- **401 path**: `auth()` returns no session → `{ error: "Unauthorized" }` 401. ✓ (same pattern as `/api/bookings`)
+- **403 path**: user has no `Enterprise` with `ownerUserId` → `{ error: "Only enterprise owners can send invites" }` 403. ✓
+- **422 path**: invalid email → Zod `safeParse` fails → `fieldErrors` 422. ✓
+- **409 path**: existing `pending` invite for same `(enterpriseId, email)` → `fieldErrors.email` 409. ✓
+- **201 path**: invite record created, email sent (best-effort), 201 response. ✓ (code path confirmed)
+- **Individual users**: `fetchOwnedEnterprise` returns `null` → `TeamCard` not rendered → settings page unchanged. ✓
+- **Auth flow unchanged**: no changes to `auth.ts`, `next-auth.d.ts`, middleware, or login/signup. ✓
+
+### Notes and caveats
+
+- The invite `acceptUrl` (`{BASE_URL}/invite/{token}`) is stored in the sent email and in the `Invite.token` column. The accept route (`/invite/[token]`) does not exist yet — users clicking the link get a 404 until the next milestone.
+- `"member"` role is upserted per invite send. On the first invite from any enterprise, this creates the role; subsequent invites reuse it. Idempotent.
+- Email is best-effort: if Resend fails, the invite is still created in the DB. The owner would need to resend manually or the accept flow can be triggered by resending the link.
+- No invite list is shown on the settings page yet (next milestone).
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — build `/invite/[token]` page that:
+1. Looks up the invite by token; shows 404/expired if not found or `status !== "pending"`.
+2. If the invited email already has a YouMimic account, prompts login and adds them to the `EnterpriseMember` table.
+3. If no account exists, redirects to `/signup` pre-filled with the invited email and a `?invite={token}` query param so the signup can complete membership linkage.
+
+**Or alternatively:** show a pending-invites list on the settings page (query `prisma.invite.findMany({ where: { enterpriseId, status: "pending" } })`) so the owner can see who has been invited.
+
+---
+
 ## Session: Post-signup onboarding split — 2026-06-29
 
 ### What was done
