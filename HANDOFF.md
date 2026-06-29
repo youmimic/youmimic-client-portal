@@ -1,5 +1,82 @@
 # HANDOFF.md
 
+## Session: Post-signup onboarding split — 2026-06-29
+
+### What was done
+
+Added differentiated "Getting started" content on the dashboard landing page. A server-side Prisma query checks whether the authenticated user owns an `Enterprise` row. Individual users see personal setup steps; Business owners see workspace-focused steps. No auth flow, schema, or middleware changes were made.
+
+### What was inspected
+
+- `app/(dashboard)/dashboard/page.tsx` — existing landing page: just a greeting, no onboarding content. Already calls `auth()`.
+- `app/(dashboard)/layout.tsx` — calls `auth()` and redirects unauthenticated users; `DashboardShell` wraps children.
+- `components/dashboard/dashboard-shell.tsx` — client component; sidebar + header + `<main>` container.
+- `prisma/schema.prisma` — `Enterprise.ownerUserId` FK to `User.id`; `@@index([ownerUserId])` already present.
+- `auth.ts` / `next-auth.d.ts` — `session.user.id` typed as `string`; no changes needed.
+- `components/ui/card.tsx` — `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent` — confirmed slot-based grid layout; icon inline inside `CardTitle` flex span works correctly.
+- `app/(dashboard)/dashboard/billing/page.tsx` — confirmed `force-dynamic` and Prisma query patterns.
+
+### Implementation
+
+**`app/(dashboard)/dashboard/page.tsx`** — single file changed.
+
+- Added `export const dynamic = "force-dynamic"`.
+- Imported `prisma` and ran a single `findFirst` query:
+  ```ts
+  const enterprise = userId
+    ? await prisma.enterprise.findFirst({
+        where: { ownerUserId: userId },
+        select: { id: true, name: true },
+      })
+    : null;
+  ```
+- If `enterprise !== null` → render `<BusinessGettingStarted enterpriseName={...} />`.
+- If `enterprise === null` → render `<IndividualGettingStarted />`.
+- Both variants render a `grid gap-4 sm:grid-cols-2 lg:grid-cols-3` of three `GettingStartedCard` components using shadcn `Card`/`CardHeader`/`CardTitle`/`CardDescription`/`CardContent`.
+- **Individual cards**: "Set up your avatar" → `/dashboard/avatars`, "Book a capture session" → `/dashboard/bookings`, "Manage your plan" → `/dashboard/billing`.
+- **Business cards**: `{enterpriseName}` → `/dashboard/settings`, "Set up your avatars" → `/dashboard/avatars`, "Enterprise billing" → `/dashboard/billing`.
+- No blocking navigation, no mandatory workflow — content differentiation only.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/(dashboard)/dashboard/page.tsx` | Added Prisma enterprise query + Individual/Business getting-started card grids |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; 26 routes; /dashboard ƒ Dynamic; ƒ Proxy confirmed
+```
+
+### Manual verification
+
+Full runtime verification requires a live Neon connection (not available locally). Code-inspection verification:
+
+- **Business owner path**: `enterprise !== null` branch renders `BusinessGettingStarted` with `enterprise.name`. The `Enterprise` model's `ownerUserId` index ensures the `findFirst` is efficient.
+- **Individual path**: `enterprise === null` (no owned enterprise row) renders `IndividualGettingStarted`. This covers all Individual-signup users and any Business-signup user whose enterprise creation failed (transaction atomicity prevents partial state, so this edge case should not occur in practice).
+- **Auth unchanged**: `auth()` is already called in the layout; the dashboard page re-calls it only to extract `userId` for the Prisma query. No new auth surfaces.
+- **No schema or migration changes** — query uses the existing `Enterprise.ownerUserId` field and index.
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+
+### Recommended next milestone
+
+- **Enterprise invite flow** — allow the Business owner to invite team members via the existing `Invite` model. The `Invite` table (`email`, `roleId`, `token`, `status`, `enterpriseId`) is already in the schema; the invite-send and invite-accept API routes need to be built.
+- **Workspace settings page** — the Business owner's "Workspace Settings" card currently links to `/dashboard/settings` (personal settings). A dedicated workspace page at `/dashboard/settings/workspace` would show the enterprise name, member list, and invite management.
+
+---
+
 ## Session: Individual / Business account type at signup — 2026-06-29
 
 ### What was done

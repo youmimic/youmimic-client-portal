@@ -1,12 +1,32 @@
+import Link from "next/link";
+import { Building2, CalendarDays, CreditCard, UserCircle2 } from "lucide-react";
 import { auth } from "@/auth";
+import prisma from "@/lib/prisma";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export const metadata = {
   title: "Dashboard — YouMimic Portal",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const session = await auth();
+  const userId = session?.user?.id;
   const displayName = session?.user?.name ?? session?.user?.email ?? "there";
+
+  const enterprise = userId
+    ? await prisma.enterprise.findFirst({
+        where: { ownerUserId: userId },
+        select: { id: true, name: true },
+      })
+    : null;
 
   return (
     <div className="space-y-6">
@@ -14,6 +34,107 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">Welcome back, {displayName}.</p>
       </div>
+
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight mb-4">
+          Getting started
+        </h2>
+        {enterprise ? (
+          <BusinessGettingStarted enterpriseName={enterprise.name} />
+        ) : (
+          <IndividualGettingStarted />
+        )}
+      </div>
     </div>
+  );
+}
+
+function IndividualGettingStarted() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <GettingStartedCard
+        icon={<UserCircle2 className="h-5 w-5 shrink-0" />}
+        title="Set up your avatar"
+        description="Create your personal AI avatar for use in videos and presentations."
+        href="/dashboard/avatars"
+        linkLabel="Go to Avatars"
+      />
+      <GettingStartedCard
+        icon={<CalendarDays className="h-5 w-5 shrink-0" />}
+        title="Book a capture session"
+        description="Schedule a session to record footage for your avatar."
+        href="/dashboard/bookings"
+        linkLabel="View Bookings"
+      />
+      <GettingStartedCard
+        icon={<CreditCard className="h-5 w-5 shrink-0" />}
+        title="Manage your plan"
+        description="Review your subscription and billing details."
+        href="/dashboard/billing"
+        linkLabel="Go to Billing"
+      />
+    </div>
+  );
+}
+
+function BusinessGettingStarted({ enterpriseName }: { enterpriseName: string }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <GettingStartedCard
+        icon={<Building2 className="h-5 w-5 shrink-0" />}
+        title={enterpriseName}
+        description="Your business workspace is set up. Manage your team and enterprise settings."
+        href="/dashboard/settings"
+        linkLabel="Workspace Settings"
+      />
+      <GettingStartedCard
+        icon={<UserCircle2 className="h-5 w-5 shrink-0" />}
+        title="Set up your avatars"
+        description="Create AI avatars for your team members and business use cases."
+        href="/dashboard/avatars"
+        linkLabel="Go to Avatars"
+      />
+      <GettingStartedCard
+        icon={<CreditCard className="h-5 w-5 shrink-0" />}
+        title="Enterprise billing"
+        description="Review your enterprise subscription and payment history."
+        href="/dashboard/billing"
+        linkLabel="Go to Billing"
+      />
+    </div>
+  );
+}
+
+function GettingStartedCard({
+  icon,
+  title,
+  description,
+  href,
+  linkLabel,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  href: string;
+  linkLabel: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <span className="text-primary">{icon}</span>
+          {title}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Link
+          href={href}
+          className="text-sm font-medium text-primary hover:underline"
+        >
+          {linkLabel} →
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
