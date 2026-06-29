@@ -1,5 +1,35 @@
 # HANDOFF.md
 
+## Session: Billing page support note — 2026-06-29
+
+### What was done
+
+Added a muted billing support line at the bottom of `/dashboard/billing`, after the payment history section. `sales@youmimic.com` is rendered as a styled `mailto:` link. No billing logic, routes, or architecture changed.
+
+### Placement decision
+
+After inspecting all four sections (Personal plan → Enterprise plans → Enterprise memberships → Payment history), the bottom of the page after payment history is the most natural position — it sits below all actionable controls without interrupting them, reads as helpful context rather than a warning, and matches the industry convention for support contact on billing pages.
+
+### No copy-to-clipboard
+
+The booking dialog copy pattern requires `"use client"`. Adding a client component just for this would broaden scope unnecessarily. The task's scope guard calls for just the `mailto:` link in this milestone.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/(dashboard)/dashboard/billing/page.tsx` | Added billing support `<p>` with `mailto:` link after payment history section |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck → clean
+npm run build     → clean; routes unchanged
+```
+
+---
+
 ## Session: External links section on dashboard — 2026-06-29
 
 ### What was done

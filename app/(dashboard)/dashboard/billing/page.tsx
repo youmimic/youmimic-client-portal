@@ -16,6 +16,7 @@ import {
   BillingActionButton,
   type BillingAction,
 } from "@/components/dashboard/billing-actions";
+import { BillingSupportEmail } from "@/components/dashboard/billing-support-email";
 
 export const metadata = {
   title: "Billing — YouMimic Portal",
@@ -353,8 +354,9 @@ function PersonalPlanCard({ sub }: { sub: SubData | null }) {
         )}
       </CardContent>
 
-      <CardFooter>
+      <CardFooter className="flex-col items-start gap-2">
         <BillingActionButton action={action} label={label} variant={variant} />
+        <BillingSupportEmail />
       </CardFooter>
     </Card>
   );
@@ -471,7 +473,9 @@ function PaymentHistorySection({ payments }: { payments: PaymentRecord[] }) {
     return (
       <Card>
         <CardContent className="py-8 text-center">
-          <p className="text-sm text-muted-foreground">No payment history yet.</p>
+          <p className="text-sm text-muted-foreground">
+            No payment history yet.
+          </p>
         </CardContent>
       </Card>
     );
