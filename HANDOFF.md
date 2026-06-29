@@ -1,5 +1,83 @@
 # HANDOFF.md
 
+## Session: Capture location workflow — 2026-06-29
+
+### What was done
+
+Added a full capture location workflow to the bookings feature. Every new or edited booking now requires the user to specify where the capture session will take place. Historical rows safely receive NULL for all location columns.
+
+### Schema changes
+
+Two new Prisma enums: `CaptureLocationType { capital_city | regional_other | multi_location }` and `AustralianCapitalCity { sydney | melbourne | brisbane | perth | adelaide | hobart | canberra | darwin }`.
+
+Eight nullable columns added to `Booking`: `captureLocationType`, `capitalCity`, `suburbOrTown`, `stateOrTerritory`, `postcode`, `addressLine1`, `addressLine2`, `locationNotes`.
+
+Migration: `20260629000000_add_capture_location/migration.sql` — all `ADD COLUMN` with no defaults; safe for existing rows (historical rows get NULL).
+
+### Validation changes (`lib/validations/booking.ts`)
+
+- Exported location constants, types, and `CAPITAL_CITY_LABELS` record.
+- Added all 8 location fields to the Zod schema.
+- Replaced the old `.refine()` participants check with a single `.superRefine()` that also enforces location conditional requirements: `capital_city` → `capitalCity` required; `regional_other` → suburb/town, state/territory, postcode required; `multi_location` → locationNotes required.
+- Fixed Zod v4 API: `{ required_error }` → `{ error }` on `z.enum()`, and `z.ZodIssueCode.custom` → `"custom"`.
+
+### Resolver change
+
+Both dialog files switched from `zodResolver` to `standardSchemaResolver` (`@hookform/resolvers/standard-schema`). Zod v4 schemas using `.superRefine()` don't satisfy the `z4.$ZodType` constraint in `zodResolver`'s overloads, leaving `TFieldValues` unresolved. Zod v4 implements Standard Schema; `standardSchemaResolver` infers the form type correctly. Runtime behavior is identical.
+
+### UI changes (both dialogs)
+
+A location section appears inside the non-contact-sales branch, after captures count:
+1. Location type select — clears all dependent fields on type change.
+2. `capital_city` → capital city select (8 Australian capitals).
+3. `regional_other` → suburb/town (req), state/territory (req), postcode (req), address line 1/2 (optional), location notes (optional).
+4. `multi_location` → location notes (req) with helper text.
+
+EditDialog pre-fills from the existing booking's location fields. Old bookings show empty location state — user must fill location when editing.
+
+### Bookings table
+
+Added a "Location" column (`lg:table-cell`). Shows city name, suburb+state, "Multi-location", or "—" for historical rows.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `prisma/schema.prisma` | Added 2 enums; 8 nullable fields on `Booking` |
+| `prisma/migrations/20260629000000_add_capture_location/migration.sql` | **Created** — safe additive migration |
+| `lib/validations/booking.ts` | Location constants + fields + `superRefine`; Zod v4 API fixes |
+| `app/api/bookings/route.ts` | Persist all 8 location fields |
+| `app/api/bookings/[id]/route.ts` | Same for PATCH |
+| `components/dashboard/new-booking-dialog.tsx` | Location section; `standardSchemaResolver` |
+| `components/dashboard/booking-actions.tsx` | `BookingForActions` extended; EditDialog location section; `standardSchemaResolver` |
+| `app/(dashboard)/dashboard/bookings/page.tsx` | Location fields in query + mapping + table column |
+
+### Checks run
+
+```
+npx prisma generate → clean
+npm run lint        → 0 errors, 2 warnings (both pre-existing)
+npm run typecheck   → clean
+npm run build       → clean; routes unchanged
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Theme script warning — React 19 + next-themes 0.4.6 known issue.
+8. Invite acceptance page (`/invite/[token]`) not yet built.
+
+### Recommended next milestone
+
+**Invite acceptance flow** — `/invite/[token]` page that resolves the token, verifies `status === "pending"`, then either adds an existing signed-in user to `EnterpriseMember` or redirects to `/signup?invite={token}` for new users.
+
+---
+
 ## Session: Billing page support note — 2026-06-29
 
 ### What was done

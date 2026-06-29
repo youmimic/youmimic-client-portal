@@ -227,6 +227,23 @@ enum BookingStatus {
   completed
 }
 
+enum CaptureLocationType {
+  capital_city
+  regional_other
+  multi_location
+}
+
+enum AustralianCapitalCity {
+  sydney
+  melbourne
+  brisbane
+  perth
+  adelaide
+  hobart
+  canberra
+  darwin
+}
+
 model Booking {
   id            String   @id @default(cuid())
   userId        String
@@ -234,11 +251,19 @@ model Booking {
   requestedDate DateTime
   timeStart     String
   timeEnd       String
-  capturesCount Int           @default(1)
-  status        BookingStatus @default(pending)
-  paymentStatus PaymentStatus @default(unpaid)
-  notes         String?
-  createdAt     DateTime @default(now())
+  capturesCount        Int                  @default(1)
+  status               BookingStatus        @default(pending)
+  paymentStatus        PaymentStatus        @default(unpaid)
+  notes                String?
+  captureLocationType  CaptureLocationType?
+  capitalCity          AustralianCapitalCity?
+  suburbOrTown         String?
+  stateOrTerritory     String?
+  postcode             String?
+  addressLine1         String?
+  addressLine2         String?
+  locationNotes        String?
+  createdAt            DateTime             @default(now())
 
   user         User        @relation(fields: [userId], references: [id])
   enterprise   Enterprise? @relation(fields: [enterpriseId], references: [id])

@@ -35,8 +35,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const { requestedDate, capturesCount, timeStart, notes, participants } =
-      parsed.data;
+    const {
+      requestedDate,
+      capturesCount,
+      timeStart,
+      notes,
+      participants,
+      captureLocationType,
+      capitalCity,
+      suburbOrTown,
+      stateOrTerritory,
+      postcode,
+      addressLine1,
+      addressLine2,
+      locationNotes,
+    } = parsed.data;
 
     // Always compute timeEnd server-side — never trust the client-submitted value.
     const timeEnd = addHoursToTime(timeStart, capturesCount);
@@ -49,6 +62,14 @@ export async function POST(req: Request) {
         timeStart,
         timeEnd,
         notes: notes || null,
+        captureLocationType: captureLocationType ?? null,
+        capitalCity: capitalCity ?? null,
+        suburbOrTown: suburbOrTown || null,
+        stateOrTerritory: stateOrTerritory || null,
+        postcode: postcode || null,
+        addressLine1: addressLine1 || null,
+        addressLine2: addressLine2 || null,
+        locationNotes: locationNotes || null,
         participants: {
           create: participants.map((p, i) => ({
             sortOrder: i + 1,

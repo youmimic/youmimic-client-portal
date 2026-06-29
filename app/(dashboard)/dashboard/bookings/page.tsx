@@ -8,6 +8,11 @@ import {
   BookingActions,
   type BookingForActions,
 } from "@/components/dashboard/booking-actions";
+import {
+  CAPITAL_CITY_LABELS,
+  type AustralianCapitalCity,
+  type CaptureLocationType,
+} from "@/lib/validations/booking";
 
 export const metadata = {
   title: "Bookings — YouMimic Portal",
@@ -29,6 +34,14 @@ async function fetchBookings(userId: string) {
         select: { firstName: true, contactNumber: true, sortOrder: true },
         orderBy: { sortOrder: "asc" },
       },
+      captureLocationType: true,
+      capitalCity: true,
+      suburbOrTown: true,
+      stateOrTerritory: true,
+      postcode: true,
+      addressLine1: true,
+      addressLine2: true,
+      locationNotes: true,
     },
     orderBy: { requestedDate: "desc" },
   });
@@ -65,6 +78,25 @@ function formatDate(date: Date): string {
   }).format(new Date(date));
 }
 
+function formatLocationSummary(booking: BookingRow): string {
+  const type = booking.captureLocationType as CaptureLocationType | null;
+  if (!type) return "—";
+  if (type === "capital_city") {
+    const city = booking.capitalCity as AustralianCapitalCity | null;
+    return city ? (CAPITAL_CITY_LABELS[city] ?? city) : "Capital city";
+  }
+  if (type === "regional_other") {
+    const parts = [booking.suburbOrTown, booking.stateOrTerritory].filter(
+      Boolean,
+    );
+    return parts.length > 0 ? parts.join(", ") : "Regional";
+  }
+  if (type === "multi_location") {
+    return "Multi-location";
+  }
+  return "—";
+}
+
 function toBookingForActions(booking: BookingRow): BookingForActions {
   return {
     id: booking.id,
@@ -78,6 +110,14 @@ function toBookingForActions(booking: BookingRow): BookingForActions {
       firstName: p.firstName,
       contactNumber: p.contactNumber,
     })),
+    captureLocationType: booking.captureLocationType as CaptureLocationType | null,
+    capitalCity: booking.capitalCity,
+    suburbOrTown: booking.suburbOrTown,
+    stateOrTerritory: booking.stateOrTerritory,
+    postcode: booking.postcode,
+    addressLine1: booking.addressLine1,
+    addressLine2: booking.addressLine2,
+    locationNotes: booking.locationNotes,
   };
 }
 
@@ -102,6 +142,9 @@ function BookingsTable({ bookings }: { bookings: BookingRow[] }) {
                 </th>
                 <th className="px-4 py-3 font-medium text-muted-foreground">
                   Captures
+                </th>
+                <th className="hidden px-4 py-3 font-medium text-muted-foreground lg:table-cell">
+                  Location
                 </th>
                 <th className="hidden px-4 py-3 font-medium text-muted-foreground sm:table-cell">
                   Enterprise
@@ -131,6 +174,9 @@ function BookingsTable({ bookings }: { bookings: BookingRow[] }) {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {booking.capturesCount}
+                  </td>
+                  <td className="hidden max-w-48 truncate px-4 py-3 text-muted-foreground lg:table-cell">
+                    {formatLocationSummary(booking)}
                   </td>
                   <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
                     {booking.enterprise?.name ?? "—"}

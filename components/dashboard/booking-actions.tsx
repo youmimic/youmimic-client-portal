@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, useFieldArray } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
 import { Ban, Check, CircleHelp, Copy, Mail, Pencil, X } from "lucide-react";
 
 import {
@@ -11,6 +11,10 @@ import {
   type UpdateBookingInput,
   MAX_CAPTURES,
   NOTES_MAX,
+  AUSTRALIAN_CAPITAL_CITIES,
+  CAPITAL_CITY_LABELS,
+  type CaptureLocationType,
+  type AustralianCapitalCity,
 } from "@/lib/validations/booking";
 import { addHoursToTime } from "@/lib/booking-time";
 import { Button } from "@/components/ui/button";
@@ -54,6 +58,14 @@ export type BookingForActions = {
   status: string;
   notes: string | null;
   participants: Array<{ firstName: string; contactNumber: string }>;
+  captureLocationType: CaptureLocationType | null;
+  capitalCity: AustralianCapitalCity | null;
+  suburbOrTown: string | null;
+  stateOrTerritory: string | null;
+  postcode: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  locationNotes: string | null;
 };
 
 const EDITABLE_STATUSES = ["pending", "confirmed"];
@@ -115,7 +127,7 @@ function EditDialog({
   const [emailCopied, setEmailCopied] = useState(false);
 
   const form = useForm<UpdateBookingInput>({
-    resolver: zodResolver(updateBookingSchema),
+    resolver: standardSchemaResolver(updateBookingSchema),
     defaultValues: {
       requestedDate: booking.requestedDate,
       capturesCount: booking.capturesCount,
@@ -126,6 +138,14 @@ function EditDialog({
         firstName: p.firstName,
         contactNumber: p.contactNumber,
       })),
+      captureLocationType: booking.captureLocationType ?? undefined,
+      capitalCity: booking.capitalCity ?? undefined,
+      suburbOrTown: booking.suburbOrTown ?? "",
+      stateOrTerritory: booking.stateOrTerritory ?? "",
+      postcode: booking.postcode ?? "",
+      addressLine1: booking.addressLine1 ?? "",
+      addressLine2: booking.addressLine2 ?? "",
+      locationNotes: booking.locationNotes ?? "",
     },
     mode: "onBlur",
   });
@@ -142,6 +162,10 @@ function EditDialog({
   const timeStart = useWatch({ control: form.control, name: "timeStart" });
   const notesValue = useWatch({ control: form.control, name: "notes" }) ?? "";
   const notesLength = notesValue.length;
+  const captureLocationType = useWatch({
+    control: form.control,
+    name: "captureLocationType",
+  });
 
   // Auto-compute timeEnd when timeStart or capturesCount changes.
   useEffect(() => {
@@ -379,6 +403,233 @@ function EditDialog({
               </div>
             ) : (
               <>
+                <FormField
+                  control={form.control}
+                  name="captureLocationType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Capture location</FormLabel>
+                      <Select
+                        value={field.value ?? ""}
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          form.setValue("capitalCity", null);
+                          form.setValue("suburbOrTown", "");
+                          form.setValue("stateOrTerritory", "");
+                          form.setValue("postcode", "");
+                          form.setValue("addressLine1", "");
+                          form.setValue("addressLine2", "");
+                          form.setValue("locationNotes", "");
+                        }}
+                        name={field.name}
+                      >
+                        <FormControl>
+                          <SelectTrigger onBlur={field.onBlur} ref={field.ref}>
+                            <SelectValue placeholder="Select location type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="capital_city">
+                            Capital city
+                          </SelectItem>
+                          <SelectItem value="regional_other">
+                            Regional / Other
+                          </SelectItem>
+                          <SelectItem value="multi_location">
+                            Multi-location
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {captureLocationType === "capital_city" && (
+                  <FormField
+                    control={form.control}
+                    name="capitalCity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Capital city</FormLabel>
+                        <Select
+                          value={field.value ?? ""}
+                          onValueChange={(val) => field.onChange(val)}
+                          name={field.name}
+                        >
+                          <FormControl>
+                            <SelectTrigger
+                              onBlur={field.onBlur}
+                              ref={field.ref}
+                            >
+                              <SelectValue placeholder="Select city" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {AUSTRALIAN_CAPITAL_CITIES.map((city) => (
+                              <SelectItem key={city} value={city}>
+                                {CAPITAL_CITY_LABELS[city]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {captureLocationType === "regional_other" && (
+                  <div className="space-y-3">
+                    <FormField
+                      control={form.control}
+                      name="suburbOrTown"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Suburb / Town</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g. Newtown"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField
+                        control={form.control}
+                        name="stateOrTerritory"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>State / Territory</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g. NSW"
+                                {...field}
+                                value={field.value ?? ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="postcode"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Postcode</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g. 2042"
+                                {...field}
+                                value={field.value ?? ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="addressLine1"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Address line 1{" "}
+                            <span className="font-normal text-muted-foreground">
+                              (optional)
+                            </span>
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g. 42 King Street"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="addressLine2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Address line 2{" "}
+                            <span className="font-normal text-muted-foreground">
+                              (optional)
+                            </span>
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g. Level 3"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="locationNotes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Location notes{" "}
+                            <span className="font-normal text-muted-foreground">
+                              (optional)
+                            </span>
+                          </FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Any additional location details…"
+                              className="resize-none"
+                              rows={2}
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+
+                {captureLocationType === "multi_location" && (
+                  <FormField
+                    control={form.control}
+                    name="locationNotes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Location notes</FormLabel>
+                        <p className="text-xs text-muted-foreground">
+                          List the planned locations or describe the rollout.
+                        </p>
+                        <FormControl>
+                          <Textarea
+                            placeholder="e.g. Sydney CBD office Mon–Tue, Melbourne HQ Wed–Thu…"
+                            className="resize-none"
+                            rows={3}
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <FormField
                     control={form.control}
