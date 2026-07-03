@@ -70,6 +70,7 @@ export type BookingForActions = {
 
 const EDITABLE_STATUSES = ["pending", "confirmed"];
 const CONTACT_SALES_SENTINEL = "contact-sales";
+const SALES_EMAIL = process.env.NEXT_PUBLIC_SALES_EMAIL ?? "sales@youmimic.com";
 
 // Returns the earliest bookable date as a YYYY-MM-DD string.
 // Advances 3 business days from today, skipping Sat/Sun (no holiday logic).
@@ -201,7 +202,7 @@ function EditDialog({
   }
 
   function copyEmail() {
-    navigator.clipboard.writeText("sales@youmimic.com").then(() => {
+    navigator.clipboard.writeText(SALES_EMAIL).then(() => {
       setEmailCopied(true);
       setTimeout(() => setEmailCopied(false), 2000);
     });
@@ -370,10 +371,10 @@ function EditDialog({
                   For 10+ avatar capture sessions, please contact sales at:{" "}
                   <span className="inline-flex items-center gap-1">
                     <a
-                      href="mailto:sales@youmimic.com"
+                      href={`mailto:${SALES_EMAIL}`}
                       className="text-primary underline underline-offset-4 hover:text-primary/80"
                     >
-                      sales@youmimic.com
+                      {SALES_EMAIL}
                     </a>
                     <Button
                       type="button"
@@ -394,7 +395,7 @@ function EditDialog({
                   </span>
                 </p>
                 <a
-                  href="mailto:sales@youmimic.com"
+                  href={`mailto:${SALES_EMAIL}`}
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                 >
                   <Mail className="h-4 w-4" aria-hidden="true" />

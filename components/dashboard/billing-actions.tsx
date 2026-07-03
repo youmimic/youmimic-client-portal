@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { ButtonProps } from "@/components/ui/button";
 
+const SALES_EMAIL = process.env.NEXT_PUBLIC_SALES_EMAIL ?? "sales@youmimic.com";
+
 export type BillingAction =
   | { type: "checkout"; planType: "CREATOR" | "ENTERPRISE"; enterpriseId?: string }
   | { type: "portal"; enterpriseId?: string }
@@ -26,7 +28,7 @@ export function BillingActionButton({
       <p className="text-sm text-muted-foreground">
         Enterprise billing is managed by the YouMimic team.{" "}
         <a
-          href="mailto:sales@youmimic.com"
+          href={`mailto:${SALES_EMAIL}`}
           className="underline underline-offset-4 hover:text-foreground"
         >
           Contact sales

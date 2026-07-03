@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const SALES_EMAIL = "sales@youmimic.com";
+const SALES_EMAIL = process.env.NEXT_PUBLIC_SALES_EMAIL ?? "sales@youmimic.com";
 
 export function BillingSupportEmail() {
   const [copied, setCopied] = useState(false);
