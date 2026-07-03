@@ -158,6 +158,35 @@
   --font-heading: var(--font-montserrat);
 }
 
+/* Outer span: cycling border colour */
+@keyframes badge-border {
+  0%, 100% { border-color: #f43f5e; box-shadow: 0 0 6px #f43f5e55; }
+  16%       { border-color: #f97316; box-shadow: 0 0 6px #f9731655; }
+  33%       { border-color: #eab308; box-shadow: 0 0 6px #eab30855; }
+  50%       { border-color: #22c55e; box-shadow: 0 0 6px #22c55e55; }
+  66%       { border-color: #3b82f6; box-shadow: 0 0 6px #3b82f655; }
+  83%       { border-color: #a855f7; box-shadow: 0 0 6px #a855f755; }
+}
+
+.badge-rainbow-border {
+  animation: badge-border 6s ease-in-out infinite;
+}
+
+/* Inner span: left-to-right gradient sweep on the text */
+@keyframes badge-text-sweep {
+  0%   { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+.badge-rainbow-text {
+  background: linear-gradient(90deg, #f43f5e, #f97316, #eab308, #22c55e, #3b82f6, #a855f7, #f43f5e);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: badge-text-sweep 4s ease-in-out infinite;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

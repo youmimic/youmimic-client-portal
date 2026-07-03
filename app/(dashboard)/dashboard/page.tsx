@@ -137,10 +137,12 @@ function GettingStartedCard({
   linkLabel: string;
 }) {
   return (
-    <Card>
+    <Card className="group">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <span className="text-primary">{icon}</span>
+          <span className="text-primary transition-transform duration-700 ease-in-out group-hover:[transform:perspective(400px)_rotateY(360deg)_scale(1.1)_translateY(-0.125rem)]">
+            {icon}
+          </span>
           {title}
         </CardTitle>
         <CardDescription>{description}</CardDescription>
@@ -216,14 +218,16 @@ function ExternalLinkCard({
   badge?: string;
 }) {
   return (
-    <Card>
+    <Card className="group">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <span className="text-primary">{icon}</span>
+          <span className="text-primary transition-transform duration-700 ease-in-out group-hover:[transform:perspective(400px)_rotateY(360deg)_scale(1.1)_translateY(-0.125rem)]">
+            {icon}
+          </span>
           {title}
           {badge && (
-            <span className="ml-auto inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              {badge}
+            <span className="badge-rainbow-border ml-auto inline-flex items-center rounded-full border-2 bg-muted px-2 py-0.5 text-xs font-semibold">
+              <span className="badge-rainbow-text">{badge}</span>
             </span>
           )}
         </CardTitle>
