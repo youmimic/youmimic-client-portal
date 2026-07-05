@@ -7,6 +7,12 @@ datasource db {
   provider = "postgresql"
 }
 
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  BILLING_ADMIN
+}
+
 enum PlanType {
   FREE
   CREATOR
@@ -30,12 +36,18 @@ enum BillingOwnerType {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  passwordHash  String
-  emailVerified Boolean   @default(false)
-  createdAt     DateTime  @default(now())
+  id               String     @id @default(cuid())
+  name             String
+  email            String     @unique
+  passwordHash     String
+  emailVerified    Boolean    @default(false)
+  createdAt        DateTime   @default(now())
+
+  adminRole        AdminRole?
+  isSuspended      Boolean    @default(false)
+  suspendedAt      DateTime?
+  suspensionReason String?
+  sessionVersion   Int        @default(1)
 
   userRoles               UserRole[]
   enterprises             Enterprise[]      @relation("EnterpriseOwner")
@@ -48,6 +60,7 @@ model User {
   systemEvents            SystemEvent[]
   emailLogs               EmailLog[]
   adminLogs               AdminLog[]        @relation("AdminUser")
+  adminLogsAsTarget       AdminLog[]        @relation("AdminLogTarget")
 
   @@map("users")
 }
@@ -365,16 +378,20 @@ model Webhook {
 }
 
 model AdminLog {
-  id          String   @id @default(cuid())
-  adminUserId String
-  action      String
-  entityType  String
-  entityId    String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  adminUserId  String
+  action       String
+  entityType   String
+  entityId     String?
+  targetUserId String?
+  reason       String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
 
-  adminUser User @relation("AdminUser", fields: [adminUserId], references: [id])
+  adminUser  User  @relation("AdminUser", fields: [adminUserId], references: [id])
+  targetUser User? @relation("AdminLogTarget", fields: [targetUserId], references: [id])
 
   @@index([adminUserId])
+  @@index([targetUserId])
   @@map("admin_logs")
 }

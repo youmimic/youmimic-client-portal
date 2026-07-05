@@ -8,6 +8,9 @@ declare module "next-auth" {
       roles: string[];
       isEmailVerified: boolean;
       hasActiveSubscription: boolean;
+      adminRole: string | null;
+      isSuspended: boolean;
+      sessionVersion: number;
     } & DefaultSession["user"];
   }
 
@@ -15,6 +18,9 @@ declare module "next-auth" {
     id: string;
     roles: string[];
     isEmailVerified: boolean;
+    adminRole: string | null;
+    isSuspended: boolean;
+    sessionVersion: number;
   }
 }
 
@@ -24,5 +30,8 @@ declare module "next-auth/jwt" {
     roles?: string[];
     isEmailVerified?: boolean;
     hasActiveSubscription?: boolean;
+    adminRole?: string | null;
+    isSuspended?: boolean;
+    sessionVersion?: number;
   }
 }

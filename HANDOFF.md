@@ -1,5 +1,103 @@
 # HANDOFF.md
 
+## Session: Admin area Phase 1 — schema, auth layer, RBAC, audit — 2026-07-06
+
+### What was done
+
+Implemented Phase 1 of the admin area: database schema, auth layer, middleware guards, and service helpers. No admin UI or API routes yet — those are Phase 2.
+
+### Schema changes (`prisma/schema.prisma`)
+
+**New enum `AdminRole`:** `SUPER_ADMIN | ADMIN | BILLING_ADMIN`
+
+**`User` model — 5 new fields:**
+- `adminRole AdminRole?` — null for regular users
+- `isSuspended Boolean @default(false)`
+- `suspendedAt DateTime?`
+- `suspensionReason String?`
+- `sessionVersion Int @default(1)` — incremented when admin revokes sessions
+
+**`AdminLog` model — 2 new fields + new relation:**
+- `targetUserId String?` — the user being acted upon
+- `reason String?` — admin's stated reason for the action
+- `targetUser User? @relation("AdminLogTarget", ...)` — named relation back to User
+- Added `@@index([targetUserId])`
+
+Migration: `20260705231649_add_admin_fields` — fully additive, no data loss risk.
+
+### Auth layer changes
+
+**`next-auth.d.ts`** — Extended `Session.user`, `User`, and `JWT` interfaces with `adminRole: string | null`, `isSuspended: boolean`, `sessionVersion: number`.
+
+**`auth.ts`** — Three changes:
+1. **Suspended sign-in block**: `authorize()` throws `AccountSuspendedError` (code: `account_suspended`) if `user.isSuspended === true`. Suspended users cannot create new sessions.
+2. **JWT stamping at sign-in**: `adminRole`, `isSuspended`, `sessionVersion` added to the sign-in branch of the `jwt` callback.
+3. **Session revocation on `trigger === "update"`**: Re-queries `{ adminRole, isSuspended, sessionVersion }` from DB. If DB `sessionVersion > token.sessionVersion`, returns `null` to immediately invalidate the session.
+
+### `proxy.ts` changes
+
+- `/admin` added to `PROTECTED_PREFIXES` (unauthenticated users redirected to login).
+- **Suspended-user guard**: any authenticated user with `isSuspended === true` on a protected route is redirected to `/suspended`. Runs before email-verification and subscription checks.
+- **Admin role guard**: authenticated users without `adminRole` on `/admin/**` are redirected to `/dashboard`.
+
+### New files
+
+| File | Description |
+|---|---|
+| `app/suspended/page.tsx` | Static page for suspended accounts — contact support email, sign-out + back-to-login buttons |
+| `lib/admin/rbac.ts` | Permission helpers: `canViewUsers`, `canSuspendUser`, `canReactivateUser`, `canRevokeSessions`, `canViewAuditLog`, `canActOnUser` — hierarchy BILLING_ADMIN < ADMIN < SUPER_ADMIN |
+| `lib/admin/audit.ts` | `writeAuditLog(input)` — typed wrapper around `prisma.adminLog.create`; all Phase 2 API mutations must call this |
+
+### Session revocation design
+
+JWT-expiry-window approach: admin increments `sessionVersion` in DB (Phase 2 API). User's JWT remains valid until next `trigger === "update"` call, at which point the jwt callback detects the version mismatch and returns `null` (revokes). This avoids per-request Neon calls in middleware.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing, unchanged)
+npm run typecheck → clean
+npm run build     → clean; 28 routes (added /suspended ○ Static); ƒ Proxy confirmed
+```
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `prisma/schema.prisma` | Added `AdminRole` enum; 5 new fields on `User`; 2 new fields + relation on `AdminLog` |
+| `prisma/migrations/20260705231649_add_admin_fields/migration.sql` | Created — applied migration |
+| `next-auth.d.ts` | Added `adminRole`, `isSuspended`, `sessionVersion` to `Session.user`, `User`, `JWT` |
+| `auth.ts` | Suspended sign-in block; stamp new JWT fields; session revocation on `trigger === "update"` |
+| `proxy.ts` | `/admin` prefix protected; suspended-user redirect; admin role redirect |
+| `app/suspended/page.tsx` | Created — suspended account page |
+| `lib/admin/rbac.ts` | Created — RBAC permission helpers |
+| `lib/admin/audit.ts` | Created — typed `writeAuditLog` helper |
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Invite acceptance page (`/invite/[token]`) not yet built.
+8. Enterprise member (non-owner) bookings access — product decision needed.
+9. Admin login error message for `account_suspended` code not yet wired into `login-form.tsx`.
+
+### Recommended next milestone
+
+**Admin area Phase 2 — API routes:**
+1. `GET /api/admin/users` — paginated user list with search/filters
+2. `GET /api/admin/users/[id]` — user detail + subscription + recent audit log
+3. `POST /api/admin/users/[id]/suspend` — suspend + `writeAuditLog` + reason required
+4. `POST /api/admin/users/[id]/reactivate` — clear suspension fields + `writeAuditLog`
+5. `POST /api/admin/users/[id]/revoke-sessions` — increment `sessionVersion` + `writeAuditLog`
+
+All routes must use `lib/admin/rbac.ts` for permission checks and `lib/admin/audit.ts` for logging.
+
+---
+
 ## Session: SubscriptionActivator crash fix — 2026-06-29
 
 ### What was done

@@ -15,6 +15,10 @@ class EmailNotVerifiedError extends CredentialsSignin {
   code = "email_not_verified";
 }
 
+class AccountSuspendedError extends CredentialsSignin {
+  code = "account_suspended";
+}
+
 type UserWithRoles = Prisma.UserGetPayload<{
   include: {
     userRoles: {
@@ -64,6 +68,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new EmailNotVerifiedError();
         }
 
+        if (user.isSuspended) {
+          throw new AccountSuspendedError();
+        }
+
         const passwordMatches = await bcrypt.compare(
           password,
           user.passwordHash,
@@ -81,6 +89,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           isEmailVerified: user.emailVerified,
           roles,
+          adminRole: user.adminRole,
+          isSuspended: user.isSuspended,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
@@ -89,13 +100,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
-        token.roles = (user as { roles?: string[] }).roles ?? [];
-        token.isEmailVerified =
-          (user as { isEmailVerified?: boolean }).isEmailVerified ?? false;
+        token.roles = user.roles ?? [];
+        token.isEmailVerified = user.isEmailVerified ?? false;
+        token.adminRole = user.adminRole ?? null;
+        token.isSuspended = user.isSuspended ?? false;
+        token.sessionVersion = user.sessionVersion ?? 1;
 
-        // Populate subscription state at sign-in so proxy.ts can read from
-        // the token instead of querying the DB on every /dashboard/bookings request.
-        // Checks both personal (CREATOR) and owned-enterprise (ENTERPRISE) subscriptions.
+        // Populate subscription state at sign-in so proxy.ts can gate
+        // /dashboard/bookings without a DB call on every request.
         const userId = user.id;
         if (userId) {
           token.hasActiveSubscription = await userHasActiveSubscription(userId);
@@ -104,13 +116,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
 
-      // Re-query subscription when the client explicitly requests a session
-      // refresh (trigger === "update"), e.g. from the post-checkout success page.
-      // Uses the same query as sign-in so the proxy gate stays consistent.
-      // Fail closed: if token.id is absent, leave hasActiveSubscription unchanged.
+      // On explicit session refresh (post-checkout, post-admin-action): re-query
+      // all mutable user state. If the DB sessionVersion is higher than the token's,
+      // return null to immediately revoke the session (forces re-login).
       if (trigger === "update") {
         const userId = token.id as string | undefined;
         if (userId) {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              adminRole: true,
+              isSuspended: true,
+              sessionVersion: true,
+            },
+          });
+
+          if (!dbUser) return null;
+
+          const tokenVersion = (token.sessionVersion as number | undefined) ?? 1;
+          if (dbUser.sessionVersion > tokenVersion) {
+            // Admin incremented sessionVersion — revoke this token.
+            return null;
+          }
+
+          token.adminRole = dbUser.adminRole ?? null;
+          token.isSuspended = dbUser.isSuspended;
+          token.sessionVersion = dbUser.sessionVersion;
           token.hasActiveSubscription = await userHasActiveSubscription(userId);
         }
       }
@@ -122,8 +153,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.roles = (token.roles as string[]) ?? [];
         session.user.isEmailVerified = Boolean(token.isEmailVerified);
-        // Undefined on tokens issued before this field was added → fail closed (false).
         session.user.hasActiveSubscription = Boolean(token.hasActiveSubscription);
+        session.user.adminRole = (token.adminRole as string | null | undefined) ?? null;
+        session.user.isSuspended = Boolean(token.isSuspended);
+        session.user.sessionVersion = (token.sessionVersion as number | undefined) ?? 1;
       }
 
       return session;
