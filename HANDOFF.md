@@ -1,5 +1,96 @@
 # HANDOFF.md
 
+## Session: Admin area Phase 2 — user management API routes — 2026-07-06
+
+### What was done
+
+Implemented all five admin API routes on top of the Phase 1 RBAC/audit foundation. No UI pages — API-only milestone.
+
+### Routes added
+
+| Route | Method | Description |
+|---|---|---|
+| `/api/admin/users` | GET | Paginated user list with search, filters, and stable sort |
+| `/api/admin/users/[id]` | GET | User detail with subscriptions, owned enterprises, and 20 most recent admin actions |
+| `/api/admin/users/[id]/suspend` | POST | Suspend a user; `reason` required |
+| `/api/admin/users/[id]/reactivate` | POST | Clear suspension; `reason` optional |
+| `/api/admin/users/[id]/revoke-sessions` | POST | Increment `sessionVersion`; `reason` optional |
+
+### GET /api/admin/users — query parameters
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `page` | integer ≥ 1 | 1 | |
+| `pageSize` | 1–100 | 20 | Hard cap at 100 |
+| `search` | string ≤ 200 chars | — | Case-insensitive match on `name` OR `email` |
+| `adminRole` | enum or `"all"` | `"all"` | `SUPER_ADMIN`, `ADMIN`, `BILLING_ADMIN` |
+| `isSuspended` | `"true"` \| `"false"` \| `"all"` | `"all"` | |
+| `sortBy` | `createdAt` \| `name` \| `email` | `createdAt` | |
+| `sortOrder` | `asc` \| `desc` | `desc` | |
+
+Stable pagination: secondary sort on `id: "asc"` prevents page drift when the primary sort key has duplicates. Response includes `{ users, pagination: { page, pageSize, total, totalPages } }`.
+
+### Permission enforcement (every route)
+
+1. `auth()` → 401 if no session
+2. Cast `session.user.adminRole` → `canViewUsers` / `canSuspendUser` / etc. → 403 if insufficient role
+3. Self-action check: `session.user.id === targetId` → 403 (cannot act on yourself)
+4. Fetch target with explicit `{ id, adminRole, isSuspended/sessionVersion }` select
+5. `canActOnUser(actorRole, target.adminRole)` → 403 (non-SUPER_ADMIN cannot act on SUPER_ADMIN targets)
+6. Business logic check (already suspended / not suspended) → 409
+7. DB update
+8. `writeAuditLog` from `lib/admin/audit.ts`
+
+### Revoke-sessions design
+
+Increments `target.sessionVersion` by 1 via `{ increment: 1 }` (atomic). The new version is recorded in the `AdminLog.metadata` field. The user's current JWT has the old version. On their next `trigger === "update"` call, `auth.ts` detects the mismatch and returns `null` to revoke the token. No per-request DB checks in middleware.
+
+### Explicit selects (no `passwordHash` exposure)
+
+All routes use `satisfies Prisma.UserSelect` or inline select objects. `passwordHash`, `emailVerificationTokens`, and other sensitive relations are never included in any response.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `lib/validations/admin.ts` | **Created** — `listUsersQuerySchema`, `suspendUserSchema`, `adminActionSchema` |
+| `app/api/admin/users/route.ts` | **Created** — GET paginated list |
+| `app/api/admin/users/[id]/route.ts` | **Created** — GET user detail |
+| `app/api/admin/users/[id]/suspend/route.ts` | **Created** — POST suspend |
+| `app/api/admin/users/[id]/reactivate/route.ts` | **Created** — POST reactivate |
+| `app/api/admin/users/[id]/revoke-sessions/route.ts` | **Created** — POST revoke sessions |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing, unchanged)
+npm run typecheck → clean
+npm run build     → clean; 33 routes (5 new /api/admin/... ƒ Dynamic); ƒ Proxy confirmed
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Invite acceptance page (`/invite/[token]`) not yet built.
+8. Enterprise member (non-owner) bookings access — product decision needed.
+9. Admin login error message for `account_suspended` code not yet wired into `login-form.tsx`.
+10. Admin UI (Phase 3): `/admin`, `/admin/users`, `/admin/users/[id]` pages.
+
+### Recommended next milestone
+
+**Admin area Phase 3 — UI pages:**
+- `app/(admin)/layout.tsx` + `AdminShell` component (sidebar/header, "Admin" label)
+- `app/(admin)/admin/page.tsx` — KPI cards (total users, suspended count, recent audit log entries)
+- `app/(admin)/admin/users/page.tsx` — paginated table consuming `GET /api/admin/users`
+- `app/(admin)/admin/users/[id]/page.tsx` — detail view with suspend / reactivate / revoke-sessions action buttons
+
+---
+
 ## Session: Admin area Phase 1 — schema, auth layer, RBAC, audit — 2026-07-06
 
 ### What was done
