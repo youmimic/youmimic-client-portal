@@ -214,8 +214,9 @@ export function UserActions({ userId, isSuspended }: Props) {
           <DialogHeader>
             <DialogTitle>Sign Out All Sessions</DialogTitle>
             <DialogDescription>
-              This will invalidate all of the user&apos;s active sessions. They
-              will need to sign in again on all devices.
+              This will revoke the user&apos;s sessions. They will be signed
+              out the next time their session refreshes (within 24 hours) or
+              when they next open the app.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

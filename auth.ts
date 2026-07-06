@@ -97,7 +97,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.roles = user.roles ?? [];
@@ -116,34 +116,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
 
-      // On explicit session refresh (post-checkout, post-admin-action): re-query
-      // all mutable user state. If the DB sessionVersion is higher than the token's,
-      // return null to immediately revoke the session (forces re-login).
-      if (trigger === "update") {
-        const userId = token.id as string | undefined;
-        if (userId) {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: {
-              adminRole: true,
-              isSuspended: true,
-              sessionVersion: true,
-            },
-          });
+      // Re-query mutable user state on every token re-issuance that is NOT a
+      // fresh sign-in (handled above). This runs on two paths:
+      //   1. Explicit session.update() call (trigger === "update") — e.g. post-checkout.
+      //   2. Natural JWT refresh — Auth.js re-issues the cookie once the token's age
+      //      exceeds `updateAge` (default 24 h). trigger is undefined in this case.
+      //
+      // Revocation design: when an admin calls POST /api/admin/users/[id]/revoke-sessions,
+      // the DB sessionVersion is incremented. The user's current JWT still holds the old
+      // version. On the next re-issuance (explicit update OR natural 24 h refresh),
+      // this branch detects the mismatch and returns null — Auth.js clears the cookie
+      // and the user must log in again. No per-request DB reads in middleware.
+      const userId = token.id as string | undefined;
+      if (userId) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            adminRole: true,
+            isSuspended: true,
+            sessionVersion: true,
+          },
+        });
 
-          if (!dbUser) return null;
+        if (!dbUser) return null;
 
-          const tokenVersion = (token.sessionVersion as number | undefined) ?? 1;
-          if (dbUser.sessionVersion > tokenVersion) {
-            // Admin incremented sessionVersion — revoke this token.
-            return null;
-          }
-
-          token.adminRole = dbUser.adminRole ?? null;
-          token.isSuspended = dbUser.isSuspended;
-          token.sessionVersion = dbUser.sessionVersion;
-          token.hasActiveSubscription = await userHasActiveSubscription(userId);
+        const tokenVersion = (token.sessionVersion as number | undefined) ?? 1;
+        if (dbUser.sessionVersion > tokenVersion) {
+          // sessionVersion was incremented by an admin action — revoke this token.
+          return null;
         }
+
+        token.adminRole = dbUser.adminRole ?? null;
+        token.isSuspended = dbUser.isSuspended;
+        token.sessionVersion = dbUser.sessionVersion;
+        token.hasActiveSubscription = await userHasActiveSubscription(userId);
       }
 
       return token;

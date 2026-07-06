@@ -1,5 +1,58 @@
 # HANDOFF.md
 
+## Session: Fix — revoke-sessions sessionVersion check — 2026-07-06
+
+### What was inspected
+
+- `auth.ts` — `jwt` callback; the sign-in branch, the `trigger === "update"` branch, and the natural-refresh fall-through path.
+- `app/api/admin/users/[id]/revoke-sessions/route.ts` — atomically increments `sessionVersion`, writes audit log, returns new version.
+- `components/admin/user-actions.tsx` — "Sign Out All Sessions" dialog; calls the revoke endpoint and does `router.refresh()` on success.
+- `proxy.ts` — reads `req.auth` (JWT decode only, no `jwt` callback invocation, no DB query).
+
+### Root cause
+
+**Root Cause A.** `sessionVersion` was correctly incremented in the DB by the revoke endpoint, but the check in `auth.ts` was gated behind `if (trigger === "update")`. Auth.js only fires `trigger === "update"` when client code calls `session.update()` explicitly. The only call site in this app is `SubscriptionActivator` on the checkout success page. Regular navigation never triggers it.
+
+When the `jwt` callback is invoked for a **natural token refresh** (Auth.js re-issues the JWT cookie once the token's age exceeds `updateAge`, which defaults to 24 hours), `trigger` is `undefined`. The old code fell straight through to `return token` with no DB check, leaving the revoked user's JWT valid for up to 30 days.
+
+### Fix (3 files)
+
+**`auth.ts`** — removed the `if (trigger === "update")` guard from the DB re-query block. The block now runs on every `jwt` callback invocation that is not a fresh sign-in (the `if (user)` early-return handles sign-in). This covers:
+- Explicit `session.update()` calls (post-checkout, post-admin-action).
+- Natural 24-hour JWT refresh cycles — the path that was previously silently skipped.
+
+The `trigger` parameter was also removed from the destructuring since it is no longer used.
+
+A DB read now occurs at most once every 24 hours per active user (on natural refresh) plus once per explicit `session.update()` call. No per-request DB reads in middleware.
+
+**`app/api/admin/users/[id]/revoke-sessions/route.ts`** — updated inline comment to accurately describe the revocation timing (natural refresh OR explicit update, not `trigger === "update"` only).
+
+**`components/admin/user-actions.tsx`** — updated dialog description from "sign in again on all devices" (implies instant hard-kill) to "signed out the next time their session refreshes (within 24 hours) or when they next open the app" (truthful to the architecture).
+
+### Manual test flow (code-inspection level)
+
+1. User signs in → `sessionVersion: 1` stamped in JWT.
+2. Admin opens `/admin/users/[id]` and clicks "Sign Out All Sessions".
+3. `POST /api/admin/users/[id]/revoke-sessions` → DB `sessionVersion` incremented to 2 → audit log written.
+4. User continues navigating → JWT still holds `sessionVersion: 1` → requests succeed (expected: within the 24h window).
+5. Within 24 hours, Auth.js naturally re-issues the JWT → `jwt` callback fires without `trigger`.
+6. DB `sessionVersion` (2) > token `sessionVersion` (1) → callback returns `null` → Auth.js clears the session cookie.
+7. User's next request → no valid session → redirected to login.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing, unchanged)
+npm run typecheck → clean
+npm run build     → clean; routes unchanged
+```
+
+### Limitation
+
+Revocation is not instant. A user with a freshly-refreshed JWT retains access for up to 24 hours after the admin action. Per-request DB checks in middleware would eliminate this window but add latency to every request — a deliberate architectural trade-off documented in Phase 1.
+
+---
+
 ## Session: Admin area Phase 3 — admin UI pages — 2026-07-06
 
 ### What was done

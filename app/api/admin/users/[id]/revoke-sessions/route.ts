@@ -60,8 +60,10 @@ export async function POST(
   }
 
   // Incrementing sessionVersion makes the target's current JWT stale.
-  // On their next trigger === "update" call, auth.ts detects the mismatch
-  // and returns null to revoke the token (JWT-expiry-window approach).
+  // auth.ts re-checks sessionVersion on every token re-issuance (explicit
+  // session.update() OR the natural 24 h Auth.js refresh cycle). When the
+  // mismatch is detected the jwt callback returns null, clearing the cookie
+  // and forcing re-login. No per-request DB reads in middleware.
   const updated = await prisma.user.update({
     where: { id: targetId },
     data: { sessionVersion: { increment: 1 } },
