@@ -1,5 +1,67 @@
 # HANDOFF.md
 
+## Session: Admin area Phase 3 — admin UI pages — 2026-07-06
+
+### What was done
+
+Built the first admin UI on top of the Phase 1 (schema/auth) and Phase 2 (API routes) foundations. All admin pages live under the `(admin)` route group and are guarded by `auth()` + `adminRole` checks at both the layout level and within each page.
+
+### Routes added
+
+| Route | Description |
+|---|---|
+| `/admin` | Overview page: 4 KPI cards + recent admin activity table (last 10 logs) |
+| `/admin/users` | Paginated, searchable, filterable user table backed by `GET /api/admin/users` |
+| `/admin/users/[id]` | User detail: identity, account status, subscriptions, owned enterprises, audit log, 3 action buttons |
+
+### New files
+
+| File | Description |
+|---|---|
+| `components/admin/admin-shell.tsx` | Client shell: desktop + mobile sidebar with "Admin" badge, nav items (Overview / Users), "Back to Dashboard" link, sign-out |
+| `app/(admin)/layout.tsx` | Server layout: `auth()` guard — unauthenticated → `/login`, no adminRole → `/dashboard`; renders `AdminShell` |
+| `app/(admin)/admin/page.tsx` | Server component (`force-dynamic`): 5 Prisma queries via `Promise.all`; KPI cards; recent activity table |
+| `app/(admin)/admin/users/page.tsx` | Client component: debounced search, role + status filters, paginated table; fetches `GET /api/admin/users` |
+| `app/(admin)/admin/users/[id]/page.tsx` | Server component (`force-dynamic`): direct Prisma query; identity card, account status card, subscriptions, enterprises, audit log; renders `UserActions` |
+| `components/admin/user-actions.tsx` | Client component: 3 controlled dialogs (Suspend / Reactivate / Sign Out All Sessions) wired to Phase 2 endpoints; per-dialog loading + error state; `router.refresh()` on success |
+
+### Design decisions
+
+- `AdminShell` mirrors `DashboardShell` / `AppSidebar` patterns (same CSS variables, same active-state classes, same mobile overlay) but adds a destructive-tinted "Admin" badge and avatar chip to visually distinguish the context.
+- All three action dialogs are controlled via `open`/`onOpenChange` + separate `<Button onClick>` elements — no `DialogTrigger` — so the trigger and dialog are decoupled.
+- Suspend dialog requires a non-empty reason (mirrors the API `suspendUserSchema`); Reactivate and Revoke dialogs accept an optional reason.
+- `isSelf` guard on the detail page: if the signed-in admin views their own record, action buttons are suppressed to avoid the self-action API 403.
+- `react-hooks/set-state-in-effect` lint rule satisfied: all setState calls in the users page are inside `.then()/.catch()` promise callbacks or inside event handlers — never synchronously in `useEffect` bodies.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing, unchanged)
+npm run typecheck → clean
+npm run build     → clean; 3 new routes: /admin ƒ, /admin/users ƒ, /admin/users/[id] ƒ
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Invite acceptance page (`/invite/[token]`) not yet built.
+8. Enterprise member (non-owner) bookings access — product decision needed.
+9. Admin login error message for `account_suspended` code not yet wired into `login-form.tsx`.
+
+### Recommended next milestone
+
+Options:
+- **Invite acceptance flow** — `/invite/[token]` page (resolves token, adds existing user or redirects new user to `/signup?invite={token}`)
+- **Admin login error message** — wire `account_suspended` code into `login-form.tsx` to show a descriptive message
+- **Payment history pagination** — lift the `take: 20` cap on payment history
+
+---
+
 ## Session: Admin area Phase 2 — user management API routes — 2026-07-06
 
 ### What was done
