@@ -44,3 +44,17 @@ export function canActOnUser(
   if (targetRole === "SUPER_ADMIN" && actorRole !== "SUPER_ADMIN") return false;
   return true;
 }
+
+// Enterprise permissions — maps to ADMIN minimum (same tier as user management).
+// BILLING_ADMIN can view enterprise data but cannot create/edit/delete enterprises or members.
+export function canViewEnterprises(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}
+
+export function canManageEnterprises(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}
+
+export function canManageEnterpriseMembers(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}

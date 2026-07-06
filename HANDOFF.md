@@ -1,5 +1,120 @@
 # HANDOFF.md
 
+## Session: Admin Phase E1 — Enterprise admin foundation — 2026-07-06
+
+### What was inspected
+
+- `prisma/schema.prisma` — `Enterprise`, `EnterpriseMember`, `Invite` models and their relations
+- `lib/admin/rbac.ts` — existing user-scoped permission helpers and `AdminRole` hierarchy
+- `lib/admin/audit.ts` — `writeAuditLog` interface and existing `entityType` usage
+- `app/(dashboard)/dashboard/billing/page.tsx` — enterprise owner vs member paths, subscription ownership
+- `app/(dashboard)/dashboard/settings/page.tsx` — team card (owner only), invite form
+- `app/(dashboard)/dashboard/bookings/page.tsx` — booking fetch by `userId`, enterprise column
+- `app/(dashboard)/dashboard/page.tsx` — enterprise owner detection for `BusinessGettingStarted`
+
+### Enterprise model summary
+
+**`Enterprise`**
+- `id`, `name`, `ownerUserId` (FK → `User.id`), `status` (default `"active"`), `createdAt`
+- Relations: `owner User`, `members EnterpriseMember[]`, `subscriptions Subscription[]`, `avatars Avatar[]`, `bookings Booking[]`, `invites Invite[]`
+- Indexed on `ownerUserId`
+
+**`EnterpriseMember`**
+- `id`, `enterpriseId`, `userId`, `roleId`
+- Relations: `enterprise Enterprise`, `user User`, `role Role`
+- Unique constraint: `(enterpriseId, userId)` — a user can only be a member of a given enterprise once
+
+**`Invite`**
+- `id`, `enterpriseId`, `email`, `roleId`, `token` (unique), `status` (default `"pending"`), `invitedById?`, `createdAt`
+- No relation back to the sending user is enforced at DB level; `invitedById` is nullable
+- Acceptance page (`/invite/[token]`) is not yet built — emails link to it but it 404s
+
+### Ownership vs membership in the application
+
+| Context | Owner detection | Member detection |
+|---|---|---|
+| `/dashboard` | `enterprise.findFirst({ where: { ownerUserId } })` | Not checked — non-owners see `IndividualGettingStarted` |
+| `/dashboard/billing` | `enterprise.findMany({ where: { ownerUserId } })` | `enterpriseMember.findMany({ where: { userId, enterprise: { ownerUserId: { not: userId } } } })` |
+| `/dashboard/settings` | `enterprise.findFirst({ where: { ownerUserId } })` | Not checked — non-owner members have no enterprise settings section |
+| `/dashboard/bookings` | Not checked | Bookings fetched by `userId` regardless; enterprise column shows booking's tagged enterprise name |
+
+Enterprise state is **not stamped into the JWT**. No `isEnterpriseOwner`, `enterpriseId`, or `memberships` fields exist on `Session.user`. Every page that needs enterprise context does its own Prisma read at render time.
+
+### Ownership transfer rules (documented — not yet implemented)
+
+A future "transfer ownership" admin action must touch these in a single transaction:
+
+1. Update `Enterprise.ownerUserId` to the new owner's `userId`.
+2. Create an `EnterpriseMember` row for the old owner (if they should remain as a member), or leave them with no enterprise affiliation.
+3. `Subscription` rows linked to the enterprise use `enterpriseId` — they do not reference `ownerUserId` directly, so subscription records do not need to be updated. The Stripe customer relationship is held on `Subscription.stripeCustomerId` (the enterprise's Stripe customer); review with the billing team if the new owner will manage billing under a different Stripe entity.
+4. Write an audit log entry with `entityType: ENTITY_TYPES.ENTERPRISE`, `action: "transfer_ownership"`, recording both old and new `ownerUserId` in `metadata`.
+5. Outstanding `Invite` records can remain as-is — they reference `enterpriseId`, not `ownerUserId`.
+
+### Changes in this session
+
+**`lib/admin/rbac.ts`** — added 3 enterprise permission helpers:
+
+```ts
+export function canViewEnterprises(role: AdminRoleValue): boolean   // ADMIN minimum
+export function canManageEnterprises(role: AdminRoleValue): boolean // ADMIN minimum
+export function canManageEnterpriseMembers(role: AdminRoleValue): boolean // ADMIN minimum
+```
+
+All three require `ADMIN` or higher. The existing `AdminRole` enum only has `SUPER_ADMIN`, `ADMIN`, and `BILLING_ADMIN`. The Phase E1 instruction referenced `OPERATIONS_ADMIN` and `SUPPORT_ADMIN` — those do not exist in the current schema and would require a schema migration + Prisma generate to add. Mapped to `ADMIN` minimum until that schema change is explicitly requested.
+
+**`lib/admin/audit.ts`** — added `ENTITY_TYPES` constant:
+
+```ts
+export const ENTITY_TYPES = {
+  USER: "user",
+  ENTERPRISE: "enterprise",
+  ENTERPRISE_MEMBER: "enterprise_member",
+  ENTERPRISE_INVITE: "enterprise_invite",
+} as const;
+```
+
+Existing `entityType: "user"` usage in all Phase 2 API routes is consistent with `ENTITY_TYPES.USER`. Future enterprise admin routes must import and use these constants to keep audit log queries consistent.
+
+### What did NOT change
+
+- No new API routes — Phase E1 is foundation-only.
+- No new UI pages.
+- No schema changes or migrations.
+- The `entityType: "user"` string in Phase 2 routes was not refactored to use `ENTITY_TYPES.USER` — low-risk cosmetic cleanup deferred to avoid noise in this diff.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing, unchanged)
+npm run typecheck → clean
+npm run build     → clean (routes unchanged)
+```
+
+### Remaining issues (carried forward)
+
+1. `CONTACT_EMAIL` env var not yet set in Vercel.
+2. `take: 20` hard cap on payment history — add pagination.
+3. Zero-amount invoice 404 — no in-page fallback.
+4. `STRIPE_AVATAR_CAPTURE_PRICE_ID` — unconnected to code.
+5. Explicit `select` audit for avatars and settings pages.
+6. Create `production` GitHub environment in repo settings.
+7. Invite acceptance page (`/invite/[token]`) not yet built.
+8. Enterprise member (non-owner) bookings access — product decision needed.
+9. Admin login error message for `account_suspended` code not yet wired into `login-form.tsx`.
+10. `ENTITY_TYPES.USER` refactor in Phase 2 API routes — deferred cosmetic cleanup.
+11. `OPERATIONS_ADMIN` / `SUPPORT_ADMIN` roles referenced in instructions but not in schema; requires schema migration if needed.
+
+### Recommended next milestone
+
+**Admin Phase E2 — Enterprise list and detail pages:**
+- `GET /api/admin/enterprises` — paginated list with search and status filter
+- `GET /api/admin/enterprises/[id]` — detail with owner, member list, subscription, audit log
+- `app/(admin)/admin/enterprises/page.tsx` — client table
+- `app/(admin)/admin/enterprises/[id]/page.tsx` — server detail view
+- Wire `canViewEnterprises` from this session into the new routes
+
+---
+
 ## Session: Fix — revoke-sessions sessionVersion check — 2026-07-06
 
 ### What was inspected
