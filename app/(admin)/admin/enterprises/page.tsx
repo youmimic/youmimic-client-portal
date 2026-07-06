@@ -115,7 +115,9 @@ export default function AdminEnterprisesPage() {
       })
       .catch((e: unknown) => {
         if (!cancelled)
-          setError(e instanceof Error ? e.message : "Failed to load enterprises");
+          setError(
+            e instanceof Error ? e.message : "Failed to load enterprises",
+          );
       });
 
     return () => {
@@ -130,9 +132,7 @@ export default function AdminEnterprisesPage() {
       <div>
         <h1 className="text-2xl font-semibold">Enterprises</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          {data
-            ? `${data.totalItems.toLocaleString()} total`
-            : "Loading…"}
+          {data ? `${data.totalItems.toLocaleString()} total` : "Loading…"}
         </p>
       </div>
 
@@ -241,7 +241,14 @@ export default function AdminEnterprisesPage() {
                         </Link>
                       </td>
                       <td className="px-6 py-3 hidden sm:table-cell text-muted-foreground">
-                        {enterprise.owner ? enterprise.owner.email : "—"}
+                        {enterprise.owner ? (
+                          <>
+                            <div>{enterprise.owner.name}</div>
+                            <div>{enterprise.owner.email}</div>
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="px-6 py-3 hidden md:table-cell text-muted-foreground">
                         {enterprise.planType ?? "—"}

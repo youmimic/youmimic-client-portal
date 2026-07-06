@@ -211,7 +211,9 @@ export default function AdminUsersPage() {
                   data?.users.map((user) => (
                     <tr key={user.id}>
                       <td className="px-6 py-3">
-                        <div className="font-medium">{user.name}</div>
+                        <Link href={`/admin/users/${user.id}`}>
+                          <div className="font-medium">{user.name}</div>
+                        </Link>
                         <div className="text-xs text-muted-foreground">
                           {user.email}
                         </div>
