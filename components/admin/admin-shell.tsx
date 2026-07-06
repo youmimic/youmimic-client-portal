@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
+  Building2,
   LayoutDashboard,
   Menu,
   ShieldCheck,
@@ -20,6 +21,7 @@ import SignOutButton from "@/components/auth/sign-out-button";
 const navItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/admin/users", label: "Users", icon: Users, exact: false },
+  { href: "/admin/enterprises", label: "Enterprises", icon: Building2, exact: false },
 ];
 
 type SidebarContentProps = {

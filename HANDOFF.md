@@ -1,5 +1,87 @@
 # HANDOFF.md
 
+## Session: Admin Phase E2 — Enterprises admin list + detail — 2026-07-06
+
+### What was inspected
+
+- `prisma/schema.prisma` — confirmed `Enterprise`, `EnterpriseMember`, `Invite`, `Subscription` shapes (re-verified from Phase E1 summary below, still accurate).
+- `lib/admin/rbac.ts` — `canViewEnterprises` already existed from Phase E1 (ADMIN minimum); reused as-is, no changes.
+- `lib/admin/audit.ts` — `ENTITY_TYPES.ENTERPRISE` / `ENTERPRISE_MEMBER` / `ENTERPRISE_INVITE` already existed from Phase E1; reused for the audit-log query, no writes added (this phase is read-only).
+- `app/api/admin/users/route.ts` and `app/api/admin/users/[id]/route.ts` — copied the explicit-select, RBAC-then-fetch, Zod-query pattern.
+- `app/(admin)/admin/users/page.tsx` and `app/(admin)/admin/users/[id]/page.tsx` — copied the client-table (debounced search + filter selects) and server-detail (breadcrumb + card grid) UI patterns.
+- `components/admin/admin-shell.tsx` — added an "Enterprises" nav entry.
+
+### Key schema facts that shaped this phase
+
+- `Enterprise` has **no** `planType` / `subscriptionStatus` columns of its own — these are derived from the most recent row in `Enterprise.subscriptions` (`orderBy: createdAt desc, take: 1`). An enterprise with zero subscriptions renders as `planType: null`, `subscriptionStatus: null` ("None" in the UI).
+- `EnterpriseMember` has **no join-date column** — `member.joinedAt` in the API/UI is always `null`. Documented as a known limitation, not invented.
+- `Invite` has **no expiry column** — `invite.expiresAt` is always `null` for the same reason.
+- `AdminLog.entityId` is a single string field. Since Phase E3 (enterprise mutations) doesn't exist yet, there are currently no enterprise-scoped audit rows in the DB — the audit query is wired correctly (matches `entityType in [enterprise, enterprise_member, enterprise_invite]` AND `entityId in [enterprise.id, ...memberIds, ...inviteIds]`) but will show "No admin actions recorded" until Phase E3 ships mutations that call `writeAuditLog`.
+
+### API routes added
+
+**`GET /api/admin/enterprises`** — paginated, searchable, filterable list.
+- Query params: `page`, `pageSize` (max 100), `search` (matches enterprise name OR owner email), `subscriptionStatus` (`SubscriptionStatus` enum value, `"none"`, or `"all"`), `planType` (`PlanType` enum value or `"all"`), `sortBy` (`name` | `createdAt` | `ownerEmail`), `sortOrder`.
+- Validated via new `listEnterprisesQuerySchema` in `lib/validations/admin.ts`.
+- RBAC: `canViewEnterprises` (401 if no session, 403 if insufficient role).
+- Response: `{ items, page, pageSize, totalItems, totalPages }` where each item is `{ id, name, owner, planType, subscriptionStatus, membersCount, createdAt }`.
+- No audit log write (read-only).
+
+**`GET /api/admin/enterprises/[id]`** — detail view.
+- RBAC: same as list; 404 if enterprise not found.
+- Response: `{ id, name, planType, subscriptionStatus, createdAt, owner, members[], invites[], auditLog[] }`.
+- `members[]`: `{ id, email, name, role, joinedAt: null }` (see schema note above).
+- `invites[]`: `{ id, email, status, role, createdAt, expiresAt: null }` (see schema note above).
+- `auditLog[]`: latest 20 rows, newest first.
+
+### UI routes added
+
+- `app/(admin)/admin/enterprises/page.tsx` — client component. Debounced search, plan-type filter, subscription-status filter, paginated table (name, owner, plan, subscription badge, member count, created date), row links to detail.
+- `app/(admin)/admin/enterprises/[id]/page.tsx` — server component (`force-dynamic`), direct Prisma query (same pattern as `/admin/users/[id]`, not calling its own API route). RBAC check via `canViewEnterprises` in addition to the layout's generic `adminRole` presence check (layout alone would let `BILLING_ADMIN` — a role below the `ADMIN` minimum required by `canViewEnterprises` — reach the page; the explicit in-page check closes that gap for this route only). Sections: Enterprise Summary, Owner, Members, Invites, Audit Log — all read-only, no action buttons.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `lib/validations/admin.ts` | Added `PLAN_TYPES`, `SUBSCRIPTION_STATUSES`, `listEnterprisesQuerySchema` |
+| `app/api/admin/enterprises/route.ts` | **Created** — GET paginated list |
+| `app/api/admin/enterprises/[id]/route.ts` | **Created** — GET detail |
+| `app/(admin)/admin/enterprises/page.tsx` | **Created** — client list page |
+| `app/(admin)/admin/enterprises/[id]/page.tsx` | **Created** — server detail page |
+| `components/admin/admin-shell.tsx` | Added "Enterprises" nav item (`Building2` icon) |
+
+### What did NOT change
+
+- No enterprise mutations (ownership transfer, member removal, invite resend/cancel) — deferred to Phase E3 per instructions.
+- No new `AdminLog` writes — list/detail are read-only.
+- No schema changes.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing, unchanged)
+npm run typecheck → clean
+npm run build     → clean; 4 new routes (/admin/enterprises ƒ, /admin/enterprises/[id] ƒ,
+                     /api/admin/enterprises ƒ, /api/admin/enterprises/[id] ƒ)
+```
+
+### Manual verification
+
+- Unauthenticated request to `/admin/enterprises` → `307` redirect to `/login?callbackUrl=%2Fadmin%2Fenterprises` (proxy's existing `/admin` protection, unchanged).
+- Unauthenticated request to `/api/admin/enterprises` → `401 Unauthorized`.
+- Authenticated admin click-through (list → detail, filters, pagination) was **not** performed in this session — no admin credentials were available in this environment. The query shapes were validated indirectly: `npm run build` runs `prisma generate` against the live schema and then a full `next build` + `tsc` pass, which would fail on any invalid `select`/`where`/`orderBy` field name, relation, or enum value. Recommend a quick manual click-through with real admin credentials before considering this phase fully closed.
+
+### Recommended next milestone
+
+**Admin Phase E3 — Enterprise mutations:**
+- `POST /api/admin/enterprises/[id]/transfer-ownership`
+- `POST /api/admin/enterprises/[id]/members/[memberId]/remove`
+- `POST /api/admin/enterprises/[id]/invites/[inviteId]/resend` or `/cancel`
+- Wire `canManageEnterprises` / `canManageEnterpriseMembers` (already defined in `lib/admin/rbac.ts` since Phase E1) into these routes.
+- Add action buttons to `app/(admin)/admin/enterprises/[id]/page.tsx` (currently pure read-only).
+
+---
+
 ## Session: Admin Phase E1 — Enterprise admin foundation — 2026-07-06
 
 ### What was inspected

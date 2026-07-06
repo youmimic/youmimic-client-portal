@@ -28,3 +28,30 @@ export const suspendUserSchema = z.object({
 export const adminActionSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
+
+export const PLAN_TYPES = ["FREE", "CREATOR", "ENTERPRISE"] as const;
+const PLAN_TYPE_FILTER = [...PLAN_TYPES, "all"] as const;
+
+export const SUBSCRIPTION_STATUSES = [
+  "INCOMPLETE",
+  "INCOMPLETE_EXPIRED",
+  "TRIALING",
+  "ACTIVE",
+  "PAST_DUE",
+  "UNPAID",
+  "CANCELED",
+  "PAUSED",
+] as const;
+const SUBSCRIPTION_STATUS_FILTER = [...SUBSCRIPTION_STATUSES, "none", "all"] as const;
+
+export const listEnterprisesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().max(200).optional(),
+  subscriptionStatus: z.enum(SUBSCRIPTION_STATUS_FILTER).default("all"),
+  planType: z.enum(PLAN_TYPE_FILTER).default("all"),
+  sortBy: z.enum(["name", "createdAt", "ownerEmail"]).default("createdAt"),
+  sortOrder: z.enum(["asc", "desc"]).default("desc"),
+});
+
+export type ListEnterprisesQuery = z.infer<typeof listEnterprisesQuerySchema>;
