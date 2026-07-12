@@ -3,6 +3,7 @@ import {
   Bot,
   Building2,
   CalendarDays,
+  CheckCircle2,
   CreditCard,
   ExternalLink,
   Languages,
@@ -27,10 +28,15 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ joined?: string }>;
+}) {
   const session = await auth();
   const userId = session?.user?.id;
   const displayName = session?.user?.name ?? session?.user?.email ?? "there";
+  const { joined } = await searchParams;
 
   const enterprise = userId
     ? await prisma.enterprise.findFirst({
@@ -41,6 +47,15 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {joined && (
+        <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400">
+          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <p>
+            You&apos;ve joined <strong>{joined}</strong> successfully.
+          </p>
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">Welcome back, {displayName}.</p>

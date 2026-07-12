@@ -37,6 +37,8 @@ type RegisterResponse = {
   error?: string;
   fieldErrors?: Record<string, string[] | undefined>;
   message?: string;
+  emailVerified?: boolean;
+  joinedEnterpriseName?: string | null;
 };
 
 const KNOWN_FIELD_KEYS = new Set<keyof JoinFormInput>([
@@ -107,7 +109,7 @@ export default function JoinForm({
     const response = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...values, callbackUrl }),
+      body: JSON.stringify({ ...values, callbackUrl, inviteToken: token }),
     });
 
     const data: RegisterResponse = await response.json().catch(() => ({}));
@@ -129,11 +131,29 @@ export default function JoinForm({
       return;
     }
 
+    // If membership was already created (the common case — the invite was
+    // validated server-side during registration), skip the redundant stop
+    // at /invite/[token] after login and go straight to the dashboard with
+    // a welcome banner. Only fall back to /invite/[token] as the post-login
+    // destination if the server couldn't complete the join here (e.g. the
+    // invite was cancelled between page load and submit) — that page will
+    // then complete the acceptance itself or show why it couldn't.
+    const postLoginUrl = data.joinedEnterpriseName
+      ? `/dashboard?joined=${encodeURIComponent(data.joinedEnterpriseName)}`
+      : callbackUrl;
+
     const loginParams = new URLSearchParams({
       registered: "1",
-      callbackUrl,
+      callbackUrl: postLoginUrl,
       email,
     });
+    // Only claim "verified" if the server actually skipped verification
+    // (it re-validates the invite itself — a race where the invite was
+    // cancelled between page load and submit falls back to normal
+    // verification, so don't assume success here implies it was skipped).
+    if (data.emailVerified) {
+      loginParams.set("verified", "1");
+    }
     router.push(`/login?${loginParams.toString()}`);
     router.refresh();
   }

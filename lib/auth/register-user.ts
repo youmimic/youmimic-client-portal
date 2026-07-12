@@ -4,9 +4,10 @@ import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { registerSchema } from "@/lib/validations/auth";
 import { sendVerifyEmail } from "@/lib/mailer";
+import { claimInviteAndCreateMembership } from "@/lib/invites/accept-invite";
 
 type RegisterResult =
-  | { ok: true }
+  | { ok: true; emailVerified: boolean; joinedEnterpriseName: string | null }
   | {
       ok: false;
       status: number;
@@ -79,6 +80,12 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
       ? rawCallbackUrl
       : null;
 
+  const rawInviteToken = body.inviteToken;
+  const inviteToken =
+    typeof rawInviteToken === "string" && rawInviteToken.length > 0
+      ? rawInviteToken
+      : null;
+
   if (!acceptTerms || !termsLinkClicked) {
     return {
       ok: false,
@@ -120,33 +127,70 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
     };
   }
 
+  // Trust for skipping email verification comes from the Invite row itself,
+  // never from the client — a client-supplied "skip verification" flag would
+  // let anyone bypass verification on the public /signup form too. Clicking
+  // a still-pending invite link addressed to this exact email is treated as
+  // equivalent proof of inbox ownership.
+  let verifiedViaInvite = false;
+  if (inviteToken) {
+    const invite = await prisma.invite.findUnique({
+      where: { token: inviteToken },
+      select: { email: true, status: true },
+    });
+    verifiedViaInvite = !!invite && invite.status === "pending" && invite.email === email;
+  }
+
   const passwordHash = await bcrypt.hash(password, 12);
   const token = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
 
-  const user = await prisma.$transaction(async (tx) => {
+  const { user, joinedEnterpriseName } = await prisma.$transaction(async (tx) => {
     const createdUser = await tx.user.create({
       data: {
         name,
         email,
         passwordHash,
-        emailVerified: false,
+        emailVerified: verifiedViaInvite,
       },
       select: { id: true, email: true, name: true },
     });
 
-    await tx.emailVerificationToken.deleteMany({
-      where: { userId: createdUser.id, used: false },
-    });
+    if (!verifiedViaInvite) {
+      await tx.emailVerificationToken.deleteMany({
+        where: { userId: createdUser.id, used: false },
+      });
 
-    await tx.emailVerificationToken.create({
-      data: {
-        userId: createdUser.id,
-        token,
-        expiresAt,
-        used: false,
-      },
-    });
+      await tx.emailVerificationToken.create({
+        data: {
+          userId: createdUser.id,
+          token,
+          expiresAt,
+          used: false,
+        },
+      });
+    }
+
+    // Invite eligibility (pending status + matching email) was already
+    // proven above to decide verifiedViaInvite. Accepting it here, in the
+    // same transaction as account creation, means a brand-new invitee
+    // never has to make a second stop at /invite/[token] after logging in
+    // — membership already exists by the time they log in.
+    let joinedEnterpriseName: string | null = null;
+    if (verifiedViaInvite && inviteToken) {
+      const claimResult = await claimInviteAndCreateMembership(
+        tx,
+        inviteToken,
+        createdUser.id,
+      );
+      if (claimResult.status === "accepted") {
+        joinedEnterpriseName = claimResult.enterpriseName;
+      }
+      // If the claim lost a race (invite was cancelled/accepted between the
+      // pre-transaction check and now), the account is still created and
+      // verified — the caller falls back to sending them through
+      // /invite/[token] after login, which will show the correct state.
+    }
 
     if (accountType === "BUSINESS" && businessName) {
       // Ensure the "owner" role exists — safe to upsert idempotently.
@@ -175,24 +219,26 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
       });
     }
 
-    return createdUser;
+    return { user: createdUser, joinedEnterpriseName };
   });
 
-  const appUrl = process.env.NEXTAUTH_URL;
-  if (!appUrl) {
-    throw new Error("NEXTAUTH_URL is not configured");
+  if (!verifiedViaInvite) {
+    const appUrl = process.env.NEXTAUTH_URL;
+    if (!appUrl) {
+      throw new Error("NEXTAUTH_URL is not configured");
+    }
+
+    const verifyUrl = callbackUrl
+      ? `${appUrl}/api/verify-email?token=${token}&callbackUrl=${encodeURIComponent(callbackUrl)}`
+      : `${appUrl}/api/verify-email?token=${token}`;
+
+    await sendVerifyEmail({
+      to: user.email,
+      name: user.name ?? "there",
+      verifyUrl,
+      idempotencyKey: `verify-email/${token}`,
+    });
   }
 
-  const verifyUrl = callbackUrl
-    ? `${appUrl}/api/verify-email?token=${token}&callbackUrl=${encodeURIComponent(callbackUrl)}`
-    : `${appUrl}/api/verify-email?token=${token}`;
-
-  await sendVerifyEmail({
-    to: user.email,
-    name: user.name ?? "there",
-    verifyUrl,
-    idempotencyKey: `verify-email/${token}`,
-  });
-
-  return { ok: true };
+  return { ok: true, emailVerified: verifiedViaInvite, joinedEnterpriseName };
 }

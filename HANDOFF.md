@@ -1,5 +1,116 @@
 # HANDOFF.md
 
+## Session: Skip the /invite/[token] detour after invite signup — 2026-07-13 (follow-up 3)
+
+### Problem
+
+User feedback: after signing up via `/invite/[token]/join` and then logging in, the user was routed back to `/invite/[token]` before finally reaching the dashboard. Bad UX — an extra stop for a step that had already been proven possible at signup time.
+
+### Fix
+
+Membership creation now happens **inside the same transaction as account creation**, at registration time, whenever `registerUser()` already validated the invite (the `verifiedViaInvite` check from the previous session — pending status + matching email). The post-registration login redirect then goes straight to `/dashboard?joined=<name>` instead of back through `/invite/[token]`.
+
+**`lib/invites/accept-invite.ts`** — extracted the core claim logic (atomic `updateMany` status flip + `enterpriseMember.upsert`) out of `acceptInvite()` into a new exported `claimInviteAndCreateMembership(tx, token, userId)` that takes a `Prisma.TransactionClient` instead of opening its own transaction. `acceptInvite()` (still used by the main `/invite/[token]` page for the existing-account path) now just wraps it in `prisma.$transaction()`. Same idempotency/race guarantees as before — nothing about the atomic-claim behavior changed, only where it can be called from.
+
+**`lib/auth/register-user.ts`** — inside the existing `$transaction`, right after `tx.user.create()`, calls `claimInviteAndCreateMembership(tx, inviteToken, createdUser.id)` when `verifiedViaInvite` is true. Account creation and invite acceptance are now one atomic unit — if either fails, both roll back; no window where a verified account exists without its membership, or vice versa. `RegisterResult`'s success variant gained `joinedEnterpriseName: string | null` so callers know whether it actually happened (falls back to `null` if a race meant the invite was no longer claimable at that exact moment — rare, and handled gracefully, see below).
+
+**`app/api/register/route.ts`** — response now includes `joinedEnterpriseName`.
+
+**`app/invite/[token]/join/join-form.tsx`** — the post-registration `/login` redirect's `callbackUrl` is now `/dashboard?joined=<enterprise name>` when `joinedEnterpriseName` came back non-null, falling back to the old `/invite/[token]` destination only in the rare case it didn't (e.g. the invite got cancelled in the seconds between page load and form submit) — that page still knows how to complete or correctly explain that state, so nothing is lost in the fallback case.
+
+**`app/(dashboard)/dashboard/page.tsx`** — now reads a `joined` search param and renders a small green "You've joined {name} successfully." banner above the existing header, reusing the same visual style as the login page's success banners and the billing page's `REDIRECT_NOTICES` pattern (non-dismissable, presence-driven, same as billing's). This replaces the `SuccessCard` on `/invite/[token]` as the user-visible confirmation for this path — that card still exists and still renders for the *other* path (existing account, signs in, lands on `/invite/[token]` directly).
+
+**`app/login/login-form.tsx`** — unchanged from the previous session in this area (already handled the combined `registered=1&verified=1` banner text); no further changes needed since `/dashboard?joined=...` is just a `callbackUrl` value it already knows how to redirect to.
+
+### What did NOT change
+
+- The existing-account path (`/invite/[token]` → `/login` → back to `/invite/[token]` to accept) is untouched — that page is still the only place that flow can complete acceptance, and stopping there once is expected, not a bug.
+- `acceptInvite()`'s public signature and behavior for the main invite page is unchanged.
+- No schema changes.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings
+npm run typecheck → clean
+npm run build     → clean; routes unchanged
+```
+
+### Manual verification
+
+Re-ran the disposable `tsx`-script approach from the previous session (real `registerUser()` against the dev DB, temp enterprise/role/invite seeded and deleted afterward), this time asserting the new atomic-accept behavior directly:
+
+| Assertion | Result |
+|---|---|
+| `result.joinedEnterpriseName === "Verify Reg2 Co"` | PASS |
+| `EnterpriseMember` row exists for `(enterpriseId, userId)` immediately after `registerUser()` returns | PASS |
+| `Invite.status` flipped to `"accepted"` | PASS |
+| Exactly one membership row (no duplicate) | PASS |
+| Password hash validates — login would succeed | PASS |
+
+Also curl-verified via `npm run start`: unauthenticated `GET /dashboard` still 307-redirects to `/login` (no 500 from the new `searchParams` prop), and `GET /invite/<bad-token>/join` still renders "Invite not found" correctly.
+
+### Recommended next milestone
+
+Same as prior sessions — a real browser click-through of the full path end to end (invite → join → login → land on `/dashboard` with the green "You've joined X" banner visible), since this environment only allows curl/script-level checks, not a rendered browser session.
+
+---
+
+## Session: Skip email verification for invite-based signups — 2026-07-13 (follow-up 2)
+
+### Decision
+
+Clicking a still-pending invite link addressed to a specific email is treated as equivalent proof of inbox ownership to clicking a separate email-verification link — so `/invite/[token]/join` signups no longer require a second "verify your email" round-trip. Discussed with the user first (exploratory question → explicit agreement) before implementing, per the project's working method.
+
+### Design constraint (why this isn't just a client-supplied flag)
+
+`registerUser()` is shared by both the public `/signup` form and the invite `join-form`. A client-supplied "skip verification" boolean would let anyone bypass verification on the public form too. Instead, `registerUser()` now accepts an optional `inviteToken` in the request body and **re-validates it server-side** against the `Invite` table: the token must resolve to a row, that row's `status` must still be `"pending"`, and its `email` must exactly match the email being registered. Only if all three hold does the new account get created with `emailVerified: true` and skip creating an `EmailVerificationToken` row / sending the verification email entirely. Any mismatch (bad token, already-accepted/cancelled invite, tampered email) silently falls back to the existing normal-signup behavior — never a hard error, just no shortcut.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `lib/auth/register-user.ts` | Accepts optional `inviteToken`; looks it up and computes `verifiedViaInvite`; `emailVerified` on the created `User` row now reflects it; `EmailVerificationToken` creation and `sendVerifyEmail()` are both skipped when true; `RegisterResult`'s success variant now carries `emailVerified: boolean` so callers know what actually happened (not just what they asked for) |
+| `app/api/register/route.ts` | Response body now includes `emailVerified` and a matching `message` |
+| `app/invite/[token]/join/join-form.tsx` | Sends `inviteToken` in the register request; only appends `verified=1` to the post-registration `/login` redirect when the **response** confirms `emailVerified === true` (not assumed from having sent an invite token — protects against a race where the invite was cancelled between page load and submit) |
+| `app/login/login-form.tsx` | `registered=1` banner copy now branches on `verified === "1"` ("You can log in now." vs. "Please check your email to verify your account."); the standalone `verified` banner is suppressed when shown together with `registered=1` to avoid a contradictory double banner |
+
+### What did NOT change
+
+- The public `/signup` form and its `registerUser()` code path are untouched — no `inviteToken` is ever sent from there, so `verifiedViaInvite` is always `false` and behavior is identical to before.
+- No schema changes.
+- Password/terms/privacy validation requirements are unchanged and still enforced for invite signups — only the email-verification *step* is skipped, not any other requirement.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings
+npm run typecheck → clean
+npm run build     → clean; routes unchanged
+```
+
+### Manual verification
+
+Ran the real `registerUser()` function (not a reimplementation) against the dev DB via a disposable `tsx` script — seeded a temporary enterprise/role/pending-invite, called `registerUser()` exactly as `join-form.tsx` would, and asserted against the live DB, then deleted every row the script created:
+
+| Assertion | Result |
+|---|---|
+| `result.emailVerified === true` | PASS |
+| Created `User.emailVerified === true` in DB | PASS |
+| No `EmailVerificationToken` row created | PASS |
+| `bcrypt.compare(password, user.passwordHash)` succeeds (so `authorize()` would let them log in immediately) | PASS |
+| No stray `Enterprise` auto-created for the new member (confirms the `accountType: "INDIVIDUAL"` steering from the previous session still holds) | PASS |
+
+The mismatched-email fallback branch (`invite.email !== submitted email` → `verifiedViaInvite = false`) was **not** exercised end-to-end in this run, since that branch calls the real `sendVerifyEmail()` → Resend, and there was no safe way to trigger a real outbound email in this shared dev environment without it landing in an inbox. That branch is a single boolean condition and was verified by code review instead.
+
+One environment note for future sessions: exercising `lib/auth/register-user.ts` standalone outside Next's bundler requires a `server-only` shim (`lib/mailer.ts` imports it; Next resolves it specially, plain Node/tsx cannot) — a throwaway stub `node_modules/server-only/{package.json,index.js}` was created and deleted for this run, not committed.
+
+### Recommended next milestone
+
+Carried forward from the earlier sessions today — a real manual click-through covering: existing-account invite (→ `/login`), new-account invite (→ `/invite/[token]/join`, now skipping verification), and confirming the combined "Account created successfully. You can log in now." banner renders correctly in a browser (only curl/code-level checks were done in this environment).
+
+---
+
 ## Session: Invite acceptance — dedicated join page for brand-new invitees — 2026-07-13 (follow-up)
 
 ### Problem found

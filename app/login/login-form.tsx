@@ -95,8 +95,9 @@ export default function LoginForm() {
           {registered === "1" && showRegistered && (
             <div className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
               <p>
-                Account created successfully. Please check your email to verify
-                your account.
+                {verified === "1"
+                  ? "Account created successfully. You can log in now."
+                  : "Account created successfully. Please check your email to verify your account."}
               </p>
               <button
                 type="button"
@@ -109,7 +110,7 @@ export default function LoginForm() {
             </div>
           )}
 
-          {verified === "1" && showVerified && (
+          {verified === "1" && registered !== "1" && showVerified && (
             <div className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
               <p>Your email has been verified. You can now log in.</p>
               <button

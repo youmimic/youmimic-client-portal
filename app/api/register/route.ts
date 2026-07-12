@@ -20,8 +20,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json(
       {
-        message:
-          "User registered successfully. Please verify your email. Make sure to check the spam folder.",
+        message: result.emailVerified
+          ? "Account created successfully."
+          : "User registered successfully. Please verify your email. Make sure to check the spam folder.",
+        emailVerified: result.emailVerified,
+        joinedEnterpriseName: result.joinedEnterpriseName,
       },
       { status: 201 },
     );
