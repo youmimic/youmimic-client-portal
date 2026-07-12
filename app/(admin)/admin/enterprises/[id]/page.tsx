@@ -4,9 +4,18 @@ import { ChevronRight } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import type { AdminRole } from "@/app/generated/prisma/client";
-import { canViewEnterprises } from "@/lib/admin/rbac";
+import {
+  canViewEnterprises,
+  canManageEnterprises,
+  canManageEnterpriseMembers,
+} from "@/lib/admin/rbac";
 import { ENTITY_TYPES } from "@/lib/admin/audit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  TransferOwnershipAction,
+  EnterpriseMembersTable,
+  EnterpriseInvitesTable,
+} from "@/components/admin/enterprise-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +66,17 @@ export default async function AdminEnterpriseDetailPage({
   });
 
   if (!enterprise) notFound();
+
+  const canManage = canManageEnterprises(actorRole);
+  const canManageMembers = canManageEnterpriseMembers(actorRole);
+
+  const eligibleNewOwners = enterprise.members
+    .filter((member) => member.user.id !== enterprise.owner?.id)
+    .map((member) => ({
+      userId: member.user.id,
+      email: member.user.email,
+      name: member.user.name,
+    }));
 
   const relatedIds = [
     enterprise.id,
@@ -163,6 +183,14 @@ export default async function AdminEnterpriseDetailPage({
             ) : (
               <p className="text-muted-foreground">No owner on record.</p>
             )}
+            <div className="pt-1">
+              <TransferOwnershipAction
+                enterpriseId={enterprise.id}
+                currentOwner={enterprise.owner}
+                eligibleMembers={eligibleNewOwners}
+                canManage={canManage}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -173,42 +201,18 @@ export default async function AdminEnterpriseDetailPage({
           <CardTitle className="text-base">Members</CardTitle>
         </CardHeader>
         <CardContent>
-          {enterprise.members.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No members.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th className="pb-2 font-medium text-muted-foreground">
-                      Email
-                    </th>
-                    <th className="pb-2 font-medium text-muted-foreground hidden sm:table-cell">
-                      Name
-                    </th>
-                    <th className="pb-2 font-medium text-muted-foreground">
-                      Role
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {enterprise.members.map((member) => (
-                    <tr key={member.id}>
-                      <td className="py-2 pr-4 font-medium">
-                        {member.user.email}
-                      </td>
-                      <td className="py-2 pr-4 hidden sm:table-cell text-muted-foreground">
-                        {member.user.name ?? "—"}
-                      </td>
-                      <td className="py-2 pr-4 text-muted-foreground">
-                        {member.role.name}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <EnterpriseMembersTable
+            enterpriseId={enterprise.id}
+            ownerUserId={enterprise.owner?.id ?? null}
+            members={enterprise.members.map((member) => ({
+              id: member.id,
+              userId: member.user.id,
+              email: member.user.email,
+              name: member.user.name,
+              role: member.role.name,
+            }))}
+            canManage={canManageMembers}
+          />
         </CardContent>
       </Card>
 
@@ -218,50 +222,17 @@ export default async function AdminEnterpriseDetailPage({
           <CardTitle className="text-base">Invites</CardTitle>
         </CardHeader>
         <CardContent>
-          {enterprise.invites.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No pending or recent invites.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th className="pb-2 font-medium text-muted-foreground">
-                      Email
-                    </th>
-                    <th className="pb-2 font-medium text-muted-foreground hidden sm:table-cell">
-                      Role
-                    </th>
-                    <th className="pb-2 font-medium text-muted-foreground">
-                      Status
-                    </th>
-                    <th className="pb-2 font-medium text-muted-foreground text-right">
-                      Sent
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {enterprise.invites.map((invite) => (
-                    <tr key={invite.id}>
-                      <td className="py-2 pr-4 font-medium">{invite.email}</td>
-                      <td className="py-2 pr-4 hidden sm:table-cell text-muted-foreground">
-                        {invite.role.name}
-                      </td>
-                      <td className="py-2 pr-4">
-                        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                          {invite.status}
-                        </span>
-                      </td>
-                      <td className="py-2 text-right text-muted-foreground whitespace-nowrap">
-                        {invite.createdAt.toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <EnterpriseInvitesTable
+            enterpriseId={enterprise.id}
+            invites={enterprise.invites.map((invite) => ({
+              id: invite.id,
+              email: invite.email,
+              role: invite.role.name,
+              status: invite.status,
+              createdAt: invite.createdAt.toISOString(),
+            }))}
+            canManage={canManageMembers}
+          />
         </CardContent>
       </Card>
 

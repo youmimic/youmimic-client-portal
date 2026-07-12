@@ -55,3 +55,48 @@ export const listEnterprisesQuerySchema = z.object({
 });
 
 export type ListEnterprisesQuery = z.infer<typeof listEnterprisesQuerySchema>;
+
+// Enterprise ownership transfer — reason required (surfaced in the audit log
+// and to the new/old owner if we ever notify them).
+export const transferOwnerSchema = z.object({
+  newOwnerUserId: z.string().min(1),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Reason is required")
+    .max(500, "Reason must be 500 characters or less"),
+});
+
+export type TransferOwnerInput = z.infer<typeof transferOwnerSchema>;
+
+// Enterprise member removal — reason required.
+export const removeMemberSchema = z.object({
+  memberUserId: z.string().min(1),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Reason is required")
+    .max(500, "Reason must be 500 characters or less"),
+});
+
+export type RemoveMemberInput = z.infer<typeof removeMemberSchema>;
+
+// Invite resend — reason optional (this is a low-risk, reversible action).
+export const resendInviteSchema = z.object({
+  inviteId: z.string().min(1),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export type ResendInviteInput = z.infer<typeof resendInviteSchema>;
+
+// Invite cancellation — reason required.
+export const cancelInviteSchema = z.object({
+  inviteId: z.string().min(1),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Reason is required")
+    .max(500, "Reason must be 500 characters or less"),
+});
+
+export type CancelInviteInput = z.infer<typeof cancelInviteSchema>;

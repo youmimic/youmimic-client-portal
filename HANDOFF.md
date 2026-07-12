@@ -1,5 +1,81 @@
 # HANDOFF.md
 
+## Session: Admin Phase E3 — Enterprise management actions — 2026-07-06
+
+### What was inspected
+
+- `prisma/schema.prisma` — re-confirmed `Enterprise.ownerUserId` is a required scalar (not nullable), `EnterpriseMember` has a `@@unique([enterpriseId, userId])` compound key (`enterpriseId_userId` in the generated client), and `Invite.status` is a free-text `String` (not an enum) defaulting to `"pending"` — adding a `"cancelled"` status value needed no migration.
+- `lib/admin/rbac.ts` — `canManageEnterprises` / `canManageEnterpriseMembers` already existed from Phase E1 (both ADMIN minimum); also reused `canActOnUser` (originally written for user-suspension routes) to block a non-SUPER_ADMIN admin from transferring ownership to/from, or removing, a SUPER_ADMIN-tagged user.
+- `lib/admin/audit.ts` — `ENTITY_TYPES` already covered `ENTERPRISE`, `ENTERPRISE_MEMBER`, `ENTERPRISE_INVITE`; reused as-is.
+- `app/api/admin/users/[id]/suspend/route.ts` and `reactivate/route.ts` — copied the auth → RBAC → Zod-body → fetch-target → business-rule-checks → mutate → `writeAuditLog` sequence.
+- `app/api/invites/route.ts` and `lib/mailer.ts` — copied the invite-email pattern (`sendInviteEmail`, `BASE_URL` env var, `token`-based accept URL) for the resend-invite route.
+- `components/admin/user-actions.tsx` — copied the controlled-dialog + `ActionState` + `router.refresh()` pattern for the new `components/admin/enterprise-actions.tsx`.
+- `app/(admin)/admin/enterprises/[id]/route.ts` (GET) — confirmed the audit-log query matches `entityId` against `[enterprise.id, ...member ids, ...invite ids]` computed **at read time**. This shaped a key design decision below.
+
+### Design decisions (not explicit in the schema — documented here)
+
+1. **New owner must already be an `EnterpriseMember`.** The task spec allowed either "already a member" or "can be safely added as a member." There is no product rule anywhere in the codebase for auto-promoting an arbitrary user into an enterprise, and the repo has no user-search/combobox UI component (only a native-style `Select`), so building a global user picker would have been scope creep. Transfer-ownership therefore requires the selected user to already appear in `enterprise.members`; the UI's "New owner" dropdown is populated directly from the enterprise's own member list (already fetched by the detail page), not a new search endpoint.
+2. **All four new audit-log entries use `entityId: enterprise.id`, never a member/invite id.** The existing GET route recomputes "related ids" from *current* members/invites on every read. If a removed member's row (or, less critically, an invite) were used as `entityId`, that log entry would fall out of the queryable set the moment the member row is deleted, since it would no longer appear in the recomputed `relatedIds` list. Anchoring every mutation's `entityId` to the enterprise's own id (which is always in `relatedIds`) guarantees the action stays visible in the enterprise's audit trail permanently. The removed member's user id is still recorded in `targetUserId` and `metadata`.
+3. **Ownership transfer never touches `EnterpriseMember` rows.** The new owner keeps their existing membership row (with whatever role they had); the old owner is not backfilled into `EnterpriseMember`. This matches the Phase E1 note ("...or leave them with no enterprise affiliation") and avoids inventing role-reassignment logic that wasn't requested. `Enterprise.ownerUserId` is a required, single-value field, so there is no code path that can produce an ownerless enterprise — the transfer is a single atomic field update.
+4. **Invite resend reuses the existing `token`** rather than rotating it. There is no token-rotation precedent anywhere in the codebase (`app/api/invites/route.ts` mints a token once at creation); reusing it keeps previously-sent copies of the email valid too, which is expected behavior for "resend."
+5. **`canActOnUser` reused for privilege protection.** Transfer-owner checks it against both the outgoing and incoming owner's `adminRole`; remove-member checks it against the target member's `adminRole`. This was not explicitly requested per-route but directly implements the task's "non-'highest' admin roles cannot act on protected entities" requirement using infrastructure that already existed for the same purpose on the users API.
+
+### API routes added
+
+All four require a JSON body, `auth()`, and a permission check; all return `401`/`403`/`404`/`409`/`422` as appropriate and write an `AdminLog` row on success only.
+
+| Route | RBAC | Body | Notes |
+|---|---|---|---|
+| `POST /api/admin/enterprises/[id]/transfer-owner` | `canManageEnterprises` | `{ newOwnerUserId, reason }` | 409 if already owner; 422 if new owner isn't an existing member; 409 if new owner is suspended; 403 if either owner is a protected (`SUPER_ADMIN`) admin account the caller can't act on. Action: `transfer_enterprise_owner`. |
+| `POST /api/admin/enterprises/[id]/remove-member` | `canManageEnterpriseMembers` | `{ memberUserId, reason }` | 403 if `memberUserId` is the current owner; 404 if not a member; 403 if member is a protected admin account. Action: `remove_enterprise_member`. |
+| `POST /api/admin/enterprises/[id]/resend-invite` | `canManageEnterpriseMembers` | `{ inviteId, reason? }` | 409 if invite isn't `pending`; 502 (no audit write) if the email send throws. Action: `resend_enterprise_invite`. |
+| `POST /api/admin/enterprises/[id]/cancel-invite` | `canManageEnterpriseMembers` | `{ inviteId, reason }` | 409 if invite isn't `pending`; sets `status: "cancelled"` (row is kept, not deleted). Action: `cancel_enterprise_invite`. |
+
+New Zod schemas in `lib/validations/admin.ts`: `transferOwnerSchema`, `removeMemberSchema`, `resendInviteSchema`, `cancelInviteSchema`.
+
+### UI changes
+
+- `components/admin/enterprise-actions.tsx` (new, client component) — three exports:
+  - `TransferOwnershipAction` — button + dialog rendered inside the existing "Owner" card; dropdown of eligible members (current owner excluded), required reason, confirmation copy showing "old → new".
+  - `EnterpriseMembersTable` — replaces the old static members table; adds a "Remove" action per row (hidden for the owner's own row), confirmation dialog with required reason.
+  - `EnterpriseInvitesTable` — replaces the old static invites table; adds "Resend"/"Cancel" actions for `pending` invites only (accepted/cancelled invites show no actions).
+- `app/(admin)/admin/enterprises/[id]/page.tsx` — now computes `canManage` / `canManageMembers` server-side and passes them as props; all three action components no-op (render nothing or disable) when the signed-in admin lacks the relevant permission, so `BILLING_ADMIN` viewers still see read-only tables exactly as before.
+
+### What did NOT change
+
+- No schema changes or migrations — `Invite.status` accepts `"cancelled"` as a plain string value, no enum update needed.
+- No JWT/session changes — enterprise ownership/membership changes are picked up on the next DB read, same as documented in Phase E1/E2 (no instant client-side effect for the affected user; they'd see the change next time a server component queries their enterprise).
+- No new "add member" or "invite a specific user by admin" flow — out of scope for this phase.
+- No global user-search endpoint — see design decision #1.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing: signup page React Compiler note, lib/prisma.ts eslint-disable; unchanged)
+npm run typecheck → clean
+npm run build     → clean; 4 new routes (/api/admin/enterprises/[id]/transfer-owner ƒ,
+                     /remove-member ƒ, /resend-invite ƒ, /cancel-invite ƒ)
+```
+
+### Manual verification
+
+Not performed in this session — no admin credentials were available in this environment (same limitation noted in Phase E2). The route/query shapes were validated indirectly: `npm run build` runs `prisma generate` against the live schema and a full `next build` + `tsc` pass, which would fail on any invalid `select`/`where`/compound-key name or enum value. **Recommend a manual click-through before considering this phase fully closed**: transfer ownership between two seeded users, remove a member, resend/cancel an invite, and confirm a `BILLING_ADMIN` session sees the enterprise detail page with no action buttons.
+
+### Known limitations (carried forward + new)
+
+1. Ownership/membership changes are not instant for the affected end user — no session/JWT invalidation is triggered (consistent with Phase E1's documented no-JWT-enterprise-state decision).
+2. New owner must already be an enterprise member — there is no admin-side "add member directly" flow yet, so an admin must first get the target user invited/accepted before they're eligible for ownership transfer.
+3. `EnterpriseMember` and `Invite` still have no join-date/expiry columns (carried over from Phase E2).
+4. All items 1–11 from Phase E1/E2 (CONTACT_EMAIL env var, payment history pagination, etc.) remain open.
+
+### Recommended next milestone
+
+- Manual QA pass on the four new actions with real admin/member accounts (see above).
+- Consider an admin-side "add existing user as enterprise member" action, which would remove limitation #2 above.
+- Invite acceptance page (`/invite/[token]`) — still not built (carried forward since Phase 1).
+
+---
+
 ## Session: Admin Phase E2 — Enterprises admin list + detail — 2026-07-06
 
 ### What was inspected
