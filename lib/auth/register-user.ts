@@ -71,6 +71,14 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
     businessName,
   } = parsed.data;
 
+  const rawCallbackUrl = body.callbackUrl;
+  const callbackUrl =
+    typeof rawCallbackUrl === "string" &&
+    rawCallbackUrl.startsWith("/") &&
+    !rawCallbackUrl.startsWith("//")
+      ? rawCallbackUrl
+      : null;
+
   if (!acceptTerms || !termsLinkClicked) {
     return {
       ok: false,
@@ -175,7 +183,9 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
     throw new Error("NEXTAUTH_URL is not configured");
   }
 
-  const verifyUrl = `${appUrl}/api/verify-email?token=${token}`;
+  const verifyUrl = callbackUrl
+    ? `${appUrl}/api/verify-email?token=${token}&callbackUrl=${encodeURIComponent(callbackUrl)}`
+    : `${appUrl}/api/verify-email?token=${token}`;
 
   await sendVerifyEmail({
     to: user.email,

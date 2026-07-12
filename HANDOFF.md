@@ -1,5 +1,187 @@
 # HANDOFF.md
 
+## Session: Invite acceptance — dedicated join page for brand-new invitees — 2026-07-13 (follow-up)
+
+### Problem found
+
+The invite flow shipped earlier today always sent signed-out visitors to `/login?callbackUrl=...&email=...`. That's correct for someone who already has a YouMimic account, but the common case — a brand-new team member who has never signed up — has no password to log in with. They'd have had to notice the "Sign up" link themselves and fill out the full `/signup` form, including the `accountType` (Individual/Business) toggle and business name field, neither of which make sense for someone joining an *existing* enterprise as a member.
+
+### Fix
+
+Added a dedicated `/invite/[token]/join` page for this case, and taught the main invite page to route to it instead of `/login` when no account exists yet for the invite's email.
+
+**`app/invite/[token]/page.tsx`** — signed-out branch now does one extra check:
+```
+const existingUser = await prisma.user.findUnique({ where: { email: invite.email } });
+if (existingUser) redirect("/login?callbackUrl=...&email=...");   // existing behavior
+redirect(`/invite/${token}/join`);                                 // new: no account yet
+```
+Also reordered the checks so `invite.status !== "pending"` is evaluated **before** the signed-out branch — previously an already-accepted/cancelled invite would still bounce a signed-out visitor through login/join for no reason; now they see "Invite no longer active" immediately regardless of auth state. This was a latent bug in the first cut, caught while restructuring this branch.
+
+**`app/invite/[token]/join/page.tsx`** (new, server) — re-validates independently (invalid token, non-pending invite, and — defensively — an account that already exists for that email, in which case it redirects to `/login` instead) before rendering the join form. Redirects straight to `/invite/[token]` if a session already exists (lets the main page's Case D logic own that path).
+
+**`app/invite/[token]/join/join-form.tsx`** (new, client) — a trimmed copy of `signup-form.tsx`'s pattern: same `Form`/`FormField`/terms-and-privacy-click-tracking UX, but:
+- No account-type toggle, no business name field.
+- Email is fixed (shown as static text + a hidden `form.register("email")` field pre-filled from the invite) — not user-editable, since it must match the invite.
+- `accountType` is hardcoded to `"INDIVIDUAL"` via a hidden field. This matters: `registerUser()` only auto-creates a new `Enterprise` + owner role when `accountType === "BUSINESS"`. An invited member is joining an *existing* enterprise, so forcing `"INDIVIDUAL"` means registration skips that branch entirely — no new backend logic needed, just steering the existing `registerUser()` down its already-correct path.
+- Still requires `acceptTerms`/`acceptPrivacyPolicy` (legal requirement preserved, not skipped).
+- On success, redirects to `/login?registered=1&callbackUrl=/invite/[token]&email=<email>` — same continuation mechanism as the main signup form, so email verification → login → back to `/invite/[token]` → membership creation all just work, unchanged.
+
+**`lib/validations/signup-form.ts`** (new) — extracted `confirmPasswordSchema` (= `registerSchema` + a `confirmPassword` field) out of `app/signup/signup-form.tsx` so both the full signup form and the new trimmed join form share the same base schema instead of duplicating it. Each form still applies its own `.superRefine()` — `signup-form.tsx` keeps the business-name-required-if-BUSINESS rule (irrelevant to the join form, which is always `INDIVIDUAL`), `join-form.tsx` only checks password match.
+
+**`components/invite/invite-status-cards.tsx`** (new) — extracted `InviteShell`, `InvalidInviteCard`, `AlreadyHandledCard` out of `app/invite/[token]/page.tsx` so the new join page can render the same invalid/already-handled states without duplicating markup. `WrongAccountCard` and `SuccessCard` stayed in the main page file since they're specific to the signed-in acceptance path.
+
+### Files changed
+
+| File | Status |
+|---|---|
+| `components/invite/invite-status-cards.tsx` | Created — shared `InviteShell`/`InvalidInviteCard`/`AlreadyHandledCard` |
+| `app/invite/[token]/page.tsx` | Updated — reordered status/session checks; branches to `/join` when no account exists |
+| `app/invite/[token]/join/page.tsx` | Created — server page, re-validates, renders `JoinForm` |
+| `app/invite/[token]/join/join-form.tsx` | Created — trimmed signup form for invited members |
+| `lib/validations/signup-form.ts` | Created — shared `confirmPasswordSchema` |
+| `app/signup/signup-form.tsx` | Updated — now imports `confirmPasswordSchema` instead of defining it inline |
+
+### What did NOT change
+
+- No schema changes.
+- No changes to `registerUser()` or `/api/register` — the join form steers existing logic (`accountType: "INDIVIDUAL"`) rather than adding a new code path there.
+- No changes to `/dashboard`, `/dashboard/settings`, or the acceptance transaction (`lib/invites/accept-invite.ts`) from the earlier session today.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing, unchanged)
+npm run typecheck → clean
+npm run build     → clean; /invite/[token]/join ƒ added
+```
+
+### Manual verification
+
+- `npm run build && npm run start`, curl-verified: `GET /invite/<bad-token>` and `GET /invite/<bad-token>/join` both return `200` with "Invite not found" (no 500 on either route).
+- Not re-verified against a seeded pending invite in this follow-up (same constraint as the earlier session today — no safe way to mutate the shared Neon dev DB from this environment). The `accountType: "INDIVIDUAL"` steering and the existing-user routing logic were verified by code review against `lib/auth/register-user.ts`'s actual branch condition (`if (accountType === "BUSINESS" && businessName)`), not by an end-to-end run.
+
+### Recommended next milestone
+
+Same as the earlier session today: a manual click-through with a real invite, now covering both sub-cases — an email with an existing account (→ `/login`) and one without (→ `/invite/[token]/join`).
+
+---
+
+## Session: Invite acceptance flow — `/invite/[token]` — 2026-07-13
+
+### What was inspected
+
+- `prisma/schema.prisma` — `Invite` (`token` unique, `status` plain `String` default `"pending"`, `roleId`, `enterpriseId`, `email`, no expiry column), `EnterpriseMember` (`@@unique([enterpriseId, userId])`, generated key name `enterpriseId_userId`), `Enterprise`, `Role`.
+- `app/api/invites/route.ts` — confirms invite creation shape: `token = crypto.randomUUID()`, `acceptUrl = ${BASE_URL}/invite/${token}`, `roleId` resolved once via `role.upsert({ name: "member" })` at invite-creation time and stored directly on the `Invite` row — the accept flow must reuse `invite.roleId` as-is, never re-derive a role.
+- `lib/mailer.ts` / `emails/templates/invite-email.tsx` — email links straight to `/invite/{token}`; no separate deep-link scheme to account for.
+- `auth.ts` / `next-auth.d.ts` — JWT session, no enterprise state stamped in the token (confirmed via Phase E1 note in this file) — the accept page does its own Prisma reads, consistent with every other enterprise-aware page in the app.
+- `proxy.ts` — `/invite/[token]` is **not** in `PROTECTED_PREFIXES`, so signed-out users reach the page directly; the page itself must branch on `auth()`, not middleware.
+- `app/login/login-form.tsx` — already reads `callbackUrl` from `searchParams`, validates it (`startsWith("/") && !startsWith("//")`), and does `router.push(callbackUrl)` after a successful `signIn()`. This is the exact continuation mechanism to reuse — no new redirect scheme invented.
+- `app/signup/page.tsx` (pre-change) — client component, no `searchParams` handling at all; always redirected to `/login?registered=1` unconditionally after successful registration.
+- `lib/auth/register-user.ts` — registration requires email verification before login is possible (`EmailNotVerifiedError` in `auth.ts`); the verify email link is built once in `registerUser()` and does not currently carry any post-verification destination.
+- `app/api/verify-email/route.ts` — always redirected to `/login?verified=1`, dropping any invite context that arrived via signup.
+- `app/suspended/page.tsx`, `app/verify-email/page.tsx` — reused as the UI reference pattern (`Card`/`CardHeader`/`CardDescription` with an icon + one action button) for all new invite-state cards.
+- `app/(dashboard)/dashboard/checkout/success/page.tsx` + `subscription-activator.tsx` — reused as the precedent for "client component using `useSearchParams` needs a `Suspense`-wrapped server page.tsx" (see decision below).
+- `app/(dashboard)/dashboard/settings/page.tsx` / `app/(dashboard)/dashboard/page.tsx` — confirmed the "Team" card on `/dashboard/settings` only renders for the enterprise **owner** (`enterprise.findFirst({ ownerUserId })`); a newly-accepted member has no owner-scoped content there. `/dashboard` has no membership-aware content either, but is the only page every authenticated user (owner or member) can land on meaningfully.
+
+### Required behavior implemented
+
+All in `app/invite/[token]/page.tsx` (server component, `force-dynamic`):
+
+| Case | Behavior |
+|---|---|
+| Token doesn't resolve to any `Invite` | `InvalidInviteCard` — "This invite link is invalid or no longer available." No throw, no 500. |
+| `Invite.status !== "pending"` | `AlreadyHandledCard` — "This invite has already been used or is no longer active." |
+| Signed-out visitor | `redirect("/login?callbackUrl=/invite/[token]&email=<invite.email>")` — no separate token param needed since the callback URL itself re-enters this page. |
+| Signed-in, email mismatch | `WrongAccountCard` — explains the mismatch, shows the invited email, offers sign-out + back-to-dashboard. Does **not** auto-accept. |
+| Signed-in, matching email, pending | Runs `acceptInvite()`, then `SuccessCard` — "You've joined {enterprise} successfully" with a continue-to-dashboard button. |
+
+### Acceptance transaction — `lib/invites/accept-invite.ts`
+
+```
+prisma.$transaction(tx => {
+  1. Re-read invite by token inside tx (never trust the page's earlier read).
+  2. If not found -> "not_found". If status !== "pending" -> "not_pending".
+  3. tx.invite.updateMany({ where: { id, status: "pending" }, data: { status: "accepted" } })
+     — atomic conditional update; count === 0 means a concurrent request already
+     claimed it, so this request also returns "not_pending" instead of racing ahead.
+  4. tx.enterpriseMember.upsert({ where: { enterpriseId_userId }, create: {...}, update: {} })
+     — protects against the (enterpriseId, userId) unique constraint even in the
+     unlikely case a membership row already exists for other reasons.
+  5. Return { status: "accepted", enterpriseName }.
+})
+```
+
+**Idempotency design decision:** rather than read-then-write (which is racy under concurrent double-clicks), the invite claim uses a single conditional `updateMany` and inspects `count`. Only the request that actually flips `pending -> accepted` proceeds to create membership. A second concurrent or later request always sees `status !== "pending"` and renders `AlreadyHandledCard` — this is also what makes "re-opening an already-accepted invite" safe with no extra bookkeeping: the invite's own `status` field is the single source of truth for "already handled," so no separate dedupe flag was invented.
+
+### Auth continuation (Case C / section 5)
+
+Reused the existing `callbackUrl` mechanism end-to-end instead of inventing a parallel one:
+
+1. **Signed-out, existing account** — `/invite/[token]` → `/login?callbackUrl=/invite/[token]&email=<email>`. `login-form.tsx` already redirects to `callbackUrl` post-sign-in; only change was adding `email` prefill (`searchParams.get("email")` → `defaultValues.email`).
+2. **Signed-out, no account (new user)** — `/login` → user clicks "Sign up" → lands on `/signup` with no context. To close this gap: `app/signup/signup-form.tsx` now also reads `callbackUrl` and `email` from `searchParams`, prefills the email field, and forwards `callbackUrl` in the `POST /api/register` body plus onto the post-registration `/login?registered=1&callbackUrl=...` redirect.
+3. **Email verification gap** — registration requires email verification before login works, and the verification link is emailed, so `callbackUrl` has to survive an out-of-band click days later. `lib/auth/register-user.ts` now accepts an optional `callbackUrl` in the request body (validated: must start with `/`, not `//`), and appends it as a query param on the emailed `verifyUrl`. `app/api/verify-email/route.ts` reads that `callbackUrl` back off its own query string and forwards it onto the final `/login?verified=1&callbackUrl=...` redirect (re-validated there too — defense in depth, since this value now round-trips through an emailed link).
+4. Login form already does the rest (`router.push(callbackUrl)` after `signIn`), landing the user back on `/invite/[token]`, which now has a session and completes Case D.
+
+### Signup page restructure (build-required)
+
+Adding `useSearchParams()` to `app/signup/page.tsx` (a client component with no server-side dynamic API call) broke `next build` — "useSearchParams() should be wrapped in a suspense boundary," because the page was previously fully static and Next tried to prerender it. Fixed by following the exact precedent already in this repo (`dashboard/checkout/success/page.tsx` + `subscription-activator.tsx`): split into a plain server `app/signup/page.tsx` that renders `<Suspense fallback={null}><SignupForm /></Suspense>`, moving all existing client logic verbatim into `app/signup/signup-form.tsx`. `/signup` is now a dynamic (`ƒ`) route instead of static — expected and harmless (it was never meaningfully static content: full name/password form).
+
+### Redirect after success — decision
+
+Chose **`/dashboard`**, not `/dashboard/settings`. Settings' "Team" card is owner-only (`enterprise.findFirst({ ownerUserId })`), so a newly-joined member would land on a page with nothing enterprise-related to see. `/dashboard` is the one page meaningful to every authenticated user regardless of role. No changes were made to `/dashboard` itself — the success message ("You've joined {enterprise} successfully") is rendered directly on the invite page before the user clicks through, so no query-param banner or dashboard changes were needed.
+
+### Files changed
+
+| File | Status |
+|---|---|
+| `lib/invites/accept-invite.ts` | Created — transaction helper |
+| `app/invite/[token]/page.tsx` | Created — all 5 states |
+| `app/login/login-form.tsx` | Updated — `email` searchParam prefill |
+| `app/signup/page.tsx` | Rewritten — thin server wrapper + `Suspense` |
+| `app/signup/signup-form.tsx` | Created — moved client form logic; added `callbackUrl`/`email` handling |
+| `lib/auth/register-user.ts` | Updated — optional `callbackUrl` threaded into emailed `verifyUrl` |
+| `app/api/verify-email/route.ts` | Updated — forwards `callbackUrl` onto the `/login` redirect |
+
+### What did NOT change
+
+- No Prisma schema changes — `Invite.status` stays a plain string; `"accepted"` is a new value but no migration needed (same precedent as `"cancelled"` in Phase E3).
+- No enterprise state added to the JWT (explicit constraint honored).
+- No admin-side "add existing user as member" flow (explicit constraint honored).
+- No new role-mapping logic — `invite.roleId` is reused as-is from invite creation.
+- `/dashboard` and `/dashboard/settings` untouched.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 warnings (both pre-existing: signup form React Compiler note, lib/prisma.ts eslint-disable)
+npm run typecheck → clean
+npm run build     → clean; 28 routes; /invite/[token] ƒ Dynamic added; /signup now ƒ Dynamic (was static)
+```
+
+### Manual verification
+
+- `npm run build && npm run start` on a local port, then `curl`:
+  - `GET /invite/this-token-does-not-exist` → `200`, body contains "Invite not found" (confirms Case A renders cleanly, no 500).
+  - `GET /signup` → `200` (confirms the Suspense restructure didn't break the route).
+  - `GET /login?callbackUrl=%2Finvite%2Fabc&email=test%40example.com` → `200`, SSR HTML contains `value="test@example.com"` (confirms email prefill reaches the rendered form).
+- **Not performed against seeded DB rows**: valid-pending-invite acceptance, wrong-account block, already-accepted/cancelled rendering, and the concurrent-double-click race were verified by code review of `acceptInvite()`'s atomic `updateMany`+`upsert` design (see transaction section above) rather than by writing/mutating rows in the shared Neon dev database. Recommend a manual click-through with a real invite (send one from `/dashboard/settings`, open the link signed out and signed in as both the right and wrong account) before considering this fully closed.
+
+### Known limitations (carried forward + new)
+
+1. No invite expiry is enforced — the email copy says "expires in 7 days" but `Invite` has no `expiresAt` column (carried forward from Phase E1/E2 notes); an invite is valid indefinitely until accepted/cancelled.
+2. Enterprise/membership state is still not stamped into the JWT — a newly-added member's `/dashboard` won't reflect anything membership-specific until a page does its own Prisma read (consistent with the rest of the app).
+3. `/dashboard` has no member-aware "Getting started" content (only owner vs. individual) — carried forward, not addressed here since it's out of this milestone's scope.
+4. All other items in the E1–E3 sessions below remain open.
+
+### Recommended next milestone
+
+- Manual click-through of the full flow with a real invite (see above).
+- Consider member-aware content on `/dashboard` (or a `/dashboard/team` page) now that non-owner members can actually exist via this flow.
+- Admin-side "resend invite" (`/api/admin/enterprises/[id]/resend-invite`, added in Phase E3) can now be manually verified end-to-end too, since the accept link finally resolves.
+
+---
+
 ## Session: Admin Phase E3 — Enterprise management actions — 2026-07-06
 
 ### What was inspected

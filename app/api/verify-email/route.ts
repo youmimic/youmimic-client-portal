@@ -32,5 +32,13 @@ export async function GET(req: Request) {
     data: { used: true },
   });
 
-  return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/login?verified=1`);
+  const loginUrl = new URL("/login", process.env.NEXTAUTH_URL);
+  loginUrl.searchParams.set("verified", "1");
+
+  const callbackUrl = searchParams.get("callbackUrl");
+  if (callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")) {
+    loginUrl.searchParams.set("callbackUrl", callbackUrl);
+  }
+
+  return NextResponse.redirect(loginUrl);
 }

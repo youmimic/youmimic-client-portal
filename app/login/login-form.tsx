@@ -37,15 +37,6 @@ export default function LoginForm() {
   const [showRegistered, setShowRegistered] = useState(true);
   const [showVerified, setShowVerified] = useState(true);
 
-  const form = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-    mode: "onBlur",
-  });
-
   const verified = searchParams.get("verified");
   const registered = searchParams.get("registered");
   const rawCallbackUrl = searchParams.get("callbackUrl") ?? "";
@@ -53,6 +44,16 @@ export default function LoginForm() {
     rawCallbackUrl.startsWith("/") && !rawCallbackUrl.startsWith("//")
       ? rawCallbackUrl
       : "/dashboard";
+  const prefillEmail = searchParams.get("email") ?? "";
+
+  const form = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: prefillEmail,
+      password: "",
+    },
+    mode: "onBlur",
+  });
 
   async function onSubmit(values: LoginInput) {
     setFormError("");
