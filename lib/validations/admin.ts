@@ -100,3 +100,34 @@ export const cancelInviteSchema = z.object({
 });
 
 export type CancelInviteInput = z.infer<typeof cancelInviteSchema>;
+
+// Mirrors the Booking.status enum in prisma/schema.prisma (BookingStatus).
+export const BOOKING_STATUSES = [
+  "pending",
+  "confirmed",
+  "cancelled",
+  "completed",
+] as const;
+const BOOKING_STATUS_FILTER = [...BOOKING_STATUSES, "all"] as const;
+
+// "personal" = Booking.enterpriseId is null, "enterprise" = it isn't.
+const BOOKING_KIND_FILTER = ["personal", "enterprise", "all"] as const;
+
+const isoDateString = z
+  .string()
+  .refine((val) => !isNaN(Date.parse(val)), "Invalid date");
+
+export const listBookingsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().max(200).optional(),
+  status: z.enum(BOOKING_STATUS_FILTER).default("all"),
+  kind: z.enum(BOOKING_KIND_FILTER).default("all"),
+  sortBy: z.enum(["requestedDate", "createdAt"]).default("requestedDate"),
+  sortOrder: z.enum(["asc", "desc"]).default("desc"),
+  // Filters on Booking.requestedDate — optional, only applied if provided.
+  dateFrom: isoDateString.optional(),
+  dateTo: isoDateString.optional(),
+});
+
+export type ListBookingsQuery = z.infer<typeof listBookingsQuerySchema>;

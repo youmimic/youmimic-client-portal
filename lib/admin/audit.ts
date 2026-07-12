@@ -9,6 +9,11 @@ export const ENTITY_TYPES = {
   ENTERPRISE: "enterprise",
   ENTERPRISE_MEMBER: "enterprise_member",
   ENTERPRISE_INVITE: "enterprise_invite",
+  // Registered ahead of Phase B2 (booking mutations) so the admin booking
+  // detail route can already query for it consistently. No writes use this
+  // value yet — Phase B1 is read-only — so this query always returns empty
+  // until B2 ships an admin action that calls writeAuditLog with it.
+  BOOKING: "booking",
 } as const;
 
 interface AuditLogInput {

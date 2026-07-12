@@ -1,5 +1,83 @@
 # HANDOFF.md
 
+## Session: Admin Bookings Phase B1 — read-only module — 2026-07-13
+
+### What was inspected
+
+- `prisma/schema.prisma` — `Booking` model: `id`, `userId`, `enterpriseId` (nullable — this is the "personal vs enterprise" distinction), `requestedDate`, `timeStart`/`timeEnd` (strings, not `DateTime`), `capturesCount`, `status` (`BookingStatus` enum: `pending | confirmed | cancelled | completed`), `paymentStatus` (`PaymentStatus` enum: `unpaid | paid | refunded | failed`), `notes`, location fields (`captureLocationType`, `capitalCity`, `suburbOrTown`, `stateOrTerritory`, `postcode`, `addressLine1`, `addressLine2`, `locationNotes`), `createdAt`. Relations: `user User`, `enterprise Enterprise?`, `payments Payment[]`, `participants BookingCaptureParticipant[]`. Indexed on `userId` and `enterpriseId`.
+- `Payment` model — links to `Booking` via nullable `bookingId`; also has a `subscriptionId` for subscription-type payments. Confirms Booking has genuine payment linkage via `payments[]`, but **no direct relation to `Subscription`**.
+- `Subscription` model — links to `User` or `Enterprise` via nullable `userId`/`enterpriseId`, never to a `Booking` directly. Confirmed: any "subscription context" for a booking has to be derived by looking up the most-recent subscription for the booking's owner (enterprise if set, else user) — same pattern already used in `app/api/admin/enterprises/route.ts` to derive an enterprise's current plan.
+- `app/api/bookings/route.ts`, `app/api/bookings/[id]/route.ts`, `app/api/bookings/[id]/cancel/route.ts` — the existing user-facing booking API. Confirmed `timeEnd` is always server-computed (never trust client input) and only `pending`/`confirmed` bookings are editable — informs what a future Phase B2 admin edit would need to replicate, not touched in this phase.
+- `app/(dashboard)/dashboard/bookings/page.tsx` — the user-facing bookings list; reused its `formatLocationSummary`/`CAPITAL_CITY_LABELS` display logic for the new admin detail page's location formatting.
+- `lib/admin/rbac.ts`, `lib/admin/audit.ts`, `lib/validations/admin.ts` — confirmed every existing admin "view" permission (`canViewUsers`, `canViewEnterprises`, etc.) maps to `ADMIN` minimum on the `BILLING_ADMIN(1) < ADMIN(2) < SUPER_ADMIN(3)` hierarchy; followed the same default per the task's explicit instruction.
+- `app/api/admin/enterprises/route.ts` + `/[id]/route.ts`, `app/(admin)/admin/enterprises/page.tsx` + `/[id]/page.tsx` — used as the direct structural template for the new bookings list/detail routes and pages (explicit-select API routes, client list page with debounced search + filter `<select>`s + pagination, server detail page fetching directly via Prisma rather than proxying its own API route).
+
+### What's missing from the schema (documented, not invented)
+
+1. **No booking-scoped audit trail exists yet.** `AdminLog.entityType` is a free-text string (no enum), so no migration is needed to support it — I registered `ENTITY_TYPES.BOOKING = "booking"` in `lib/admin/audit.ts` ahead of Phase B2 and wired the detail route/page to query for it, but **no route writes this value yet** since B1 has no mutations. The audit section on the detail page will show "No admin actions recorded" for every booking until B2 ships a mutation that calls `writeAuditLog`. Verified this returns an empty array against real data (see Manual verification).
+2. **No direct `Booking → Subscription` relation.** Subscriptions link to `User`/`Enterprise`, not `Booking`. The detail route derives a best-effort "subscription context" (most recent subscription for the booking's enterprise, or its user if personal) rather than a hard link — documented inline in both the API route and the page.
+3. **`timeStart`/`timeEnd` are plain strings, not `DateTime`.** Sorting/filtering by "date" uses `requestedDate` only; time-of-day is display-only, consistent with how the existing dashboard bookings page already treats them.
+
+### RBAC
+
+`lib/admin/rbac.ts` — added `canViewBookings(role)`, `ADMIN` minimum (same tier as `canViewUsers`/`canViewEnterprises`). No `canManageBookings` yet — there is nothing to manage in a read-only phase.
+
+### Validation
+
+`lib/validations/admin.ts` — added `listBookingsQuerySchema`: `page`, `pageSize` (max 100), `search` (matches user name/email or enterprise name), `status` (`BookingStatus` enum value or `"all"`), `kind` (`"personal"` | `"enterprise"` | `"all"`, mapped to `enterpriseId: null` / `{ not: null }`), `sortBy` (`requestedDate` | `createdAt`), `sortOrder`, and optional `dateFrom`/`dateTo` (validated as parseable dates, filtered against `requestedDate`).
+
+### API routes added
+
+**`GET /api/admin/bookings`** — paginated/searchable/filterable list. `canViewBookings` RBAC (401/403), explicit `Prisma.BookingSelect`, stable pagination via secondary `{ id: "asc" }` sort. Returns `{ items, page, pageSize, totalItems, totalPages }`. Each item: id, user (id/name/email), enterprise (id/name) or null, requestedDate, timeStart/timeEnd, capturesCount, status, paymentStatus, createdAt.
+
+**`GET /api/admin/bookings/[id]`** — read-only detail. Same RBAC. Returns booking core fields + full location fields + participants + payments (from `Booking.payments`) + derived `subscriptionContext` + `auditLog` (see limitation #1 above — always `[]` today).
+
+### UI routes added
+
+- `app/(admin)/admin/bookings/page.tsx` — client list page, debounced search (300ms), status + kind filter `<select>`s, paginated table (date/time, requester, enterprise, status badge, payment badge, created date, view link).
+- `app/(admin)/admin/bookings/[id]/page.tsx` — server detail page (`force-dynamic`), fetches directly via Prisma (not via the API route — matches the enterprises/users detail page precedent), RBAC redirect to `/dashboard` if `!canViewBookings`. Sections: Booking Summary, Requester (+ derived subscription context), Participants, Payments, Audit Log. **No action buttons anywhere** — explicitly read-only per phase scope.
+- `components/admin/admin-shell.tsx` — added "Bookings" nav item (`CalendarDays` icon) between Enterprises and the account footer, same active-state/styling logic as the existing items.
+
+### Safety rules followed
+
+- No booking mutation routes or UI actions added.
+- Every Prisma query in both new routes/pages uses an explicit `select` (no bare `findMany()`/`findUnique()`, no `include`).
+- RBAC enforced in both API routes (401 unauthenticated / 403 insufficient role) and both pages (redirect to `/dashboard`).
+- `pageSize` capped at 100 via the Zod schema; sort is always `[primarySort, { id: "asc" }]` for stability.
+- No schema changes — the one addition (`ENTITY_TYPES.BOOKING`) is a new string constant value on an already-free-text column, not a migration.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 4 new routes: /admin/bookings ƒ, /admin/bookings/[id] ƒ,
+                     /api/admin/bookings ƒ, /api/admin/bookings/[id] ƒ
+```
+
+### Manual verification
+
+No admin credentials available in this environment (same limitation noted in every prior admin-phase session), so browser click-through wasn't possible. Did two things beyond the usual build-only check:
+
+1. **HTTP-level RBAC smoke test** (`npm run start` + curl, unauthenticated):
+   - `GET /admin/bookings` → `307` → `/login` (proxy's existing `/admin` protection).
+   - `GET /admin/bookings/<id>` → `307` → `/login`.
+   - `GET /api/admin/bookings` → `401 {"error":"Unauthorized"}`.
+   - `GET /api/admin/bookings/<id>` → `401 {"error":"Unauthorized"}`.
+2. **Read-only Prisma query verification against the live dev DB** (disposable `tsx` script, no writes): ran the exact `BOOKING_LIST_SELECT`/`BOOKING_DETAIL_SELECT` shapes used by both routes against real data — confirmed 3 real bookings exist, the list query with every filter dimension combined (status + kind + search + date range) executes without error, the detail query for a real booking returns correctly shaped participants/payments arrays, the derived `subscriptionContext` correctly resolved a real `CREATOR`/`ACTIVE` subscription for that booking's user, the `entityType: "booking"` audit query correctly returns `[]` (as expected — no B2 mutations exist yet), and a detail query for a nonexistent id resolves to `null` rather than throwing. Nothing was created, modified, or deleted.
+
+Recommend a real browser click-through (list page filters/pagination, detail page rendering) before considering this phase fully closed.
+
+### Recommended next milestone
+
+**Admin Bookings Phase B2 — mutations:**
+- `canManageBookings` in `lib/admin/rbac.ts` (ADMIN minimum, matching the enterprise-management tier).
+- Likely actions: cancel a booking (admin override, independent of the user-facing `EDITABLE_STATUSES` gate in `app/api/bookings/[id]/route.ts`), reassign to a different enterprise, mark payment status. Each should call `writeAuditLog` with `entityType: ENTITY_TYPES.BOOKING` (already registered) so the audit section built in B1 starts showing data immediately.
+- Add action buttons to `app/(admin)/admin/bookings/[id]/page.tsx` (currently pure read-only), following the same controlled-dialog + reason-required pattern used in `components/admin/enterprise-actions.tsx`.
+- Consider whether admin booking edits should share `lib/validations/booking.ts`'s `updateBookingSchema` (same date/business-day/location rules) or need looser admin-specific rules (e.g. admins overriding the 3-business-day lead time) — a product decision, not inferable from the current code.
+
+---
+
 ## Session: Skip the /invite/[token] detour after invite signup — 2026-07-13 (follow-up 3)
 
 ### Problem

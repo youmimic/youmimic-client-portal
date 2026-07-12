@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Building2,
+  CalendarDays,
   LayoutDashboard,
   Menu,
   ShieldCheck,
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/admin/users", label: "Users", icon: Users, exact: false },
   { href: "/admin/enterprises", label: "Enterprises", icon: Building2, exact: false },
+  { href: "/admin/bookings", label: "Bookings", icon: CalendarDays, exact: false },
 ];
 
 type SidebarContentProps = {

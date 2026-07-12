@@ -58,3 +58,9 @@ export function canManageEnterprises(role: AdminRoleValue): boolean {
 export function canManageEnterpriseMembers(role: AdminRoleValue): boolean {
   return hasMinRole(role, "ADMIN");
 }
+
+// Booking permissions — ADMIN minimum, same tier as users/enterprises view access.
+// Phase B1 is read-only; there is no canManageBookings yet (no mutation routes exist).
+export function canViewBookings(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}
