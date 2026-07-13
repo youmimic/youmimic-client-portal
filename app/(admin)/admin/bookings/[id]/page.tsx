@@ -4,13 +4,14 @@ import { ChevronRight } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import type { AdminRole } from "@/app/generated/prisma/client";
-import { canViewBookings } from "@/lib/admin/rbac";
+import { canViewBookings, canManageBookingNotes } from "@/lib/admin/rbac";
 import { ENTITY_TYPES } from "@/lib/admin/audit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   CAPITAL_CITY_LABELS,
   type AustralianCapitalCity,
 } from "@/lib/validations/booking";
+import { BookingNotesSection } from "@/components/admin/booking-notes";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,8 @@ export default async function AdminBookingDetailPage({
   const actorRole = session.user.adminRole as AdminRole;
   if (!canViewBookings(actorRole)) redirect("/dashboard");
 
+  const canManageNotes = canManageBookingNotes(actorRole);
+
   const { id } = await params;
 
   const booking = await prisma.booking.findUnique({
@@ -122,6 +125,15 @@ export default async function AdminBookingDetailPage({
         },
         orderBy: { createdAt: "desc" },
       },
+      adminNotes: {
+        select: {
+          id: true,
+          note: true,
+          createdAt: true,
+          adminUser: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
@@ -143,10 +155,8 @@ export default async function AdminBookingDetailPage({
         orderBy: { createdAt: "desc" },
       });
 
-  // No booking mutation routes exist yet (Phase B1 is read-only), so no
-  // AdminLog row has ever been written with entityType: ENTITY_TYPES.BOOKING.
-  // Wired up ahead of Phase B2 — will be empty until a mutation route calls
-  // writeAuditLog with this entityType.
+  // Populated once an admin note is added below (Phase B2a) — each
+  // note-add call also writes one of these entries.
   const auditLog = await prisma.adminLog.findMany({
     where: { entityType: ENTITY_TYPES.BOOKING, entityId: booking.id },
     select: {
@@ -361,6 +371,25 @@ export default async function AdminBookingDetailPage({
         </CardContent>
       </Card>
 
+      {/* Internal notes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Internal Notes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BookingNotesSection
+            bookingId={booking.id}
+            notes={booking.adminNotes.map((n) => ({
+              id: n.id,
+              note: n.note,
+              createdAt: n.createdAt.toISOString(),
+              adminUser: n.adminUser,
+            }))}
+            canManage={canManageNotes}
+          />
+        </CardContent>
+      </Card>
+
       {/* Audit log */}
       <Card>
         <CardHeader>
@@ -369,9 +398,7 @@ export default async function AdminBookingDetailPage({
         <CardContent>
           {auditLog.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No admin actions recorded for this booking. Booking mutations are not
-              yet implemented (Phase B1 is read-only) — this section is wired up
-              ahead of Phase B2.
+              No admin actions recorded for this booking yet.
             </p>
           ) : (
             <div className="overflow-x-auto">

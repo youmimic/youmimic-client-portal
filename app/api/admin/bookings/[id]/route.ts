@@ -44,6 +44,15 @@ const BOOKING_DETAIL_SELECT = {
     },
     orderBy: { createdAt: "desc" as const },
   },
+  adminNotes: {
+    select: {
+      id: true,
+      note: true,
+      createdAt: true,
+      adminUser: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: { createdAt: "desc" as const },
+  },
 } satisfies Prisma.BookingSelect;
 
 export async function GET(
@@ -88,9 +97,8 @@ export async function GET(
         orderBy: { createdAt: "desc" },
       });
 
-  // No booking mutation routes exist yet (Phase B1 is read-only), so no
-  // AdminLog row has ever been written with entityType: ENTITY_TYPES.BOOKING.
-  // This query is wired up for Phase B2 and will return [] until then.
+  // Populated once an admin note is added via POST /api/admin/bookings/[id]/notes
+  // (Phase B2a) — each note-add call also writes one of these entries.
   const auditLog = await prisma.adminLog.findMany({
     where: { entityType: ENTITY_TYPES.BOOKING, entityId: booking.id },
     select: {
@@ -128,6 +136,12 @@ export async function GET(
     payments: booking.payments.map((p) => ({
       ...p,
       createdAt: p.createdAt.toISOString(),
+    })),
+    adminNotes: booking.adminNotes.map((n) => ({
+      id: n.id,
+      note: n.note,
+      createdAt: n.createdAt.toISOString(),
+      adminUser: n.adminUser,
     })),
     subscriptionContext: subscription
       ? { planType: subscription.planType, status: subscription.status }

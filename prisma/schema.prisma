@@ -61,6 +61,7 @@ model User {
   emailLogs               EmailLog[]
   adminLogs               AdminLog[]        @relation("AdminUser")
   adminLogsAsTarget       AdminLog[]        @relation("AdminLogTarget")
+  bookingNotesAuthored    BookingNote[]
 
   @@map("users")
 }
@@ -282,10 +283,29 @@ model Booking {
   enterprise   Enterprise? @relation(fields: [enterpriseId], references: [id])
   payments     Payment[]
   participants BookingCaptureParticipant[]
+  adminNotes   BookingNote[]
 
   @@index([userId])
   @@index([enterpriseId])
   @@map("bookings")
+}
+
+// Internal, admin-only annotations on a booking — distinct from Booking.notes
+// (customer-facing, set on the booking form). Append-only: notes are never
+// edited or deleted, so this table doubles as its own history/audit trail.
+model BookingNote {
+  id          String   @id @default(cuid())
+  bookingId   String
+  adminUserId String
+  note        String
+  createdAt   DateTime @default(now())
+
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  adminUser User    @relation(fields: [adminUserId], references: [id])
+
+  @@index([bookingId])
+  @@index([adminUserId])
+  @@map("booking_notes")
 }
 
 model BookingCaptureParticipant {

@@ -131,3 +131,15 @@ export const listBookingsQuerySchema = z.object({
 });
 
 export type ListBookingsQuery = z.infer<typeof listBookingsQuerySchema>;
+
+// Internal admin note on a booking — required, capped generously since these
+// are free-text support annotations (not a short "reason" field).
+export const addBookingNoteSchema = z.object({
+  note: z
+    .string()
+    .trim()
+    .min(1, "Note is required")
+    .max(2000, "Note must be 2000 characters or less"),
+});
+
+export type AddBookingNoteInput = z.infer<typeof addBookingNoteSchema>;
