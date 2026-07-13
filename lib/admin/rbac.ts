@@ -65,8 +65,15 @@ export function canViewBookings(role: AdminRoleValue): boolean {
 }
 
 // Phase B2a: internal notes are append-only (no edit/delete), so this is
-// deliberately a separate, narrower permission from a future canManageBookings
-// (status/field mutations) rather than reusing one blanket "manage" flag.
+// deliberately a separate, narrower permission from canManageBookings below
+// (status transitions) rather than reusing one blanket "manage" flag.
 export function canManageBookingNotes(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}
+
+// Phase B2b: explicit status-transition actions only (cancel/confirm) — no
+// generic "update any field" capability exists, so this permission gates a
+// deliberately narrow write surface, not a full booking-edit capability.
+export function canManageBookings(role: AdminRoleValue): boolean {
   return hasMinRole(role, "ADMIN");
 }

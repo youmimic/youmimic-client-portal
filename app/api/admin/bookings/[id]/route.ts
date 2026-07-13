@@ -97,8 +97,8 @@ export async function GET(
         orderBy: { createdAt: "desc" },
       });
 
-  // Populated once an admin note is added via POST /api/admin/bookings/[id]/notes
-  // (Phase B2a) — each note-add call also writes one of these entries.
+  // Populated by internal notes (Phase B2a) and status actions (Phase B2b) —
+  // each write to either surface also writes one of these entries.
   const auditLog = await prisma.adminLog.findMany({
     where: { entityType: ENTITY_TYPES.BOOKING, entityId: booking.id },
     select: {

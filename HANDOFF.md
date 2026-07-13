@@ -1,5 +1,81 @@
 # HANDOFF.md
 
+## Session: Admin Bookings Phase B2b — status actions — 2026-07-13
+
+### What was inspected before implementing
+
+- `app/api/bookings/[id]/cancel/route.ts` (customer-facing) — the existing transition guard: `cancelled` is terminal (409 if already cancelled), `completed` bookings cannot be cancelled (409). Reused this exact guard logic for the admin override rather than inventing new rules.
+- `components/dashboard/booking-actions.tsx` — confirmed `EDITABLE_STATUSES = ["pending", "confirmed"]` gates the customer's own edit/cancel UI, and that this is a client-only display gate, not a server enforcement mechanism the new admin routes need to interact with.
+- **Searched the whole codebase for any existing write to `status: "confirmed"` or `status: "completed"`— found none.** Every `Booking` row is created with the schema default (`pending`); the only status-mutating code path anywhere is the customer cancel route (→ `cancelled`). This means `confirmed` and `completed` have been unreachable enum values since the schema was written — this milestone's `confirm` action is the **first code path in the app to ever set a booking to `confirmed`**, which strongly validates the recommendation's premise that this was genuinely missing functionality, not a redundant one.
+
+### Scope decision: cancel + confirm only, no reopen
+
+The prompt offered a conditional third action — reopen/restore — "only if the status model naturally supports it." It doesn't, cleanly:
+- No existing code path anywhere transitions a booking *backward* (e.g., `cancelled → pending`), so there's no established precedent to extend.
+- Reopening a cancelled booking whose `requestedDate` has since passed, or whose capture slot may since have been reallocated, is a real business-rule question this session has no basis to answer — exactly the kind of "unresolved business rule" the handoff's enterprise-member-access note already warns against guessing at.
+
+**Decision: implemented only `cancel` and `confirm`.** Reopen/restore is explicitly not implemented — flagged below as a question for the user, not silently skipped.
+
+Also **not implemented**: a `complete` / "mark as completed" action. It wasn't requested in this prompt, and — despite `completed` being just as unreachable as `confirmed` was — adding an unrequested third action would have violated "keep it intentionally narrow." Flagged as a natural, low-risk candidate for a future micro-milestone (same shape as `confirm`, valid only from `confirmed`).
+
+### RBAC
+
+`lib/admin/rbac.ts` — added `canManageBookings(role)`, `ADMIN` minimum. Kept deliberately separate from `canManageBookingNotes` (Phase B2a) — notes are append-only and much lower-risk than a real status transition, so the two permissions can diverge later without a breaking rename.
+
+### Validation
+
+`lib/validations/admin.ts` — added `bookingStatusActionSchema` (`{ reason: string, 1-500 chars, required }`), shared by both new routes — same shape as `suspendUserSchema`, kept as its own named export per the existing one-schema-per-action-family convention in this file.
+
+(Also fixed a duplicate `AddBookingNoteInput` type export left over from the previous session while in this file — cosmetic, `tsc` caught it immediately.)
+
+### API routes added
+
+**`POST /api/admin/bookings/[id]/cancel`** and **`POST /api/admin/bookings/[id]/confirm`** — both follow the identical shape: `auth()` → `canManageBookings` RBAC (401/403) → Zod-validated `{ reason }` body (422) → fetch current status → transition guard (409 on any invalid transition, with a specific message per case) → single `booking.update` → `writeAuditLog` (`entityType: ENTITY_TYPES.BOOKING`, `action: "cancel_booking"` / `"confirm_booking"`, `reason`) → `revalidatePath("/dashboard/bookings")` (admin-triggered changes affect the customer's own dashboard) → `{ success: true, id, status }`.
+
+**Valid transitions:** `confirm`: `pending → confirmed` only. `cancel`: `pending → cancelled` or `confirmed → cancelled` (matches the customer-facing route exactly). Every other starting status returns a specific 409, never a generic error.
+
+**Concurrency note (deliberate, matches existing convention):** these use plain read-then-write, not an atomic `updateMany` claim (the pattern used in `lib/invites/accept-invite.ts` for a public, double-click-prone flow). Every existing admin mutation route in this codebase (`resend-invite`, `cancel-invite`, `suspend`, etc.) uses the same simple pattern — admin actions triggered once from a confirmation dialog don't have the same race profile as a public email-link flow, so matching existing convention here over introducing a new pattern inconsistently.
+
+### UI changes
+
+- `components/admin/booking-status-actions.tsx` (new, client) — `BookingStatusActions`: renders a "Confirm booking" button (only when `status === "pending"`) and/or a "Cancel booking" button (only when `status` is `pending` or `confirmed`; destructive-styled), each opening a small reason-required dialog — same `Dialog`/`Label`/`Textarea` pattern as `TransferOwnershipAction` in `components/admin/enterprise-actions.tsx`. Renders nothing if `!canManage` or if the booking is in a terminal state (`cancelled`/`completed`).
+- `app/(admin)/admin/bookings/[id]/page.tsx` — added `canManageBookings` check, rendered `BookingStatusActions` at the bottom of the "Booking Summary" card. Updated the Audit Log section's comment (now populated by both B2a notes and B2b status actions, not just notes).
+- `app/api/admin/bookings/[id]/route.ts` — same comment update for consistency.
+
+### What did NOT change
+
+- No generic "update booking" endpoint or form.
+- No date/time reassignment, participant edits, enterprise reassociation, or payment overrides — all explicitly deferred per the prompt.
+- No reopen/restore action, no mark-complete action (see scope decision above).
+- `app/(admin)/admin/bookings/page.tsx` (list page) — untouched.
+- No changes to the customer-facing `/api/bookings/*` routes.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean (one self-inflicted duplicate-export error from this
+                     session's own edit, fixed immediately)
+npm run build     → clean; 2 new routes: /api/admin/bookings/[id]/cancel ƒ,
+                     /api/admin/bookings/[id]/confirm ƒ
+```
+
+### Manual verification
+
+No admin credentials available in this environment (same limitation as every prior admin-phase session).
+
+1. **HTTP-level RBAC smoke test** (`npm run start` + curl, unauthenticated): both `POST /api/admin/bookings/<id>/cancel` and `.../confirm` → `401 {"error":"Unauthorized"}` (not 500).
+2. **Live-DB transition-guard test** — learned from the previous session (B2a) that touching any real user/admin/booking, even transiently, gets correctly blocked by this environment's safety classifier. Used **fully disposable fixtures throughout** (a test user, a test admin, and a test booking — all created and deleted by the same script, never a real account or real booking): walked the disposable booking through `pending → confirmed → cancelled`, confirmed each of the four invalid-transition guards returns its exact expected error message (re-confirm, re-cancel, confirm-a-cancelled-booking), confirmed the paired `AdminLog` writes land with `entityType: "booking"`, then deleted the booking, the two audit rows, and both test accounts. No real data was ever touched.
+
+### Recommended next milestone
+
+Options, not yet started:
+- **Mark-complete action** — same shape as `confirm`, valid only from `confirmed → completed`. Lowest-risk remaining status action since `completed` is (like `confirmed` was) currently unreachable.
+- **Reopen/restore** — genuinely needs a product decision first (see scope decision above), not an engineering one. Surface to the user rather than guessing.
+- Field-level edits (date/time, participants, enterprise reassociation, payment overrides) — still correctly deferred; the handoff's "enterprise member non-owner bookings access" question remains open and should be resolved before any of these.
+
+---
+
 ## Session: Admin Bookings Phase B2a — internal notes — 2026-07-13
 
 ### Why this milestone, and why not the others

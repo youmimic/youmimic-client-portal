@@ -143,3 +143,16 @@ export const addBookingNoteSchema = z.object({
 });
 
 export type AddBookingNoteInput = z.infer<typeof addBookingNoteSchema>;
+
+// Shared by both admin booking status-transition routes (cancel, confirm) —
+// same shape as suspendUserSchema (reason required), kept as its own named
+// export since it's a distinct concern.
+export const bookingStatusActionSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Reason is required")
+    .max(500, "Reason must be 500 characters or less"),
+});
+
+export type BookingStatusActionInput = z.infer<typeof bookingStatusActionSchema>;

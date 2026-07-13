@@ -4,7 +4,11 @@ import { ChevronRight } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import type { AdminRole } from "@/app/generated/prisma/client";
-import { canViewBookings, canManageBookingNotes } from "@/lib/admin/rbac";
+import {
+  canViewBookings,
+  canManageBookingNotes,
+  canManageBookings,
+} from "@/lib/admin/rbac";
 import { ENTITY_TYPES } from "@/lib/admin/audit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,6 +16,7 @@ import {
   type AustralianCapitalCity,
 } from "@/lib/validations/booking";
 import { BookingNotesSection } from "@/components/admin/booking-notes";
+import { BookingStatusActions } from "@/components/admin/booking-status-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +86,7 @@ export default async function AdminBookingDetailPage({
   if (!canViewBookings(actorRole)) redirect("/dashboard");
 
   const canManageNotes = canManageBookingNotes(actorRole);
+  const canManageStatus = canManageBookings(actorRole);
 
   const { id } = await params;
 
@@ -155,8 +161,8 @@ export default async function AdminBookingDetailPage({
         orderBy: { createdAt: "desc" },
       });
 
-  // Populated once an admin note is added below (Phase B2a) — each
-  // note-add call also writes one of these entries.
+  // Populated by internal notes (Phase B2a) and status actions (Phase B2b) —
+  // each write to either surface also writes one of these entries.
   const auditLog = await prisma.adminLog.findMany({
     where: { entityType: ENTITY_TYPES.BOOKING, entityId: booking.id },
     select: {
@@ -248,6 +254,13 @@ export default async function AdminBookingDetailPage({
                 day: "numeric",
               })}
             />
+            <div className="pt-1">
+              <BookingStatusActions
+                bookingId={booking.id}
+                status={booking.status}
+                canManage={canManageStatus}
+              />
+            </div>
           </CardContent>
         </Card>
 
