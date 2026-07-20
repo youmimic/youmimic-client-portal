@@ -1,5 +1,71 @@
 # HANDOFF.md
 
+## Session: Admin Subscriptions module (Phases 1–3, read-only) — 2026-07-20
+
+### What was inspected before implementing
+
+Given a detailed implementation prompt for this module, inspected the live codebase before writing anything, per this repo's own working method:
+
+- `prisma/schema.prisma` — confirmed `Subscription.stripeCustomerId` is non-unique (plain index only, from an earlier session this same day), `stripeSubscriptionId` is the sole unique per-subscription key, and `AdminRole` is `SUPER_ADMIN | ADMIN | BILLING_ADMIN`.
+- `lib/admin/rbac.ts` — found that **`BILLING_ADMIN` currently grants zero capability anywhere in the app**: it's ranked below `ADMIN` in the role hierarchy, and every existing `canView*`/`canManage*` helper requires `ADMIN` minimum. The `(admin)` route group layout only checks "has *any* adminRole" to allow shell access, so a `BILLING_ADMIN` could already see the sidebar but every page blocked them. Flagged this to the user before proceeding — the answer: this module is `BILLING_ADMIN`'s first real capability (view-only).
+- `app/api/admin/enterprises/route.ts`, `app/api/admin/bookings/route.ts` and `[id]/route.ts` — confirmed the canonical list/detail response shapes (`items`/`page`/`pageSize`/`totalItems`/`totalPages` for lists; explicit `select`, ISO-stringified dates, and an `adminLog.findMany({entityType, entityId})` query for the detail page's audit section).
+- `app/(dashboard)/dashboard/billing/page.tsx` — found this page **already surfaces payment-failure state to customers** (a `StatusBadge` with distinct amber/red styling for `PAST_DUE`/`UNPAID`) — corrects an assumption in the original prompt that this wasn't surfaced anywhere yet. It just wasn't surfaced in *admin* UI. Extracted this page's badge logic into a shared component instead of duplicating it (see below).
+- `lib/admin/audit.ts` — no `SUBSCRIPTION` entity type existed yet.
+- Confirmed no code anywhere in the app calls `stripe.subscriptions.retrieve/cancel/update` — a live-Stripe-write action (sync/cancel) would be genuinely new ground, not an established pattern. Flagged this too.
+
+### Scope decision
+
+Two things were confirmed with the user before implementing, given the prompt's own instruction to stop and ask on real ambiguity:
+1. **`BILLING_ADMIN` can view subscriptions** (its first real permission in this app); managing (once a write action exists) stays at `ADMIN` minimum, matching every other write permission in the codebase.
+2. **v1 stops at Phase 3 (read-only)** — no `sync`/`cancel` write actions. Given zero precedent for live Stripe subscription mutations anywhere in this codebase, that's a deliberately separate, later piece of work.
+
+### What changed
+
+1. **`components/billing/status-badges.tsx`** (new) — `PlanBadge`, `StatusBadge` (subscription status), `PaymentStatusBadge` extracted out of the customer billing page so the admin module reuses the exact same colors/labels instead of a second, potentially-drifting copy.
+2. **`app/(dashboard)/dashboard/billing/page.tsx`** — updated to import the extracted badges; no behavior change (output-identical).
+3. **`lib/admin/rbac.ts`** — added `canViewSubscriptions` (`BILLING_ADMIN` minimum). No `canManageSubscriptions` yet — deliberately not adding a permission helper for a write surface that doesn't exist.
+4. **`lib/admin/audit.ts`** — added `SUBSCRIPTION: "subscription"` to `ENTITY_TYPES`, same "registered ahead of the write action that will use it" pattern as `BOOKING` before Phase B2.
+5. **`lib/validations/admin.ts`** — added `listSubscriptionsQuerySchema`, reusing the already-exported `PLAN_TYPES`/`SUBSCRIPTION_STATUSES` constants (added `BILLING_OWNER_TYPES` for the owner-type filter, mirroring `BillingOwnerType`).
+6. **`app/api/admin/subscriptions/route.ts`** (new) — `GET`, paginated/searchable/filterable list. Search matches `stripeSubscriptionId`, `stripeCustomerId`, owner email, or enterprise name — a list filter, not a single-record lookup, so matching multiple rows against a non-unique `stripeCustomerId` is correct, not a violation of the "never identify by customer ID alone" rule (that rule is about detail/action routes, which are keyed on `Subscription.id`).
+7. **`app/api/admin/subscriptions/[id]/route.ts`** (new) — `GET` detail: identifiers, plan/status/ownership, linked user or enterprise summary, up to 20 recent `Payment` rows, up to 20 recent audit log rows (empty today, same reasoning as `SUBSCRIPTION` entity type above).
+8. **`components/admin/admin-shell.tsx`** — added "Subscriptions" nav item (not role-gated at the shell level, matching how every other nav item works — RBAC is enforced at the page/route level).
+9. **`app/(admin)/admin/subscriptions/page.tsx`** (new) — client list page: debounced search, status/plan/owner-type filters, pagination — same structural pattern as `admin/users` and `admin/enterprises`.
+10. **`app/(admin)/admin/subscriptions/[id]/page.tsx`** (new) — server-rendered detail page: Subscription Summary, Ownership, Billing Identifiers, Recent Payments, Audit Log — same pattern as `admin/enterprises/[id]` and `admin/bookings/[id]`.
+
+### What did NOT change
+
+- No write/action routes (`sync`, `cancel`) — explicitly out of scope for this pass.
+- No `canManageSubscriptions` RBAC helper — nothing to gate yet.
+- No changes to `stripeCustomerId`/`stripeSubscriptionId` handling, no new admin flow identifies or mutates a subscription by `stripeCustomerId` alone.
+- No schema changes at all — this module is 100% additive on the existing `Subscription`/`Payment`/`AdminLog` tables.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 4 new routes: /admin/subscriptions, /admin/subscriptions/[id],
+                     /api/admin/subscriptions, /api/admin/subscriptions/[id]
+```
+
+### Manual verification (Playwright, headless Chromium)
+
+- Logged in as an existing `SUPER_ADMIN` test account, confirmed the nav link, list page, filters, and detail page all render with zero console errors.
+- **Directly verified the core correctness requirement this module exists for**: searched the list by a `stripeCustomerId` shared by two concurrent subscriptions (from the earlier reconciliation backfill) — correctly returned both as two distinct rows with two distinct `stripeSubscriptionId`s, both properly attributed to their owning enterprise. Confirms the list/detail routes handle the non-unique-customer-ID reality correctly.
+- Detail page correctly renders all 5 sections (Summary, Ownership, Billing Identifiers, Recent Payments, Audit Log) with correct data for both a user-owned and an enterprise-owned subscription.
+
+### Unresolved issues
+
+1. No `sync`/`cancel` write actions — deliberately deferred (see scope decision above). Recommended order per the original prompt if/when this is picked up: `sync` (safest, read-from-Stripe-only) before `cancel`.
+2. `canManageSubscriptions` doesn't exist yet — add it alongside the first write route, not before.
+3. The existing `enterprises` list/detail routes and the customer billing page still use a `subscriptions: { take: 1, orderBy: desc }` "most recent only" simplification predating multi-subscription-per-customer support — not a bug, but the new Subscriptions module is now the only place an admin can see *all* of an enterprise's concurrent subscriptions at once. Worth knowing when support requests come in about a discrepancy between what the Enterprises page summarizes and what Subscriptions shows in full.
+
+### Recommended next milestone
+
+Payment-failure visibility as a dedicated admin surface (flagged as a possible next step in the previous session) now has a natural home — the Subscriptions list already filters by `status`, so `PAST_DUE`/`UNPAID` are already one filter click away. A first small addition could be a "needs attention" default view or count, without yet building the `sync`/`cancel` write actions.
+
+---
+
 ## Session: Stripe subscription reconciliation — 2026-07-20
 
 ### What was inspected

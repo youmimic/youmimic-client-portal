@@ -14,6 +14,11 @@ export const ENTITY_TYPES = {
   // value yet — Phase B1 is read-only — so this query always returns empty
   // until B2 ships an admin action that calls writeAuditLog with it.
   BOOKING: "booking",
+  // Same situation as BOOKING above: the admin subscriptions module is
+  // read-only in v1 (no sync/cancel routes yet), so nothing writes this
+  // value today — registered now so the detail page's audit log query is
+  // already correct once a write action exists.
+  SUBSCRIPTION: "subscription",
 } as const;
 
 interface AuditLogInput {

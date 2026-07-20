@@ -77,3 +77,12 @@ export function canManageBookingNotes(role: AdminRoleValue): boolean {
 export function canManageBookings(role: AdminRoleValue): boolean {
   return hasMinRole(role, "ADMIN");
 }
+
+// Subscriptions — read-only in v1 (no manage/write routes exist yet, so no
+// canManageSubscriptions helper is defined until one is actually needed).
+// BILLING_ADMIN minimum, not ADMIN: every other view permission in this file
+// requires ADMIN, but BILLING_ADMIN otherwise has no capability anywhere in
+// the app today — this is its first real one, and it fits the role's name.
+export function canViewSubscriptions(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "BILLING_ADMIN");
+}

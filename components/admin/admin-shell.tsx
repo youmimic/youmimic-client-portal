@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Building2,
   CalendarDays,
+  CreditCard,
   LayoutDashboard,
   Menu,
   ShieldCheck,
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/admin/users", label: "Users", icon: Users, exact: false },
   { href: "/admin/enterprises", label: "Enterprises", icon: Building2, exact: false },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays, exact: false },
+  { href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard, exact: false },
 ];
 
 type SidebarContentProps = {

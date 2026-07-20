@@ -66,6 +66,32 @@ export const listEnterprisesQuerySchema = z.object({
 
 export type ListEnterprisesQuery = z.infer<typeof listEnterprisesQuerySchema>;
 
+// Mirrors the BillingOwnerType enum in prisma/schema.prisma.
+export const BILLING_OWNER_TYPES = ["USER", "ENTERPRISE"] as const;
+const OWNER_TYPE_FILTER = [...BILLING_OWNER_TYPES, "all"] as const;
+
+// Reuses PLAN_TYPES / SUBSCRIPTION_STATUSES above (not the enterprises-only
+// *_FILTER consts, which include a "none" value that means "no subscription
+// at all" — meaningless when listing subscriptions themselves).
+const SUB_PLAN_TYPE_FILTER = [...PLAN_TYPES, "all"] as const;
+const SUB_STATUS_FILTER = [...SUBSCRIPTION_STATUSES, "all"] as const;
+
+export const listSubscriptionsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  // Matches stripeSubscriptionId, stripeCustomerId, owner email, or
+  // enterprise name — a read-only list filter, not a single-record lookup,
+  // so matching multiple rows against a non-unique stripeCustomerId is safe.
+  search: z.string().max(200).optional(),
+  status: z.enum(SUB_STATUS_FILTER).default("all"),
+  planType: z.enum(SUB_PLAN_TYPE_FILTER).default("all"),
+  ownerType: z.enum(OWNER_TYPE_FILTER).default("all"),
+  sortBy: z.enum(["createdAt", "currentPeriodEnd", "status"]).default("createdAt"),
+  sortOrder: z.enum(["asc", "desc"]).default("desc"),
+});
+
+export type ListSubscriptionsQuery = z.infer<typeof listSubscriptionsQuerySchema>;
+
 // Enterprise ownership transfer — reason required (surfaced in the audit log
 // and to the new/old owner if we ever notify them).
 export const transferOwnerSchema = z.object({
