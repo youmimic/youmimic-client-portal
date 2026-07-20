@@ -38,6 +38,18 @@ function customerId(
   return typeof val === "string" ? val : val.id;
 }
 
+// A Stripe customer can hold more than one concurrent subscription (a base
+// plan plus a separate seats add-on, for example), so stripeCustomerId alone
+// is not enough to identify which local row a webhook event is about —
+// every handler below resolves the specific stripeSubscriptionId first and
+// only falls back to stripeCustomerId for the still-unlinked placeholder row
+// created at checkout time (see app/api/stripe/checkout-session/route.ts).
+function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const details = invoice.parent?.subscription_details?.subscription;
+  if (!details) return null;
+  return typeof details === "string" ? details : details.id;
+}
+
 // ---------------------------------------------------------------------------
 // Handler helpers
 // ---------------------------------------------------------------------------
@@ -54,7 +66,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const planType = toPlanType(session.metadata?.planType);
 
   await prisma.subscription.updateMany({
-    where: { stripeCustomerId: cid },
+    where: {
+      stripeCustomerId: cid,
+      OR: [{ stripeSubscriptionId: null }, { stripeSubscriptionId: subId }],
+    },
     data: {
       stripeSubscriptionId: subId ?? undefined,
       planType,
@@ -86,28 +101,41 @@ async function handleSubscriptionUpsert(sub: Stripe.Subscription) {
   const canceledAt = sub.canceled_at ? new Date(sub.canceled_at * 1000) : null;
   const trialEndsAt = sub.trial_end ? new Date(sub.trial_end * 1000) : null;
 
-  await prisma.subscription.updateMany({
-    where: { stripeCustomerId: cid },
-    data: {
-      stripeSubscriptionId: sub.id,
-      status: toStatus(sub.status),
-      stripePriceId: priceId,
-      stripeProductId: productId,
-      currentPeriodStart: periodStart ?? undefined,
-      currentPeriodEnd: periodEnd ?? undefined,
-      cancelAtPeriodEnd: sub.cancel_at_period_end,
-      canceledAt,
-      trialEndsAt,
-    },
+  const data = {
+    stripeSubscriptionId: sub.id,
+    status: toStatus(sub.status),
+    stripePriceId: priceId,
+    stripeProductId: productId,
+    currentPeriodStart: periodStart ?? undefined,
+    currentPeriodEnd: periodEnd ?? undefined,
+    cancelAtPeriodEnd: sub.cancel_at_period_end,
+    canceledAt,
+    trialEndsAt,
+  };
+
+  const matched = await prisma.subscription.updateMany({
+    where: { stripeSubscriptionId: sub.id },
+    data,
   });
+
+  // Not linked locally yet (e.g. first activation) — claim the still-unlinked
+  // placeholder row for this customer instead of matching every row it owns.
+  if (matched.count === 0) {
+    await prisma.subscription.updateMany({
+      where: { stripeCustomerId: cid, stripeSubscriptionId: null },
+      data,
+    });
+  }
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
   const cid = customerId(invoice.customer);
   if (!cid) return;
 
+  const subId = invoiceSubscriptionId(invoice);
+
   const localSub = await prisma.subscription.findFirst({
-    where: { stripeCustomerId: cid },
+    where: subId ? { stripeSubscriptionId: subId } : { stripeCustomerId: cid },
     orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
@@ -131,8 +159,10 @@ async function handleInvoiceFailed(invoice: Stripe.Invoice) {
   const cid = customerId(invoice.customer);
   if (!cid) return;
 
+  const subId = invoiceSubscriptionId(invoice);
+
   await prisma.subscription.updateMany({
-    where: { stripeCustomerId: cid },
+    where: subId ? { stripeSubscriptionId: subId } : { stripeCustomerId: cid },
     data: { status: SubscriptionStatus.PAST_DUE },
   });
 }

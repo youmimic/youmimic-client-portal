@@ -1,5 +1,68 @@
 # HANDOFF.md
 
+## Session: Stripe subscription reconciliation — 2026-07-20
+
+### What was inspected
+
+- `prisma/schema.prisma` — `Subscription.stripeCustomerId` was `@unique`, which assumes one Stripe customer can hold at most one subscription. A round of manual reconciliation against a Stripe export (12 historical subscriptions, done earlier this session outside the repo) surfaced a real account where that assumption doesn't hold: one legacy Stripe customer has two concurrent active subscriptions (a base plan plus a separate seats add-on).
+- `app/api/stripe/checkout-session/route.ts` — confirmed the app's own checkout flow only ever creates **one** `Subscription` row per user/enterprise (it reuses an existing row's `stripeCustomerId` on repeat checkouts rather than creating a second). The two-concurrent-subscriptions case can currently only arise from legacy/external data, not from the app's own purchase flow — useful scoping context for why this hadn't surfaced before.
+- `app/api/stripe/webhook/route.ts` — all four handlers (`handleCheckoutCompleted`, `handleSubscriptionUpsert`, `handleInvoicePaid`, `handleInvoiceFailed`) matched local rows by `stripeCustomerId` alone. Relaxing the uniqueness constraint without fixing this would have meant any webhook event for a multi-subscription customer silently overwrote *every* subscription that customer owns with one event's data — a live-data-corruption bug, not just a schema gap.
+- `app/api/admin/enterprises/[id]/transfer-owner/route.ts` — the existing admin "transfer ownership" feature: requires the new owner to already be a member of the enterprise, flips only `Enterprise.ownerUserId`, and does **not** touch either party's `EnterpriseMember.roleId`. Replicated this exact behavior in the backfill script below rather than inventing a "cleaner" version — the former owner's membership row still shows `role: owner` after transfer, which is a pre-existing quirk of the real feature, not something introduced here.
+- `node_modules/stripe` (v22) type definitions — confirmed `Invoice.subscription` moved to `invoice.parent.subscription_details.subscription` in this API version; used to fix the invoice-side webhook handlers.
+
+### What changed
+
+1. **`prisma/schema.prisma`** — additive/relaxing only:
+   - `User.stripeEmail String?` — records a known Stripe billing email for an account when it differs from the portal login email, without asserting they're provably the same identity. Same lightweight pattern as the earlier `heygenUserId` field.
+   - `Subscription.stripeCustomerId` — dropped `@unique`, added a plain `@@index([stripeCustomerId])` in its place so webhook lookups stay indexed. `stripeSubscriptionId` (already unique) is now the sole per-subscription identity key.
+   - Migration `20260720034315_add_stripe_email_and_relax_customer_uniqueness` — verified: one `DROP INDEX` (the old unique constraint), one `ADD COLUMN` (nullable), one `CREATE INDEX` (plain, replacing it). No data loss, no column drops.
+
+2. **`app/api/stripe/webhook/route.ts`** — all four handlers now resolve the specific `stripeSubscriptionId` first and only fall back to `stripeCustomerId` for the still-unlinked placeholder row created at checkout time:
+   - `handleCheckoutCompleted` — matches `stripeCustomerId` + (`stripeSubscriptionId IS NULL` or already equal to the incoming one), instead of blind `stripeCustomerId` alone.
+   - `handleSubscriptionUpsert` — tries `stripeSubscriptionId` first; only falls back to the customer's unlinked placeholder row if no match (first activation).
+   - `handleInvoicePaid` / `handleInvoiceFailed` — added `invoiceSubscriptionId()` helper (Stripe v22's `invoice.parent.subscription_details.subscription`), matches by that when present.
+
+3. **One-off data backfill** (script not committed — see "What did NOT change") applied directly against the database:
+   - Recorded a known Stripe billing email on one existing account's new `stripeEmail` field.
+   - Transferred ownership of one enterprise from its original HeyGen-derived owner to a newly created account matching who actually pays the Stripe bill (using the same precondition — new owner must already be a member — as the real transfer-ownership feature). The original owner remains a member.
+   - Created one new enterprise plus its owner account for a legacy Stripe customer who runs a small B2B setup (multiple concurrent avatar subscriptions billed to one card, purchased under separate Stripe customers).
+   - Backfilled 7 `Subscription` rows for the currently-active legacy Stripe subscriptions that now cleanly resolve to an owner (2 enterprise-owned rows sharing one Stripe customer — exactly the case the schema change above exists for; 3 more enterprise-owned rows for the B2B account, each its own distinct Stripe customer; 2 individually-owned rows for existing accounts). Each insert is idempotent on `stripeSubscriptionId`.
+   - The remaining 5 rows from the source export (all canceled, none with an existing portal account) were intentionally left out of this pass — they don't affect current billing state. Full detail in `updates/`.
+
+### What did NOT change
+
+- No GoCardless integration — confirmed out of scope; that pilot-phase system is being closed and its customers ported to Stripe, so no schema work was done for it.
+- No new avatar/user accounts were created for two people named on the B2B account's other subscriptions — no email address exists for them anywhere in the source data, so nothing was invented. Flagged as an open item below.
+- The backfill script itself is not committed to the repo — like the earlier HeyGen import, it embeds real customer emails and was run once from a scratch location, not added as a reusable tool.
+- No `AdminLog` entries were written for the ownership transfer or account creation — this was a direct data backfill, not a live admin action through the app, consistent with how the earlier HeyGen import was handled.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean
+```
+
+### Verification
+
+- Dry-run first (transaction opened, every insert/update logged, then rolled back) — matched the intended plan exactly before anything was committed.
+- Re-ran for real; committed transaction.
+- Read-only follow-up confirmed: enterprise ownership transferred correctly (former owner retained as member), the new B2B enterprise and its 3 subscriptions all resolve correctly, the two pre-existing test subscription rows were untouched, and all 7 new subscription rows show the expected owner/status/plan.
+
+### Unresolved issues
+
+1. Two people named on the B2B account's other subscriptions have no accounts — no email address available for either. Needs that contact info before accounts can be created.
+2. Test passwords (carried over from the earlier HeyGen import's convention) are still a standing exposure for every backfilled account — rotate before real use.
+3. The 5 canceled/churned Stripe rows from the export were not backfilled at all. Revisit if historical billing audit trail is ever needed.
+4. The known billing-email field (`User.stripeEmail`) is a manually-set, unindexed note — fine for this backfill, but if it's ever used programmatically (e.g. auto-matching future imports), it should get a uniqueness constraint and validation first.
+
+### Recommended next milestone
+
+Payment-failure visibility (mentioned this session but explicitly scoped out of it) — the webhook already flips a subscription to `PAST_DUE` on `invoice.payment_failed`, so the raw signal exists; it's just not surfaced anywhere in the admin or customer UI yet. Would need Stripe's invoice-level export (not just subscription-level) to reconstruct historical failures accurately.
+
+---
+
 ## Session: HeyGen workspace member import — 2026-07-20
 
 ### What was inspected

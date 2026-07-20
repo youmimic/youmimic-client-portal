@@ -53,6 +53,11 @@ model User {
   // HeyGen ahead of a future API integration. Not used for auth.
   heygenUserId     String?
 
+  // Email a payment processor (Stripe) has on file for this person, when it
+  // differs from their portal login email. Records a known correspondence
+  // without asserting it as the account's identity.
+  stripeEmail      String?
+
   userRoles               UserRole[]
   enterprises             Enterprise[]      @relation("EnterpriseOwner")
   enterpriseMembers       EnterpriseMember[]
@@ -155,7 +160,10 @@ model Subscription {
   enterpriseId         String?
 
   ownerType            BillingOwnerType
-  stripeCustomerId     String             @unique
+  // Not unique: a single Stripe customer can legitimately hold more than one
+  // concurrent subscription (e.g. a base plan plus a separate seats add-on).
+  // stripeSubscriptionId is the real per-subscription identity.
+  stripeCustomerId     String
   stripeSubscriptionId String?            @unique
   stripePriceId        String?
   stripeProductId      String?
@@ -181,6 +189,7 @@ model Subscription {
   @@index([ownerType])
   @@index([status])
   @@index([planType])
+  @@index([stripeCustomerId])
   @@map("subscriptions")
 }
 
