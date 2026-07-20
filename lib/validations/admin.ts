@@ -3,11 +3,21 @@ import { z } from "zod";
 export const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "BILLING_ADMIN"] as const;
 const ADMIN_ROLE_FILTER = [...ADMIN_ROLES, "all"] as const;
 
+// Not a Prisma enum — EnterpriseMember.roleId points at a Role row whose
+// `name` is one of these two strings (see lib/auth/register-user.ts and
+// app/api/invites/route.ts, the two places that upsert them).
+export const ENTERPRISE_MEMBER_ROLES = ["owner", "member"] as const;
+const ENTERPRISE_ROLE_FILTER = [...ENTERPRISE_MEMBER_ROLES, "all"] as const;
+
+export const USER_TYPE_FILTER = ["all", "admin", "enterprise"] as const;
+
 export const listUsersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().max(200).optional(),
+  userType: z.enum(USER_TYPE_FILTER).default("all"),
   adminRole: z.enum(ADMIN_ROLE_FILTER).default("all"),
+  enterpriseRole: z.enum(ENTERPRISE_ROLE_FILTER).default("all"),
   isSuspended: z.enum(["true", "false", "all"]).default("all"),
   sortBy: z.enum(["createdAt", "name", "email"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),

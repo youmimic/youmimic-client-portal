@@ -17,6 +17,18 @@ const USER_LIST_SELECT = {
   sessionVersion: true,
 } satisfies Prisma.UserSelect;
 
+// Only pulled in for the Enterprise User tab — a user can belong to more
+// than one enterprise, so this returns every membership rather than "the"
+// company.
+const ENTERPRISE_MEMBERSHIPS_SELECT = {
+  enterpriseMembers: {
+    select: {
+      enterprise: { select: { id: true, name: true } },
+      role: { select: { name: true } },
+    },
+  },
+} satisfies Prisma.UserSelect;
+
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) {
@@ -41,8 +53,17 @@ export async function GET(req: Request) {
     );
   }
 
-  const { page, pageSize, search, adminRole: roleFilter, isSuspended, sortBy, sortOrder } =
-    parsed.data;
+  const {
+    page,
+    pageSize,
+    search,
+    userType,
+    adminRole: roleFilter,
+    enterpriseRole,
+    isSuspended,
+    sortBy,
+    sortOrder,
+  } = parsed.data;
 
   const where: Prisma.UserWhereInput = {};
 
@@ -53,8 +74,18 @@ export async function GET(req: Request) {
     ];
   }
 
+  // "All roles" within the Admin tab still means "any admin role", not
+  // "unfiltered" — only userType === "all" leaves adminRole untouched.
   if (roleFilter !== "all") {
     where.adminRole = roleFilter as AdminRole;
+  } else if (userType === "admin") {
+    where.adminRole = { not: null };
+  }
+
+  if (enterpriseRole !== "all") {
+    where.enterpriseMembers = { some: { role: { name: enterpriseRole } } };
+  } else if (userType === "enterprise") {
+    where.enterpriseMembers = { some: {} };
   }
 
   if (isSuspended !== "all") {
@@ -72,11 +103,16 @@ export async function GET(req: Request) {
 
   const skip = (page - 1) * pageSize;
 
+  const select =
+    userType === "enterprise"
+      ? { ...USER_LIST_SELECT, ...ENTERPRISE_MEMBERSHIPS_SELECT }
+      : USER_LIST_SELECT;
+
   const [total, users] = await Promise.all([
     prisma.user.count({ where }),
     prisma.user.findMany({
       where,
-      select: USER_LIST_SELECT,
+      select,
       orderBy: [primarySort, { id: "asc" }],
       skip,
       take: pageSize,
