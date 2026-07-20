@@ -49,6 +49,10 @@ model User {
   suspensionReason String?
   sessionVersion   Int        @default(1)
 
+  // External HeyGen workspace member ID, for reconciling accounts with
+  // HeyGen ahead of a future API integration. Not used for auth.
+  heygenUserId     String?
+
   userRoles               UserRole[]
   enterprises             Enterprise[]      @relation("EnterpriseOwner")
   enterpriseMembers       EnterpriseMember[]
@@ -115,6 +119,10 @@ model Enterprise {
   ownerUserId String
   status      String   @default("active")
   createdAt   DateTime @default(now())
+
+  // Raw HeyGen workspace identifier (e.g. "YM502_Concinnity"), preserved
+  // alongside the cleaned display name for a future HeyGen integration.
+  heygenWorkspaceId String?
 
   owner         User               @relation("EnterpriseOwner", fields: [ownerUserId], references: [id])
   members       EnterpriseMember[]

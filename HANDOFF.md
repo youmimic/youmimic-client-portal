@@ -1,5 +1,64 @@
 # HANDOFF.md
 
+## Session: HeyGen workspace member import — 2026-07-20
+
+### What was inspected
+
+- `prisma/schema.prisma` — `User` (email unique, `passwordHash`, `emailVerified`, `adminRole`), `Enterprise` (single `ownerUserId`), `EnterpriseMember` (`enterpriseId` + `userId` + `roleId`, unique per pair). Only two `Role` rows exist in practice: `"owner"` and `"member"` (both upserted lazily by `lib/auth/register-user.ts` / `app/api/invites/route.ts`).
+- `lib/auth/register-user.ts` — the only prior place `Enterprise` + owner `EnterpriseMember` get created together (BUSINESS signup path); used as the reference shape for this import instead of inventing new membership logic.
+- Confirmed there is no admin "create user directly" endpoint and no prior `scripts/` import convention in this repo — this session's data load was a new one-off pattern, not a rename of existing tooling.
+- Ran a read-only check against the live DB before writing anything: of 17 candidate accounts from the source CSV, exactly 1 already existed (an internal account, `adminRole: SUPER_ADMIN`, created 2026-06-28) — left untouched per explicit instruction, since overwriting an existing higher-privilege account's password/role was out of scope.
+
+### What changed
+
+1. **`prisma/schema.prisma`** — additive only:
+   - `User.heygenUserId String?` — external HeyGen workspace-member ID, for reconciling accounts ahead of a future HeyGen API integration. Not used for auth.
+   - `Enterprise.heygenWorkspaceId String?` — raw HeyGen workspace identifier (e.g. `"YM502_Concinnity"`), kept alongside the cleaned `Enterprise.name` display value.
+   - Migration `20260720011706_add_heygen_linkage_fields` — verified pure `ALTER TABLE ... ADD COLUMN` (nullable, no default), zero data-loss risk, zero impact on existing rows.
+
+2. **Data import (run once, not committed as a script — see below)** — created:
+   - 2 internal `AdminRole=SUPER_ADMIN` users (mapped from HeyGen's own-workspace "Super Admin"/"Developer" rows, per explicit instruction to treat the HeyGen org's own team as admin accounts rather than a client enterprise).
+   - 10 client `Enterprise` rows (one per HeyGen workspace, `heygenWorkspaceId` set to the raw workspace string, `name` cleaned of the `YM###_` prefix).
+   - 16 new `User` rows total across owners + members, each: `passwordHash` = bcrypt hash (cost 12) of a fixed test password, `emailVerified: true` (no verification email sent — explicit instruction not to notify anyone), `heygenUserId` set from the CSV's per-member ID where present (one invited-but-not-yet-active HeyGen member had none).
+   - 15 `EnterpriseMember` rows (10 owners + 5 additional members), reusing the existing `"owner"`/`"member"` roles.
+   - One user intentionally ended up with both `adminRole=SUPER_ADMIN` (owner-tier internal account) and ownership of one client enterprise — that person appeared in both groups in the source data; confirmed with the user before creating rather than silently picking one.
+   - Where a HeyGen workspace had two members with no owner distinction in the source data, the first-listed row per workspace became `Enterprise.ownerUserId` (explicit tie-break, confirmed with the user).
+
+### What did NOT change
+
+- The one pre-existing account matched by the CSV — completely untouched (no password/role/name overwrite).
+- No emails, notifications, or invite records were sent or created — accounts are set up silently, per instruction.
+- No new API route or reusable admin "bulk import" UI was built — this was a single data-migration pass, not a feature.
+- The import script itself (and the source CSV, which contains real client PII — names, emails) was run from a scratchpad location and **not committed to the repository**. Only the schema/migration change is committed. If this needs to become a repeatable process (e.g. for ongoing HeyGen sync), it should be rebuilt as a proper, non-PII-hardcoded, CSV-driven script — flagged below as a candidate next milestone.
+
+### Verification
+
+- Dry-run first (transaction opened, all inserts logged, then rolled back) — output matched the intended plan exactly (16 users, 10 enterprises, 15 memberships, 0 skips) before anything was committed.
+- Re-ran for real; committed transaction.
+- Read-only follow-up query confirmed: all 16 users exist with `emailVerified=true` and the expected `heygenUserId`/`adminRole` values; all 10 enterprises have the expected `heygenWorkspaceId` and owner; all 15 memberships have the expected role.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean
+```
+
+No UI surfaces this data yet beyond what already reads `User`/`Enterprise`/`EnterpriseMember` (admin users/enterprises pages, dashboard) — not separately re-verified this session since no UI code changed.
+
+### Unresolved issues
+
+1. **Test passwords are a standing security exposure** — every imported account currently shares one known password. Fine for short-lived internal testing; must be rotated (forced password reset, or re-invite through the real flow) before any of these accounts are used for anything beyond that.
+2. **No repeatable HeyGen sync process** — this was a one-off manual pass over a point-in-time CSV export. A real HeyGen API integration (using the existing `HEYGEN_API_KEY` env var, already present but unused elsewhere in the codebase) would need to handle create/update/de-provision on an ongoing basis, not just an initial backfill.
+3. **`heygenUserId`/`heygenWorkspaceId` are unindexed, nullable, free-text fields** — fine for a first pass; add a unique index once the integration actually reads/writes them programmatically, to prevent accidental duplicate linkage.
+
+### Recommended next milestone
+
+If HeyGen integration is the next real feature (not just this backfill), start there: decide the sync direction (HeyGen → portal, portal → HeyGen, or bidirectional), and whether `heygenUserId`/`heygenWorkspaceId` need uniqueness constraints before any automated write path uses them.
+
+---
+
 ## Session: Admin Bookings — mark-complete action — 2026-07-20
 
 ### What was inspected
