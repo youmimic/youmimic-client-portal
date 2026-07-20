@@ -21,7 +21,7 @@ const idle: ActionState = { loading: false, error: null };
 
 async function postStatusAction(
   bookingId: string,
-  endpoint: "cancel" | "confirm",
+  endpoint: "cancel" | "confirm" | "complete",
   reason: string,
 ): Promise<void> {
   const res = await fetch(`/api/admin/bookings/${bookingId}/${endpoint}`, {
@@ -117,24 +117,28 @@ export function BookingStatusActions({
   const router = useRouter();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
   const [state, setState] = useState<ActionState>(idle);
 
   if (!canManage) return null;
 
-  // Valid transitions only — cancelled is terminal, completed is terminal.
+  // Valid transitions only — cancelled and completed are terminal.
   // "confirm" is only meaningful from "pending"; "cancel" is valid from
-  // "pending" or "confirmed" (same rule as the customer-facing cancel route).
+  // "pending" or "confirmed" (same rule as the customer-facing cancel route);
+  // "complete" is only meaningful from "confirmed".
   const canConfirm = status === "pending";
   const canCancel = status === "pending" || status === "confirmed";
+  const canComplete = status === "confirmed";
 
-  if (!canConfirm && !canCancel) return null;
+  if (!canConfirm && !canCancel && !canComplete) return null;
 
-  async function runAction(endpoint: "cancel" | "confirm", reason: string) {
+  async function runAction(endpoint: "cancel" | "confirm" | "complete", reason: string) {
     setState({ loading: true, error: null });
     try {
       await postStatusAction(bookingId, endpoint, reason);
       setConfirmOpen(false);
       setCancelOpen(false);
+      setCompleteOpen(false);
       setState(idle);
       router.refresh();
     } catch (e) {
@@ -159,6 +163,11 @@ export function BookingStatusActions({
           Cancel booking
         </Button>
       )}
+      {canComplete && (
+        <Button variant="outline" size="sm" onClick={() => setCompleteOpen(true)}>
+          Mark as completed
+        </Button>
+      )}
 
       <StatusActionDialog
         open={confirmOpen}
@@ -180,6 +189,17 @@ export function BookingStatusActions({
         loadingLabel="Cancelling…"
         destructive
         onConfirm={(reason) => runAction("cancel", reason)}
+        state={state}
+      />
+
+      <StatusActionDialog
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
+        title="Mark booking as completed"
+        description="This marks the capture as completed. Use this once the session has actually taken place."
+        confirmLabel="Mark as completed"
+        loadingLabel="Marking…"
+        onConfirm={(reason) => runAction("complete", reason)}
         state={state}
       />
     </div>

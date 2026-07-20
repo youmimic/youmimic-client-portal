@@ -1,5 +1,60 @@
 # HANDOFF.md
 
+## Session: Admin Bookings — mark-complete action — 2026-07-20
+
+### What was inspected
+
+- `app/api/admin/bookings/[id]/confirm/route.ts` and `.../cancel/route.ts` (Phase B2b) — the exact shape being replicated: `auth()` → `canManageBookings` RBAC (401/403) → `bookingStatusActionSchema`-validated `{ reason }` body (422) → fetch current status → transition guard (409 per invalid case) → single `booking.update` → `writeAuditLog` → `revalidatePath("/dashboard/bookings")` → `{ success, id, status }`.
+- `components/admin/booking-status-actions.tsx` — confirmed the `canConfirm`/`canCancel` gating pattern and the shared `StatusActionDialog` (reason-required, 500-char max) to extend rather than duplicate.
+- `lib/admin/rbac.ts` — `canManageBookings` (ADMIN minimum) already covers status transitions generally; no new permission needed for this narrower transition.
+- `prisma/schema.prisma` — `BookingStatus` enum (`pending | confirmed | cancelled | completed`) unchanged; `completed` was, per the B2b handoff, still unreachable before this session.
+
+This was the first of the three options the B2b handoff left open ("Mark-complete action... lowest-risk remaining status action") — picked because it has no open product question blocking it, unlike reopen/restore or field-level edits.
+
+### What changed
+
+1. **`app/api/admin/bookings/[id]/complete/route.ts`** (new) — `POST` handler, same shape as `confirm`/`cancel`. Valid transition: `confirmed → completed` only. Guards: 409 "must be confirmed before it can be marked completed" (from `pending`), 409 "cancelled bookings cannot be marked completed", 409 "already completed". Audit action `"complete_booking"`.
+2. **`components/admin/booking-status-actions.tsx`** — added `canComplete = status === "confirmed"`, a "Mark as completed" button (shown only when confirmed), and a third `StatusActionDialog` instance reusing the existing reason-required dialog pattern. `postStatusAction`'s `endpoint` union extended to `"cancel" | "confirm" | "complete"`.
+
+### What did NOT change
+
+- No reopen/restore action — still explicitly deferred pending a product decision (per B2b scope note).
+- No field-level edits — still blocked on the open "enterprise member (non-owner) booking access" question.
+- No RBAC change — `canManageBookings` already gated this.
+
+### Files changed
+
+| File                                                | Status                                      |
+| ---------------------------------------------------- | -------------------------------------------- |
+| `app/api/admin/bookings/[id]/complete/route.ts`      | Created — POST complete handler              |
+| `components/admin/booking-status-actions.tsx`        | Updated — mark-as-completed button + dialog  |
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean; new route /api/admin/bookings/[id]/complete ƒ Dynamic
+```
+
+### Manual verification
+
+- `npm run start` + unauthenticated `curl -X POST /api/admin/bookings/<id>/complete` → `401 {"error":"Unauthorized"}`, matching the existing `confirm`/`cancel` routes' behavior.
+- No admin credentials available in this environment (same limitation noted in every prior admin-phase session), so the live `confirmed → completed` transition and its guards were not exercised end-to-end against real data this session.
+
+### Unresolved issues
+
+Same three carried over from B2b — none touched by this session:
+1. Reopen/restore — needs a product decision.
+2. Field-level edits — blocked on enterprise member (non-owner) booking access.
+3. Enterprise member (non-owner) booking access — long-standing open product question (recurs across ~10 prior sessions).
+
+### Recommended next milestone
+
+With all three status actions (`confirm`, `cancel`, `complete`) now in place, the natural next step is a product decision, not more engineering: resolve the enterprise member (non-owner) booking-access question so field-level edits can be scoped, or decide the reopen/restore policy if that's still wanted.
+
+---
+
 ## Session: Admin Bookings Phase B2b — status actions — 2026-07-13
 
 ### What was inspected before implementing
