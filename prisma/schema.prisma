@@ -35,6 +35,11 @@ enum BillingOwnerType {
   ENTERPRISE
 }
 
+enum EnterpriseStatus {
+  active
+  suspended
+}
+
 model User {
   id               String     @id @default(cuid())
   name             String
@@ -128,11 +133,13 @@ model RolePermission {
 }
 
 model Enterprise {
-  id          String   @id @default(cuid())
-  name        String
-  ownerUserId String
-  status      String   @default("active")
-  createdAt   DateTime @default(now())
+  id               String           @id @default(cuid())
+  name             String
+  ownerUserId      String
+  status           EnterpriseStatus @default(active)
+  suspendedAt      DateTime?
+  suspensionReason String?
+  createdAt        DateTime         @default(now())
 
   // Raw HeyGen workspace identifier (e.g. "YM502_Concinnity"), preserved
   // alongside the cleaned display name for a future HeyGen integration.

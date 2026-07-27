@@ -14,10 +14,21 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-type Props = {
+type EditProps = {
   userId: string;
-  isSuspended: boolean;
+  name: string;
+  adminRole: string | null;
+  actorRole: string | null;
+  isSelf: boolean;
 };
 
 type ActionState = {
@@ -27,7 +38,127 @@ type ActionState = {
 
 const idle: ActionState = { loading: false, error: null };
 
-export function UserActions({ userId, isSuspended }: Props) {
+const ADMIN_ROLE_OPTIONS = [
+  { value: "NONE", label: "None" },
+  { value: "BILLING_ADMIN", label: "Billing Admin" },
+  { value: "ADMIN", label: "Admin" },
+  { value: "SUPER_ADMIN", label: "Super Admin" },
+];
+
+export function EditUserDialog({ userId, name, adminRole, actorRole, isSelf }: EditProps) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [nameValue, setNameValue] = useState(name);
+  const [roleValue, setRoleValue] = useState(adminRole ?? "NONE");
+  const [state, setState] = useState<ActionState>(idle);
+
+  // A non-SUPER_ADMIN can't grant SUPER_ADMIN (server enforces this too —
+  // this just avoids letting them pick an option that will be rejected).
+  const canOfferSuperAdmin = actorRole === "SUPER_ADMIN";
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setNameValue(name);
+      setRoleValue(adminRole ?? "NONE");
+      setState(idle);
+    }
+  }
+
+  async function handleSave() {
+    setState({ loading: true, error: null });
+    try {
+      const body: Record<string, unknown> = {};
+      if (nameValue.trim() !== name) body.name = nameValue.trim();
+      if (!isSelf && roleValue !== (adminRole ?? "NONE")) {
+        body.adminRole = roleValue === "NONE" ? null : roleValue;
+      }
+
+      if (Object.keys(body).length === 0) {
+        setOpen(false);
+        return;
+      }
+
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error ?? `Request failed (${res.status})`);
+      }
+      setOpen(false);
+      setState(idle);
+      router.refresh();
+    } catch (e) {
+      setState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        Edit
+      </Button>
+
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>
+              Update this user&apos;s name{isSelf ? "" : " and admin role"}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-user-name">Name</Label>
+            <Input
+              id="edit-user-name"
+              value={nameValue}
+              onChange={(e) => setNameValue(e.target.value)}
+            />
+          </div>
+
+          {!isSelf && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-user-role">Admin role</Label>
+              <Select value={roleValue} onValueChange={(v) => setRoleValue(v ?? "NONE")} name="edit-user-role">
+                <SelectTrigger id="edit-user-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ADMIN_ROLE_OPTIONS.filter(
+                    (o) => o.value !== "SUPER_ADMIN" || canOfferSuperAdmin || adminRole === "SUPER_ADMIN",
+                  ).map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
+            <Button
+              size="sm"
+              disabled={state.loading || nameValue.trim().length === 0}
+              onClick={handleSave}
+            >
+              {state.loading ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+export function UserActions({ userId, isSuspended }: { userId: string; isSuspended: boolean }) {
   const router = useRouter();
 
   const [suspendOpen, setSuspendOpen] = useState(false);

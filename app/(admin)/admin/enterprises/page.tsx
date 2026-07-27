@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { AddEnterpriseDialog } from "@/components/admin/add-enterprise-dialog";
 
 type EnterpriseRow = {
   id: string;
@@ -64,6 +65,7 @@ export default function AdminEnterprisesPage() {
   const [planType, setPlanType] = useState("all");
   const [subscriptionStatus, setSubscriptionStatus] = useState("all");
   const [page, setPage] = useState(1);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const [data, setData] = useState<ListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -123,17 +125,20 @@ export default function AdminEnterprisesPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, planType, subscriptionStatus, debouncedSearch]);
+  }, [page, planType, subscriptionStatus, debouncedSearch, refreshTick]);
 
   const isInitialLoad = data === null && !error;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Enterprises</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {data ? `${data.totalItems.toLocaleString()} total` : "Loading…"}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Enterprises</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {data ? `${data.totalItems.toLocaleString()} total` : "Loading…"}
+          </p>
+        </div>
+        <AddEnterpriseDialog onCreated={() => setRefreshTick((t) => t + 1)} />
       </div>
 
       <Card>

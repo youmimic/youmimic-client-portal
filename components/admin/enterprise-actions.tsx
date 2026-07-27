@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -60,6 +61,227 @@ async function postAction(
     const json = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(json.error ?? `Request failed (${res.status})`);
   }
+}
+
+export function EditEnterpriseNameDialog({
+  enterpriseId,
+  name,
+  canManage,
+}: {
+  enterpriseId: string;
+  name: string;
+  canManage: boolean;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [nameValue, setNameValue] = useState(name);
+  const [state, setState] = useState<ActionState>(idle);
+
+  if (!canManage) return null;
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setNameValue(name);
+      setState(idle);
+    }
+  }
+
+  async function handleSave() {
+    setState({ loading: true, error: null });
+    try {
+      const res = await fetch(`/api/admin/enterprises/${enterpriseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nameValue.trim() }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error ?? `Request failed (${res.status})`);
+      }
+      setOpen(false);
+      setState(idle);
+      router.refresh();
+    } catch (e) {
+      setState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        Edit
+      </Button>
+
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Enterprise</DialogTitle>
+            <DialogDescription>Update this enterprise&apos;s name.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="edit-enterprise-name">Name</Label>
+            <Input
+              id="edit-enterprise-name"
+              value={nameValue}
+              onChange={(e) => setNameValue(e.target.value)}
+            />
+          </div>
+          {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
+            <Button
+              size="sm"
+              disabled={state.loading || nameValue.trim().length === 0}
+              onClick={handleSave}
+            >
+              {state.loading ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+export function EnterpriseStatusActions({
+  enterpriseId,
+  status,
+  canManage,
+}: {
+  enterpriseId: string;
+  status: string;
+  canManage: boolean;
+}) {
+  const router = useRouter();
+  const [suspendOpen, setSuspendOpen] = useState(false);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [suspendReason, setSuspendReason] = useState("");
+  const [reactivateReason, setReactivateReason] = useState("");
+  const [suspendState, setSuspendState] = useState<ActionState>(idle);
+  const [reactivateState, setReactivateState] = useState<ActionState>(idle);
+
+  if (!canManage) return null;
+
+  async function handleSuspend() {
+    setSuspendState({ loading: true, error: null });
+    try {
+      await postAction(enterpriseId, "suspend", { reason: suspendReason });
+      setSuspendOpen(false);
+      setSuspendReason("");
+      setSuspendState(idle);
+      router.refresh();
+    } catch (e) {
+      setSuspendState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
+  async function handleReactivate() {
+    setReactivateState({ loading: true, error: null });
+    try {
+      await postAction(enterpriseId, "reactivate", { reason: reactivateReason || undefined });
+      setReactivateOpen(false);
+      setReactivateReason("");
+      setReactivateState(idle);
+      router.refresh();
+    } catch (e) {
+      setReactivateState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
+  return (
+    <>
+      {status === "active" ? (
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => { setSuspendState(idle); setSuspendOpen(true); }}
+        >
+          Suspend Enterprise
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => { setReactivateState(idle); setReactivateOpen(true); }}
+        >
+          Reactivate Enterprise
+        </Button>
+      )}
+
+      <Dialog open={suspendOpen} onOpenChange={setSuspendOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Suspend Enterprise</DialogTitle>
+            <DialogDescription>
+              This blocks every member of this enterprise from logging in
+              (they&apos;ll be shown a suspension message pointing them to
+              enterprise@youmimic.com), not just the owner. A reason is
+              required for the audit record.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="suspend-enterprise-reason">
+              Reason <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
+            <Textarea
+              id="suspend-enterprise-reason"
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              rows={3}
+              maxLength={500}
+            />
+          </div>
+          {suspendState.error && <p className="text-sm text-destructive">{suspendState.error}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={suspendState.loading || suspendReason.trim().length === 0}
+              onClick={handleSuspend}
+            >
+              {suspendState.loading ? "Suspending…" : "Suspend Enterprise"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reactivateOpen} onOpenChange={setReactivateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reactivate Enterprise</DialogTitle>
+            <DialogDescription>
+              This restores portal access for every member of this enterprise.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="reactivate-enterprise-reason">Reason (optional)</Label>
+            <Textarea
+              id="reactivate-enterprise-reason"
+              value={reactivateReason}
+              onChange={(e) => setReactivateReason(e.target.value)}
+              rows={3}
+              maxLength={500}
+            />
+          </div>
+          {reactivateState.error && (
+            <p className="text-sm text-destructive">{reactivateState.error}</p>
+          )}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
+            <Button
+              size="sm"
+              disabled={reactivateState.loading}
+              onClick={handleReactivate}
+            >
+              {reactivateState.loading ? "Reactivating…" : "Reactivate Enterprise"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 export function TransferOwnershipAction({

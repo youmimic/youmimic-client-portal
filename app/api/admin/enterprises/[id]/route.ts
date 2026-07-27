@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import type { AdminRole, Prisma } from "@/app/generated/prisma/client";
-import { canViewEnterprises } from "@/lib/admin/rbac";
-import { ENTITY_TYPES } from "@/lib/admin/audit";
+import { canViewEnterprises, canManageEnterprises } from "@/lib/admin/rbac";
+import { ENTITY_TYPES, writeAuditLog } from "@/lib/admin/audit";
+import { updateEnterpriseSchema } from "@/lib/validations/admin";
 
 const ENTERPRISE_DETAIL_SELECT = {
   id: true,
@@ -138,4 +139,60 @@ export async function GET(
       createdAt: log.createdAt.toISOString(),
     })),
   });
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const actorRole = session.user.adminRole as AdminRole | null;
+  if (!canManageEnterprises(actorRole)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = await params;
+
+  let rawBody: unknown;
+  try {
+    rawBody = await req.json();
+  } catch {
+    rawBody = {};
+  }
+
+  const parsed = updateEnterpriseSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Validation failed", fieldErrors: parsed.error.flatten().fieldErrors },
+      { status: 422 },
+    );
+  }
+
+  const existing = await prisma.enterprise.findUnique({
+    where: { id },
+    select: { id: true, name: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const updated = await prisma.enterprise.update({
+    where: { id },
+    data: { name: parsed.data.name },
+    select: { id: true, name: true, status: true },
+  });
+
+  await writeAuditLog({
+    adminUserId: session.user.id,
+    action: "update_enterprise",
+    entityType: ENTITY_TYPES.ENTERPRISE,
+    entityId: id,
+    metadata: { name: updated.name, previousName: existing.name },
+  });
+
+  return NextResponse.json({ enterprise: updated });
 }

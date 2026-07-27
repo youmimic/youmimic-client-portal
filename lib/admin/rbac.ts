@@ -17,6 +17,30 @@ export function canViewUsers(role: AdminRoleValue): boolean {
   return hasMinRole(role, "ADMIN");
 }
 
+export function canCreateUsers(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}
+
+// Editing here means the narrow surface actually exposed (name today) — not
+// email (identity-changing, out of scope) and not adminRole, which has its
+// own stricter check below.
+export function canEditUsers(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}
+
+// Granting/revoking admin roles is its own check, separate from canEditUsers:
+// any ADMIN can hand out ADMIN/BILLING_ADMIN, but only a SUPER_ADMIN can grant
+// (or revoke) SUPER_ADMIN itself — otherwise a regular ADMIN could mint a
+// SUPER_ADMIN and escalate through them.
+export function canAssignAdminRole(
+  actorRole: AdminRoleValue,
+  targetAdminRole: AdminRole | null,
+): boolean {
+  if (!hasMinRole(actorRole, "ADMIN")) return false;
+  if (targetAdminRole === "SUPER_ADMIN" && actorRole !== "SUPER_ADMIN") return false;
+  return true;
+}
+
 export function canSuspendUser(role: AdminRoleValue): boolean {
   return hasMinRole(role, "ADMIN");
 }

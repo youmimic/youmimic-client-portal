@@ -6,6 +6,7 @@ import type { Prisma } from "@/app/generated/prisma/client";
 import prisma from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 import { userHasActiveSubscription } from "@/lib/subscription";
+import { getSuspendedEnterpriseName } from "@/lib/enterprise-status";
 
 class InvalidLoginError extends CredentialsSignin {
   code = "invalid_credentials";
@@ -17,6 +18,10 @@ class EmailNotVerifiedError extends CredentialsSignin {
 
 class AccountSuspendedError extends CredentialsSignin {
   code = "account_suspended";
+}
+
+class EnterpriseSuspendedError extends CredentialsSignin {
+  code = "enterprise_suspended";
 }
 
 type UserWithRoles = Prisma.UserGetPayload<{
@@ -72,6 +77,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new AccountSuspendedError();
         }
 
+        const suspendedEnterpriseName = await getSuspendedEnterpriseName(user.id);
+        if (suspendedEnterpriseName) {
+          throw new EnterpriseSuspendedError();
+        }
+
         const passwordMatches = await bcrypt.compare(
           password,
           user.passwordHash,
@@ -91,6 +101,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           roles,
           adminRole: user.adminRole,
           isSuspended: user.isSuspended,
+          isEnterpriseSuspended: false,
           sessionVersion: user.sessionVersion,
         };
       },
@@ -104,6 +115,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.isEmailVerified = user.isEmailVerified ?? false;
         token.adminRole = user.adminRole ?? null;
         token.isSuspended = user.isSuspended ?? false;
+        token.isEnterpriseSuspended = false;
         token.sessionVersion = user.sessionVersion ?? 1;
 
         // Populate subscription state at sign-in so proxy.ts can gate
@@ -148,6 +160,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         token.adminRole = dbUser.adminRole ?? null;
         token.isSuspended = dbUser.isSuspended;
+        token.isEnterpriseSuspended = dbUser.isSuspended
+          ? false // individual suspension already covers the redirect; skip the extra query
+          : (await getSuspendedEnterpriseName(userId)) !== null;
         token.sessionVersion = dbUser.sessionVersion;
         token.hasActiveSubscription = await userHasActiveSubscription(userId);
       }
@@ -162,6 +177,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.hasActiveSubscription = Boolean(token.hasActiveSubscription);
         session.user.adminRole = (token.adminRole as string | null | undefined) ?? null;
         session.user.isSuspended = Boolean(token.isSuspended);
+        session.user.isEnterpriseSuspended = Boolean(token.isEnterpriseSuspended);
         session.user.sessionVersion = (token.sessionVersion as number | undefined) ?? 1;
       }
 

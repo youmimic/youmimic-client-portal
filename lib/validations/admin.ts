@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+// Same rules as lib/validations/auth.ts's private normalizeEmail/emailRegex —
+// duplicated narrowly here rather than exported from that file, since these
+// are admin-authored inputs (create/invite a user) not end-user auth forms.
+const adminEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(6, "Email is required")
+  .max(254)
+  .refine((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value), {
+    message: "Invalid email address",
+  });
+
 export const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "BILLING_ADMIN"] as const;
 const ADMIN_ROLE_FILTER = [...ADMIN_ROLES, "all"] as const;
 
@@ -39,6 +52,27 @@ export const adminActionSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
+// Admin-created user: name + email only. No password field — the account is
+// created without a usable password and the person sets their own via an
+// emailed set-password link (reuses the forgot-password token flow).
+export const createUserSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200),
+  email: adminEmailSchema,
+});
+
+export type CreateUserInput = z.infer<typeof createUserSchema>;
+
+// Admin edit of an existing user. `name` and `adminRole` are independently
+// optional so a caller can send just one; `adminRole: null` explicitly means
+// "revoke admin access" (distinct from omitting the field, which means "leave
+// as-is"), hence `.nullable().optional()` rather than plain `.optional()`.
+export const updateUserSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200).optional(),
+  adminRole: z.enum(ADMIN_ROLES).nullable().optional(),
+});
+
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
 export const PLAN_TYPES = ["FREE", "CREATOR", "ENTERPRISE"] as const;
 const PLAN_TYPE_FILTER = [...PLAN_TYPES, "all"] as const;
 
@@ -65,6 +99,38 @@ export const listEnterprisesQuerySchema = z.object({
 });
 
 export type ListEnterprisesQuery = z.infer<typeof listEnterprisesQuerySchema>;
+
+// Admin-created enterprise: name + an existing user's email to own it (an
+// admin filling out this form knows the owner's email, not their internal
+// user id). Creating a new owner user inline is out of scope — create the
+// user first, then the enterprise, as two separate steps.
+export const createEnterpriseSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200),
+  ownerEmail: adminEmailSchema,
+});
+
+export type CreateEnterpriseInput = z.infer<typeof createEnterpriseSchema>;
+
+// Admin edit of an existing enterprise — name only. Status changes go through
+// the dedicated suspend/reactivate actions below (same reason-required
+// convention as user suspension), not this generic edit.
+export const updateEnterpriseSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200),
+});
+
+export type UpdateEnterpriseInput = z.infer<typeof updateEnterpriseSchema>;
+
+// Enterprise suspension blocks portal access for every member, not just one
+// account — reason required, same as suspendUserSchema.
+export const suspendEnterpriseSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Reason is required")
+    .max(500, "Reason must be 500 characters or less"),
+});
+
+export type SuspendEnterpriseInput = z.infer<typeof suspendEnterpriseSchema>;
 
 // Mirrors the BillingOwnerType enum in prisma/schema.prisma.
 export const BILLING_OWNER_TYPES = ["USER", "ENTERPRISE"] as const;

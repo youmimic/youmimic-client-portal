@@ -3,6 +3,7 @@ import "server-only";
 import { resend } from "./resend";
 import { VerifyEmailTemplate } from "@/emails/templates/verify-email";
 import { ForgotPasswordEmail } from "@/emails/templates/forgot-password-email";
+import { AdminWelcomeEmail } from "@/emails/templates/admin-welcome-email";
 import { ContactNotificationEmail } from "@/emails/templates/contact-notification-email";
 import { InviteEmail } from "@/emails/templates/invite-email";
 import type { ContactInput } from "@/lib/validations/contact";
@@ -76,6 +77,39 @@ export async function sendForgotPasswordEmail({
     },
     {
       idempotencyKey: `forgot-password/${to}`,
+    },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+type SendAdminWelcomeEmailParams = {
+  to: string;
+  name: string;
+  setPasswordUrl: string;
+};
+
+export async function sendAdminWelcomeEmail({
+  to,
+  name,
+  setPasswordUrl,
+}: SendAdminWelcomeEmailParams) {
+  const from = getFromEmail();
+
+  const { data, error } = await resend.emails.send(
+    {
+      from,
+      to: [to],
+      subject: "Your youmimic account is ready — set your password",
+      react: AdminWelcomeEmail({ name, setPasswordUrl }),
+      tags: [{ name: "category", value: "admin_welcome" }],
+    },
+    {
+      idempotencyKey: `admin-welcome/${to}`,
     },
   );
 

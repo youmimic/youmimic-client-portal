@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/ui/tabs";
+import { AddUserDialog } from "@/components/admin/add-user-dialog";
 
 type Membership = {
   enterprise: { id: string; name: string };
@@ -73,6 +74,7 @@ export default function AdminUsersPage() {
   const [enterpriseRole, setEnterpriseRole] = useState("all");
   const [isSuspended, setIsSuspended] = useState("all");
   const [page, setPage] = useState(1);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const [data, setData] = useState<ListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +148,7 @@ export default function AdminUsersPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, userType, adminRole, enterpriseRole, isSuspended, debouncedSearch]);
+  }, [page, userType, adminRole, enterpriseRole, isSuspended, debouncedSearch, refreshTick]);
 
   const isInitialLoad = data === null && !error;
   const showCompanyColumn = userType === "enterprise";
@@ -154,13 +156,16 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Users</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {data
-            ? `${data.pagination.total.toLocaleString()} total`
-            : "Loading…"}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Users</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {data
+              ? `${data.pagination.total.toLocaleString()} total`
+              : "Loading…"}
+          </p>
+        </div>
+        <AddUserDialog onCreated={() => setRefreshTick((t) => t + 1)} />
       </div>
 
       <Tabs value={userType} onValueChange={handleUserTypeChange}>

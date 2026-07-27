@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserActions } from "@/components/admin/user-actions";
+import { UserActions, EditUserDialog } from "@/components/admin/user-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -98,13 +98,23 @@ export default async function AdminUserDetailPage({
         <p className="text-sm text-muted-foreground">{user.email}</p>
       </div>
 
-      {isSelf ? (
-        <p className="text-sm text-muted-foreground italic">
-          Actions are unavailable — you cannot act on your own account.
-        </p>
-      ) : (
-        <UserActions userId={user.id} isSuspended={user.isSuspended} />
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <EditUserDialog
+          userId={user.id}
+          name={user.name}
+          adminRole={user.adminRole}
+          actorRole={session.user.adminRole}
+          isSelf={isSelf}
+        />
+        {isSelf ? (
+          <p className="text-sm text-muted-foreground italic">
+            Suspend/reactivate/session actions are unavailable — you cannot
+            act on your own account.
+          </p>
+        ) : (
+          <UserActions userId={user.id} isSuspended={user.isSuspended} />
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Identity */}

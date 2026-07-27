@@ -10,6 +10,7 @@ declare module "next-auth" {
       hasActiveSubscription: boolean;
       adminRole: string | null;
       isSuspended: boolean;
+      isEnterpriseSuspended: boolean;
       sessionVersion: number;
     } & DefaultSession["user"];
   }
@@ -20,6 +21,7 @@ declare module "next-auth" {
     isEmailVerified: boolean;
     adminRole: string | null;
     isSuspended: boolean;
+    isEnterpriseSuspended: boolean;
     sessionVersion: number;
   }
 }
@@ -32,6 +34,7 @@ declare module "next-auth/jwt" {
     hasActiveSubscription?: boolean;
     adminRole?: string | null;
     isSuspended?: boolean;
+    isEnterpriseSuspended?: boolean;
     sessionVersion?: number;
   }
 }

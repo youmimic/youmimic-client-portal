@@ -7,8 +7,9 @@ import type {
   Prisma,
   SubscriptionStatus,
 } from "@/app/generated/prisma/client";
-import { canViewEnterprises } from "@/lib/admin/rbac";
-import { listEnterprisesQuerySchema } from "@/lib/validations/admin";
+import { canViewEnterprises, canManageEnterprises } from "@/lib/admin/rbac";
+import { listEnterprisesQuerySchema, createEnterpriseSchema } from "@/lib/validations/admin";
+import { writeAuditLog } from "@/lib/admin/audit";
 
 const ENTERPRISE_LIST_SELECT = {
   id: true,
@@ -128,4 +129,86 @@ export async function GET(req: Request) {
     totalItems: total,
     totalPages: Math.ceil(total / pageSize),
   });
+}
+
+export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const actorRole = session.user.adminRole as AdminRole | null;
+  if (!canManageEnterprises(actorRole)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await req.json();
+  } catch {
+    rawBody = {};
+  }
+
+  const parsed = createEnterpriseSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Validation failed", fieldErrors: parsed.error.flatten().fieldErrors },
+      { status: 422 },
+    );
+  }
+
+  const { name, ownerEmail } = parsed.data;
+
+  const owner = await prisma.user.findUnique({
+    where: { email: ownerEmail },
+    select: { id: true },
+  });
+  if (!owner) {
+    return NextResponse.json(
+      {
+        error: "No user with this email exists",
+        fieldErrors: { ownerEmail: ["No user found with this email"] },
+      },
+      { status: 404 },
+    );
+  }
+  const ownerUserId = owner.id;
+
+  const enterprise = await prisma.$transaction(async (tx) => {
+    // Same idempotent upsert as the self-service business-signup path
+    // (lib/auth/register-user.ts) — the "owner" Role row is shared, not
+    // per-enterprise.
+    const ownerRole = await tx.role.upsert({
+      where: { name: "owner" },
+      create: { name: "owner" },
+      update: {},
+      select: { id: true },
+    });
+
+    const created = await tx.enterprise.create({
+      data: { name, ownerUserId },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        createdAt: true,
+        owner: { select: { id: true, email: true, name: true } },
+      },
+    });
+
+    await tx.enterpriseMember.create({
+      data: { enterpriseId: created.id, userId: ownerUserId, roleId: ownerRole.id },
+    });
+
+    return created;
+  });
+
+  await writeAuditLog({
+    adminUserId: session.user.id,
+    action: "create_enterprise",
+    entityType: "enterprise",
+    entityId: enterprise.id,
+  });
+
+  return NextResponse.json({ enterprise }, { status: 201 });
 }

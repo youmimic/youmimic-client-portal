@@ -205,7 +205,6 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
         data: {
           name: businessName,
           ownerUserId: createdUser.id,
-          status: "active",
         },
         select: { id: true },
       });

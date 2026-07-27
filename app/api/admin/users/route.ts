@@ -1,9 +1,13 @@
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import type { AdminRole, Prisma } from "@/app/generated/prisma/client";
-import { canViewUsers } from "@/lib/admin/rbac";
-import { listUsersQuerySchema } from "@/lib/validations/admin";
+import { canViewUsers, canCreateUsers } from "@/lib/admin/rbac";
+import { listUsersQuerySchema, createUserSchema } from "@/lib/validations/admin";
+import { writeAuditLog } from "@/lib/admin/audit";
+import { sendAdminWelcomeEmail } from "@/lib/mailer";
 
 const USER_LIST_SELECT = {
   id: true,
@@ -128,4 +132,98 @@ export async function GET(req: Request) {
       totalPages: Math.ceil(total / pageSize),
     },
   });
+}
+
+export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const actorRole = session.user.adminRole as AdminRole | null;
+  if (!canCreateUsers(actorRole)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await req.json();
+  } catch {
+    rawBody = {};
+  }
+
+  const parsed = createUserSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Validation failed", fieldErrors: parsed.error.flatten().fieldErrors },
+      { status: 422 },
+    );
+  }
+
+  const { name, email } = parsed.data;
+
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+  if (existing) {
+    return NextResponse.json(
+      {
+        error: "A user with this email already exists",
+        fieldErrors: { email: ["Already in use"] },
+      },
+      { status: 409 },
+    );
+  }
+
+  // No one is ever meant to authenticate with this hash — it's a random
+  // value nobody knows, discarded immediately. The account only becomes
+  // usable once the person sets their own password via the emailed link.
+  const unusablePasswordHash = await bcrypt.hash(crypto.randomUUID(), 12);
+  const token = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour, same as forgot-password
+
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        name,
+        email,
+        passwordHash: unusablePasswordHash,
+        emailVerified: false,
+      },
+      select: { id: true, name: true, email: true },
+    });
+
+    await tx.passwordResetToken.create({
+      data: { userId: created.id, token, expiresAt, used: false },
+    });
+
+    return created;
+  });
+
+  const appUrl = process.env.NEXTAUTH_URL;
+  if (!appUrl) throw new Error("NEXTAUTH_URL is not configured");
+
+  const setPasswordUrl = new URL("/reset-password", appUrl);
+  setPasswordUrl.searchParams.set("token", token);
+
+  try {
+    await sendAdminWelcomeEmail({
+      to: user.email,
+      name: user.name,
+      setPasswordUrl: setPasswordUrl.toString(),
+    });
+  } catch (err) {
+    console.error("Admin welcome email failed:", err);
+  }
+
+  await writeAuditLog({
+    adminUserId: session.user.id,
+    action: "create_user",
+    entityType: "user",
+    entityId: user.id,
+    targetUserId: user.id,
+  });
+
+  return NextResponse.json({ user }, { status: 201 });
 }

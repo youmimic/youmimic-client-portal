@@ -75,6 +75,16 @@ export default function LoginForm() {
         return;
       }
 
+      if (code.includes("account_suspended")) {
+        router.push("/suspended?reason=account");
+        return;
+      }
+
+      if (code.includes("enterprise_suspended")) {
+        router.push("/suspended?reason=enterprise");
+        return;
+      }
+
       setFormError("Invalid email or password.");
       return;
     }

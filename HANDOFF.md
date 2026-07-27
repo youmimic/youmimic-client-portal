@@ -1,6 +1,57 @@
 # HANDOFF.md
 
-## Session: GoCardless customer reconciliation (schema) — 2026-07-27
+## Session: Admin create/edit for Users & Enterprises + enterprise suspension — 2026-07-27
+
+### Context
+
+User asked for admins to be able to add users/enterprises and edit existing ones, explicitly inviting clarifying questions first. Two rounds of `AskUserQuestion` resolved the open design points before any code was written.
+
+### Decisions confirmed with the user
+
+1. **New-user access**: no admin-set password. Admin enters name + email only; the account is created with an unusable random password hash and the person gets an emailed "set your password" link (reuses the `PasswordResetToken` + reset-password flow built earlier this week, plus a new dedicated welcome email/template so it doesn't read like an unsolicited "password reset").
+2. **New-enterprise owner**: must be an existing user, looked up by email (not by raw internal ID) — creating a brand-new owner inline was explicitly ruled out, keeping user-creation and enterprise-creation as two separate composable steps.
+3. **Editable user fields**: name, and admin role (grant/revoke). Email is intentionally not editable (identity-changing, out of scope). Granting `SUPER_ADMIN` specifically requires the actor to already be `SUPER_ADMIN` — a new rule layered on top of the existing "can't act on a SUPER_ADMIN target" rule, to prevent a regular ADMIN from minting a SUPER_ADMIN and escalating through them.
+4. **Editable enterprise fields**: name, and status. Status used to be a free-text column that was *always* `"active"` in every row and read nowhere in the app — converting it to a real enum and giving it actual behavior was a substantive addition, not just UI plumbing, so it got its own follow-up question.
+5. **Enterprise suspension behavior** (the user's own words, paraphrased): suspending an enterprise should block every member's login, redirecting them to a page explaining their account or their enterprise's account is suspended, with different contact emails for each case (individual → accounts@, enterprise → enterprise@), and a hint to contact their enterprise admin if only their individual account is suspended while the enterprise itself is still active.
+
+### What changed
+
+- **`prisma/schema.prisma`**: `Enterprise.status` converted from a free-text `String` to a new `EnterpriseStatus` enum (`active` / `suspended`) via a hand-written migration (`prisma migrate dev` refused to run non-interactively given the column-type-change warning, so the SQL was written directly and applied with `prisma migrate deploy` — verified all 12 existing rows survived the cast unchanged). Added `Enterprise.suspendedAt` / `suspensionReason`, mirroring the existing `User` fields.
+- **`auth.ts` / `proxy.ts` / `next-auth.d.ts`**: new `getSuspendedEnterpriseName()` helper (`lib/enterprise-status.ts`) blocks login at `authorize()` time for anyone who owns or is a member of a suspended enterprise (new `EnterpriseSuspendedError`), and a new `isEnterpriseSuspended` JWT/session field lets `proxy.ts` catch sessions that were already active before their enterprise was suspended — same two-layer pattern the existing individual-user suspension already uses. Deliberately simple rule: belonging to *any* suspended enterprise blocks you, even if you belong to others that are active — flagged as a known simplification since every account seen in this app so far belongs to at most one enterprise.
+- **`app/suspended/page.tsx`**: rebuilt as an async server component reading a `?reason=account|enterprise` param, showing different heading/contact-email per case, plus (for the individual-suspended case only) a hint pointing to the enterprise owner's email if the person still belongs to an active enterprise.
+- **`app/login/login-form.tsx`**: `account_suspended` and `enterprise_suspended` login failures now redirect to `/suspended?reason=...` instead of falling through to a generic "Invalid email or password" — this was silently wrong for suspended accounts even before this session (pre-existing gap, fixed in passing since it's the exact surface being touched).
+- **`lib/admin/rbac.ts`**: `canCreateUsers`, `canEditUsers` (ADMIN minimum, matching the existing tier), `canAssignAdminRole` (encodes the SUPER_ADMIN-granting-SUPER_ADMIN-only rule).
+- **`lib/validations/admin.ts`**: `createUserSchema`, `updateUserSchema`, `createEnterpriseSchema`, `updateEnterpriseSchema`, `suspendEnterpriseSchema`.
+- **`emails/templates/admin-welcome-email.tsx`** + `sendAdminWelcomeEmail()` in `lib/mailer.ts`: new template, same structural convention as the existing forgot-password email, distinct copy ("your account is ready" rather than "reset your password").
+- **API routes**: `POST /api/admin/users` (create), `PATCH /api/admin/users/[id]` (edit name/adminRole), `POST /api/admin/enterprises` (create, resolves owner by email, also creates the `EnterpriseMember` "owner" row — mirrors the exact side effect the self-service business-signup path already does in `lib/auth/register-user.ts`), `PATCH /api/admin/enterprises/[id]` (edit name), `POST /api/admin/enterprises/[id]/suspend` and `.../reactivate` (reason-required/optional, same convention as the existing user suspend/reactivate routes).
+- **UI**: `AddUserDialog` / `AddEnterpriseDialog` (new, on the respective list pages), `EditUserDialog` (in `components/admin/user-actions.tsx`, admin-role dropdown hides the SUPER_ADMIN option client-side for non-SUPER_ADMIN actors as a UX nicety — server enforces it regardless), `EditEnterpriseNameDialog` + `EnterpriseStatusActions` (in `components/admin/enterprise-actions.tsx`).
+- Every mutation writes an `AdminLog` entry (`create_user`, `update_user`, `create_enterprise`, `update_enterprise`, `suspend_enterprise`, `reactivate_enterprise`), consistent with the existing audit-log convention.
+
+### Checks
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean, all routes registered (/suspended is now dynamic, not static — expected, since it now reads a session + searchParams)
+```
+
+### Browser verification (this time actually done, not just build/typecheck)
+
+Built a disposable-fixture Playwright suite (synthetic accounts only, deleted afterward with cascade confirmed clean — zero orphaned rows) covering, end-to-end through the real UI:
+- Add User (success + duplicate-email rejection)
+- Add Enterprise (owner resolved by email, `EnterpriseMember` "owner" row confirmed created)
+- Edit Enterprise name
+- **Suspend Enterprise → owner's login is blocked with the enterprise-specific message/contact email → Reactivate Enterprise → owner can log in again** (the core new auth-affecting behavior, verified both directions)
+- Edit User admin role grant, confirmed via direct DB read + audit log entry
+- Privilege-escalation guard: a regular `ADMIN` actor gets `403` attempting to grant `SUPER_ADMIN`, but `200` granting a lower role — confirmed via direct API calls in an authenticated browser session
+
+One self-inflicted false alarm during testing: an earlier draft of the role-grant test used an imprecise text selector that happened to match the still-open dropdown's own display text, making it look like the save had succeeded when the PATCH request had never actually fired. Caught by re-running with `page.waitForResponse` against the actual network request rather than trusting DOM text — the real feature was correct throughout; the test script wasn't yet.
+
+### Not done / next
+
+- Enterprise suspension doesn't force-revoke already-active sessions immediately (no `sessionVersion` bump) — it relies on the same eventual-consistency mechanism (next natural JWT refresh, up to ~24h, or an explicit revoke) that individual user suspension already relies on. Not a new gap introduced this session, just inherited as-is; worth a joint look if immediate revocation ever becomes a real requirement for either suspension type.
+- No UI surfaces the *list* of GoCardless-flagged accounts from the prior session differently now that `Enterprise.status` is meaningful — unrelated, not in scope here.
+- Enterprise list page (`/admin/enterprises`) doesn't yet show a Status column/filter — only the detail page shows it. Small, could be added on request.
 
 ### Context
 

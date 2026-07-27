@@ -15,6 +15,8 @@ import {
   TransferOwnershipAction,
   EnterpriseMembersTable,
   EnterpriseInvitesTable,
+  EditEnterpriseNameDialog,
+  EnterpriseStatusActions,
 } from "@/components/admin/enterprise-actions";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +39,9 @@ export default async function AdminEnterpriseDetailPage({
     select: {
       id: true,
       name: true,
+      status: true,
+      suspendedAt: true,
+      suspensionReason: true,
       createdAt: true,
       owner: { select: { id: true, email: true, name: true } },
       subscriptions: {
@@ -138,6 +143,19 @@ export default async function AdminEnterpriseDetailPage({
         </p>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <EditEnterpriseNameDialog
+          enterpriseId={enterprise.id}
+          name={enterprise.name}
+          canManage={canManage}
+        />
+        <EnterpriseStatusActions
+          enterpriseId={enterprise.id}
+          status={enterprise.status}
+          canManage={canManage}
+        />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Summary */}
         <Card>
@@ -147,6 +165,18 @@ export default async function AdminEnterpriseDetailPage({
           <CardContent className="space-y-3 text-sm">
             <DetailRow label="Enterprise ID" value={enterprise.id} mono />
             <DetailRow label="Name" value={enterprise.name} />
+            <DetailRow
+              label="Status"
+              value={enterprise.status === "suspended" ? "Suspended" : "Active"}
+              valueClass={
+                enterprise.status === "suspended"
+                  ? "font-medium text-destructive"
+                  : "font-medium text-green-600 dark:text-green-400"
+              }
+            />
+            {enterprise.status === "suspended" && enterprise.suspensionReason && (
+              <DetailRow label="Suspension Reason" value={enterprise.suspensionReason} />
+            )}
             <DetailRow label="Plan Type" value={subscription?.planType ?? "None"} />
             <DetailRow
               label="Subscription Status"

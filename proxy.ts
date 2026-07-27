@@ -30,7 +30,19 @@ export const proxy = auth(async (req) => {
     // Suspended users are also blocked at the authorize() level, so this gate
     // catches sessions that were active before suspension was applied.
     if (isProtected && user.isSuspended) {
-      return NextResponse.redirect(new URL("/suspended", nextUrl.origin));
+      const url = new URL("/suspended", nextUrl.origin);
+      url.searchParams.set("reason", "account");
+      return NextResponse.redirect(url);
+    }
+
+    // Same idea, but for enterprise-level suspension: catches sessions that
+    // logged in before their enterprise was suspended (authorize() blocks new
+    // logins, but an existing JWT is only re-checked on refresh, same as
+    // isSuspended above).
+    if (isProtected && user.isEnterpriseSuspended) {
+      const url = new URL("/suspended", nextUrl.origin);
+      url.searchParams.set("reason", "enterprise");
+      return NextResponse.redirect(url);
     }
 
     // Admin routes require an adminRole. Authenticated users without one are
