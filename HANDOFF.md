@@ -1,5 +1,110 @@
 # HANDOFF.md
 
+## Session: GoCardless customer reconciliation (schema) — 2026-07-27
+
+### Context
+
+Continuing the read-only GoCardless customer-index review from an earlier session. The user identified two specific portal accounts that a fresh GoCardless customer export shows as having an active direct-debit mandate, and asked to (a) correct an enterprise name/contact-email mismatch and (b) reflect the active-mandate status in the portal for both accounts.
+
+### What was found before changing anything
+
+- One of the two accounts' enterprise was named after a person who is **not** the portal owner — the owning user's login email belongs to a different (related) individual than the name on the GoCardless export/company record. Same category of identity mismatch as the earlier Stripe reconciliation work (an account's portal login identity and its payment-processor-facing identity aren't always the same person) — not a new phenomenon, just a new instance of it.
+- The `Subscription` model has **no way to represent a non-Stripe subscription**: `stripeCustomerId` is a required, non-nullable column, there's no payment-processor/source field, and the admin Subscriptions module was explicitly built around "Stripe is the billing source of truth" (per its original spec). Faking a `Subscription` row with a placeholder `stripeCustomerId` would create data that looks Stripe-sourced but isn't, with no way for later code (webhook matching, the Subscriptions admin UI, future Stripe reconciliation) to tell the difference.
+- The GoCardless export in hand is only a **customer index** — it confirms an active mandate exists but carries no plan/amount/interval/status detail the way the Stripe subscriptions export does, so there's nothing to actually populate a subscription-shaped record with yet regardless of schema.
+
+### Decision confirmed with the user before implementing
+
+Given the schema gap and the data gap, asked the user how to represent this. Chose: **add a minimal, clearly-non-Stripe field pair, not a fabricated Subscription row.**
+
+### What changed
+
+1. **`prisma/schema.prisma`** — additive only, two new nullable/defaulted columns on `User`: `gocardlessCustomerId` (String?) and `gocardlessMandateActive` (Boolean, default false) — same convention as the existing `heygenUserId`/`stripeEmail` fields (raw external identifier + status, preserved for a future integration, not used for auth or billing logic). Migration `20260727015301_add_gocardless_fields` — pure `ADD COLUMN`, zero impact on existing tables/rows.
+2. **`app/(admin)/admin/users/[id]/page.tsx`** — added `stripeEmail`/`gocardlessCustomerId`/`gocardlessMandateActive` to the page's `select` and surfaced them as conditional rows in the existing Identity card (same `DetailRow` pattern already used for `suspendedAt`/`suspensionReason` on this page), so an admin looking at either account can see the GoCardless mandate status without it masquerading as a Stripe subscription.
+3. Corrected one enterprise's display name to match its actual registered company name, and set that enterprise owner's `stripeEmail`-equivalent contact field to the email GoCardless has on file for the actual account holder (the person the business is under, not the portal login owner) — same "processor-facing email differs from login email" pattern already established for another account earlier in this project. Set `gocardlessCustomerId`/`gocardlessMandateActive` for both flagged accounts. Real names/emails and the enterprise's prior/corrected display name are documented in `updates/2026-07-27-gocardless-reconciliation.md` (gitignored) rather than here.
+
+### Checks
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged, unrelated: signup-form.tsx React Compiler note, lib/prisma.ts unused eslint-disable)
+npm run typecheck → clean (after `npx prisma generate` to pick up the new columns — typecheck alone doesn't regenerate the client, only `build` does via its script)
+npm run build     → clean, all existing + new routes registered
+```
+
+Not done: a full in-browser click-through of the updated admin user detail page. The change is a small additive, conditionally-rendered read-only display using a display pattern (`{condition && <DetailRow .../>}`) already used repeatedly elsewhere on the same page — build + typecheck cover the JSX/type correctness, but I have not visually confirmed it renders as expected in a live browser session. Flagging this explicitly rather than claiming full verification.
+
+### Not done / next
+
+- No GoCardless *subscription-level* data (plan, amount, interval) exists in the portal yet — only the mandate-active flag. If/when a GoCardless payments or subscriptions export (not just the customer index) becomes available, this should be modeled properly rather than extended further via ad hoc fields.
+- This was a manual, two-account reconciliation, not a bulk import. The remaining 4 rows from the GoCardless customer-index sample reviewed earlier (2 already matched to existing accounts with no mandate-reflection requested, 2 with no portal account at all) were not touched this session.
+- No `AdminLog`/audit entry was written for these changes since they were applied via a direct one-off reconciliation script rather than through an admin UI action with a session-bound actor — consistent with how the earlier Stripe backfill was handled.
+
+## Session: Forgot password / reset password — 2026-07-27
+
+### What was inspected before implementing
+
+- `lib/mailer.ts` and `emails/templates/forgot-password-email.tsx` — found a **fully working `sendForgotPasswordEmail()` function and email template that nothing in the app ever called**. No API route, no page, no token model, no link on the login form. Dead scaffolding from some earlier point — this session finishes wiring it up rather than replacing it.
+- `prisma/schema.prisma` — `EmailVerificationToken` was the template to mirror: `userId`, unique `token`, `expiresAt`, `used`, indexed on `userId`. No password-reset-specific table existed.
+- `lib/auth/register-user.ts` — the exact token-issuance convention already in use: `crypto.randomUUID()`, `deleteMany({ userId, used: false })` before creating a new token so a stale unused one can't linger.
+- `lib/invites/accept-invite.ts` — the atomic single-use-claim pattern (`updateMany({ where: { id, used: false/status: pending }, data: {...} })`, check `count === 0`) that prevents a double-submit or replay from applying a one-time action twice. Reused this exact pattern for reset-token consumption.
+- `auth.ts` — the `sessionVersion` revocation mechanism admins already use via `POST /api/admin/users/[id]/revoke-sessions`. Reused it: a successful reset now increments the resetting user's own `sessionVersion`, which forces every other active session to re-authenticate on its next token refresh — no new revocation mechanism invented.
+- `proxy.ts` — only `/dashboard` and `/admin` are protected prefixes, so the new public pages needed no middleware changes.
+- Confirmed no rate-limiting exists anywhere in this app (not on login, not on register) — deliberately did not build one just for this feature; relied instead on the response never revealing whether an email has an account (the free, always-correct part of abuse resistance here).
+
+### Decisions confirmed with the user before implementing
+
+1. A successful reset invalidates the user's other active sessions (`sessionVersion` increment) — security best practice, and the mechanism already existed.
+2. A successful reset also marks the account's `emailVerified` true if it wasn't already — clicking a unique emailed link is at least as strong proof of ownership as the existing verification flow, and removes a dead-end for a never-verified account that forgot its password.
+3. Reset links expire after 1 hour (shorter than the existing 24h email-verification token, since a reset link grants account takeover if intercepted).
+
+### What changed
+
+1. **`prisma/schema.prisma`** — additive only: new `PasswordResetToken` model (same shape as `EmailVerificationToken`, kept as a separate table rather than a shared one, so a stale verification link and a reset link can never be confused for each other). Migration `20260726233336_add_password_reset_token` — verified pure `CREATE TABLE` + indexes + FK, zero impact on existing tables.
+2. **`lib/validations/auth.ts`** — `forgotPasswordSchema` (email) and `resetPasswordSchema` (token + password + confirmPassword, cross-field `.refine` for password match), reusing the existing private `passwordSchema`/`emailRegex`/`normalizeEmail` in the same file rather than duplicating the rules.
+3. **`app/api/forgot-password/route.ts`** (new) — `POST`. Always returns the same generic response whether or not the email has an account. If it does: deletes any previous unused reset tokens for that user, issues a new one (1h expiry), emails it via the now-finally-used `sendForgotPasswordEmail`. Email delivery failure is logged, not surfaced to the client (matches the tolerant-catch pattern already used for invite emails).
+4. **`app/api/reset-password/route.ts`** (new) — `POST`. Validates the token exists/unused/unexpired, then atomically claims it (`updateMany` conditional on `used: false`) inside a transaction before updating `passwordHash` + `emailVerified: true` + `sessionVersion: { increment: 1 }`. A losing concurrent claim gets the same "invalid or expired" response as a bad token, not a confusing different error.
+5. **`app/forgot-password/page.tsx` + `forgot-password-form.tsx`** (new) — same card-centered layout convention as `/login`/`/signup`. Generic success message after submit, no confirmation of account existence in the UI either.
+6. **`app/reset-password/page.tsx` + `reset-password-form.tsx`** (new) — reads `token` from the URL, new-password + confirm fields. Wrapped in `<Suspense>` (required for `useSearchParams` in a page Next.js attempts to statically prerender — `/login` avoids this because `await auth()` already forces it dynamic). A missing token shows an explicit "Invalid reset link" screen instead of a broken form. On success, redirects to `/login?reset=1` rather than auto-signing-in.
+7. **`app/login/login-form.tsx`** — added a "Forgot password?" link next to the password field, and a dismissible success banner for `?reset=1` (matching the existing `?verified=1`/`?registered=1` banner pattern already on this page).
+
+### What did NOT change
+
+- No rate limiting added — consistent with (not a regression from) the rest of the app, which has none anywhere.
+- No changes to the login `authorize()` flow itself, no new auth provider, no parallel credentials mechanism.
+- `EmailVerificationToken` untouched — password reset gets its own token table rather than overloading that one.
+
+### Checks run
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean; 4 new routes: /forgot-password, /reset-password,
+                     /api/forgot-password, /api/reset-password
+```
+
+### Manual verification (Playwright, headless Chromium, fully disposable test account)
+
+Created one synthetic test user (`emailVerified: false` initially, to also exercise decision #2), ran the complete flow, then deleted the account (cascade-deleted its token row too — confirmed 0 orphaned rows after):
+
+- Requested a reset → generic success message shown, token row created.
+- Visited the reset link, submitted a new password → redirected to `/login?reset=1`, banner visible.
+- Confirmed in the database: `passwordHash` changed, `emailVerified` flipped true, `sessionVersion` incremented 1→2, token marked used.
+- Logged in with the **new** password → succeeded, landed on `/dashboard`.
+- Logged in with the **old** password → correctly rejected.
+- Reused the same (now-used) reset link → correctly rejected with a 400 and a clear "Invalid or expired reset link" message, not a crash or a silent success.
+- A garbage/nonexistent token and a missing token were both handled cleanly (same rejection path; missing token shows a dedicated "Invalid reset link" screen with a link back to request a new one).
+- Zero console errors throughout.
+
+### Unresolved issues
+
+1. No rate limiting on `/api/forgot-password` — someone could still email-bomb an address by repeatedly requesting resets, or probe timing/response-size side channels for enumeration even though the response body itself doesn't leak account existence. Same exposure already exists on `/api/register` and login today; flagging here rather than solving it only for this one endpoint.
+2. `EmailLog` (the model already used to record verification/invite email sends) isn't written to for forgot-password emails — `sendForgotPasswordEmail` doesn't log to it and this session didn't add that either, so there's no admin-visible record of reset emails sent, unlike some other transactional email types.
+
+### Recommended next milestone
+
+If email-based abuse becomes a real concern, a lightweight rate limit (e.g. per-email or per-IP cooldown) covering `/api/forgot-password`, `/api/register`, and login would be a single small piece of shared infrastructure rather than three separate ad hoc fixes.
+
+---
+
 ## Session: Admin Subscriptions module (Phases 1–3, read-only) — 2026-07-20
 
 ### What was inspected before implementing

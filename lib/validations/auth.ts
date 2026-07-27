@@ -98,6 +98,31 @@ export const loginSchema = z.object({
     }),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string()
+    .transform(normalizeEmail)
+    .refine((value) => value.length >= 6, {
+      message: "Email is required",
+    })
+    .refine((value) => emailRegex.test(value), {
+      message: "Invalid email address",
+    }),
+});
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1, "Missing or invalid reset link"),
+    password: passwordSchema,
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterOutput = z.output<typeof registerSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

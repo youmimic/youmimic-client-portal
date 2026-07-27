@@ -31,6 +31,9 @@ export default async function AdminUserDetailPage({
       suspendedAt: true,
       suspensionReason: true,
       sessionVersion: true,
+      stripeEmail: true,
+      gocardlessCustomerId: true,
+      gocardlessMandateActive: true,
       subscriptions: {
         orderBy: { createdAt: "desc" },
         take: 5,
@@ -135,6 +138,27 @@ export default async function AdminUserDetailPage({
               value={String(user.sessionVersion)}
               mono
             />
+            {user.stripeEmail && (
+              <DetailRow label="Stripe Email" value={user.stripeEmail} />
+            )}
+            {user.gocardlessCustomerId && (
+              <>
+                <DetailRow
+                  label="GoCardless Customer"
+                  value={user.gocardlessCustomerId}
+                  mono
+                />
+                <DetailRow
+                  label="GoCardless Mandate"
+                  value={user.gocardlessMandateActive ? "Active" : "Inactive"}
+                  valueClass={
+                    user.gocardlessMandateActive
+                      ? "font-medium text-green-600 dark:text-green-400"
+                      : "text-muted-foreground"
+                  }
+                />
+              </>
+            )}
           </CardContent>
         </Card>
 

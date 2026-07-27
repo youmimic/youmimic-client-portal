@@ -36,9 +36,11 @@ export default function LoginForm() {
   const [showFormError, setShowFormError] = useState(true);
   const [showRegistered, setShowRegistered] = useState(true);
   const [showVerified, setShowVerified] = useState(true);
+  const [showReset, setShowReset] = useState(true);
 
   const verified = searchParams.get("verified");
   const registered = searchParams.get("registered");
+  const reset = searchParams.get("reset");
   const rawCallbackUrl = searchParams.get("callbackUrl") ?? "";
   const callbackUrl =
     rawCallbackUrl.startsWith("/") && !rawCallbackUrl.startsWith("//")
@@ -124,6 +126,20 @@ export default function LoginForm() {
             </div>
           )}
 
+          {reset === "1" && showReset && (
+            <div className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              <p>Your password has been reset. You can now log in.</p>
+              <button
+                type="button"
+                onClick={() => setShowReset(false)}
+                aria-label="Dismiss password reset success message"
+                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+
           {formError && showFormError && (
             <div className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               <p>{formError}</p>
@@ -168,7 +184,15 @@ export default function LoginForm() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Password</FormLabel>
+                      <Link
+                        href="/forgot-password"
+                        className="text-sm font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
                     <FormControl>
                       <Input
                         type="password"
