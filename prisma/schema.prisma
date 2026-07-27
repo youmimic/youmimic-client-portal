@@ -170,16 +170,31 @@ model EnterpriseMember {
   @@map("enterprise_members")
 }
 
+enum BillingProvider {
+  STRIPE
+  GOCARDLESS
+}
+
 model Subscription {
   id                   String             @id @default(cuid())
   userId               String?
   enterpriseId         String?
 
   ownerType            BillingOwnerType
+
+  // Defaults to STRIPE so every existing row is unaffected. GOCARDLESS rows
+  // have stripeCustomerId null and gocardlessCustomerId set instead — kept as
+  // two distinct nullable id columns (not one shared "external id" column)
+  // so admin UI/webhook code can't accidentally treat a GoCardless id as a
+  // Stripe one or vice versa.
+  billingProvider      BillingProvider    @default(STRIPE)
+  gocardlessCustomerId String?
+
   // Not unique: a single Stripe customer can legitimately hold more than one
   // concurrent subscription (e.g. a base plan plus a separate seats add-on).
-  // stripeSubscriptionId is the real per-subscription identity.
-  stripeCustomerId     String
+  // stripeSubscriptionId is the real per-subscription identity. Nullable
+  // because GOCARDLESS-provider rows never have one.
+  stripeCustomerId     String?
   stripeSubscriptionId String?            @unique
   stripePriceId        String?
   stripeProductId      String?

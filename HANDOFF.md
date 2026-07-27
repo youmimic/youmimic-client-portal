@@ -1,5 +1,39 @@
 # HANDOFF.md
 
+## Session: GoCardless subscription activation (schema + real Subscription rows) — 2026-07-27
+
+### Context
+
+Continuing the GoCardless reconciliation from earlier the same day. The user asked to "activate" the subscriptions for the six previously-identified GoCardless-active accounts since they're currently paying money. Last time, the equivalent request was deliberately scoped down to an informational-only marker (no `Subscription` rows) because the schema had no way to represent a non-Stripe subscription and the export had no plan/amount data. This time the user explicitly confirmed (via `AskUserQuestion`) they want **real, access-granting `Subscription` rows**, not just the marker.
+
+### Decisions confirmed with the user
+
+1. Real active `Subscription` rows (not just the informational flag) — explicitly accepting that this needs a schema workaround for the missing GoCardless-side identifier and a guessed plan type, since GoCardless gives no plan/amount data.
+2. One of the six accounts turned out to already have a registered enterprise (found by inspecting the DB, not assumed) — proceeded once confirmed.
+3. For the one account where the GoCardless contact is a *member*, not the *owner*, of the enterprise: attach the subscription to the enterprise (i.e. the owner), matching how billing already works everywhere else in this app.
+
+### What changed
+
+- **`prisma/schema.prisma`**: rather than writing a fake Stripe customer ID into `Subscription.stripeCustomerId` (which the admin Subscriptions UI explicitly labels "Stripe Customer ID" to admins — confirmed by reading that code before deciding), added a proper `BillingProvider` enum (`STRIPE` default / `GOCARDLESS`), made `stripeCustomerId` nullable, and added `Subscription.gocardlessCustomerId`. Migration applied cleanly; verified all pre-existing subscription rows kept `billingProvider = STRIPE` and none went null on `stripeCustomerId` unexpectedly.
+- Six `Subscription` rows created (`ENTERPRISE` plan/owner type, `ACTIVE` status, `GOCARDLESS` provider) for the six enterprises behind the six GoCardless-flagged accounts. No `currentPeriodStart`/`currentPeriodEnd` set — GoCardless gave no billing-period data, so these were left null rather than guessed.
+- **Bug caught and fixed before it reached anyone**: the customer-facing `/dashboard/billing` page's action-resolution logic treated "no `stripeCustomerId`" as "no real subscription," which would have shown a **"Subscribe" button and hidden the active-plan details** to these already-paying customers — the exact kind of confusing double-billing risk flagged earlier this session with a different account. Fixed by making that check provider-aware; GoCardless-provider active subscriptions now correctly show the same "managed by the YouMimic team" messaging enterprise Stripe subscriptions already show, with no self-serve checkout/portal button (neither has a GoCardless equivalent).
+- Admin Subscriptions list + detail pages updated to show "GoCardless" / the GoCardless customer ID instead of the Stripe-labeled fields when `billingProvider` is `GOCARDLESS`, so admins never see a real external ID under the wrong label.
+- The four account owners not already touched in the earlier GoCardless-reconciliation pass got the same `gocardlessCustomerId`/`gocardlessMandateActive` treatment as before, including the same "processor contact email differs from portal login email" pattern (`stripeEmail` field) for two of them.
+
+### Verification
+
+Build/typecheck/lint clean. Browser-verified with disposable synthetic fixtures (created and deleted, zero orphaned rows):
+- A synthetic enterprise-owner account with an active GoCardless subscription sees correct "Active" status and "managed by the YouMimic team" messaging on their billing page, **not** a Subscribe button — confirms the bug above is actually fixed, not just theoretically.
+- Same account's `/dashboard/bookings` access is correctly unlocked by the active GoCardless subscription (same gating path active Stripe subscriptions already use).
+- Admin Subscriptions list and detail pages correctly show "GoCardless" + the GoCardless customer ID, with no leftover "Stripe Customer ID" label on a non-Stripe row.
+
+Real customer/company names and emails for this session are in `updates/2026-07-27-gocardless-subscription-activation.md` (gitignored) rather than here.
+
+### Not done / next
+
+- No `stripeSubscriptionId`-equivalent exists for GoCardless (only a customer-level ID) — if GoCardless ever exposes per-subscription identifiers, this should be extended rather than re-derived.
+- Still only 6 manually-reconciled accounts; no bulk-import path exists for GoCardless data the way one might eventually want.
+
 ## Session: Admin create/edit for Users & Enterprises + enterprise suspension — 2026-07-27
 
 ### Context

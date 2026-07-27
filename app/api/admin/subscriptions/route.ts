@@ -13,8 +13,10 @@ import { listSubscriptionsQuerySchema } from "@/lib/validations/admin";
 
 const SUBSCRIPTION_LIST_SELECT = {
   id: true,
+  billingProvider: true,
   stripeSubscriptionId: true,
   stripeCustomerId: true,
+  gocardlessCustomerId: true,
   planType: true,
   status: true,
   ownerType: true,
@@ -65,6 +67,7 @@ export async function GET(req: Request) {
     where.OR = [
       { stripeSubscriptionId: { contains: search, mode: "insensitive" } },
       { stripeCustomerId: { contains: search, mode: "insensitive" } },
+      { gocardlessCustomerId: { contains: search, mode: "insensitive" } },
       { user: { email: { contains: search, mode: "insensitive" } } },
       { enterprise: { name: { contains: search, mode: "insensitive" } } },
     ];
@@ -106,8 +109,10 @@ export async function GET(req: Request) {
 
   const items = subscriptions.map((sub) => ({
     id: sub.id,
+    billingProvider: sub.billingProvider,
     stripeSubscriptionId: sub.stripeSubscriptionId,
     stripeCustomerId: sub.stripeCustomerId,
+    gocardlessCustomerId: sub.gocardlessCustomerId,
     planType: sub.planType,
     status: sub.status,
     ownerType: sub.ownerType,

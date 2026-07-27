@@ -7,10 +7,12 @@ import { ENTITY_TYPES } from "@/lib/admin/audit";
 
 const SUBSCRIPTION_DETAIL_SELECT = {
   id: true,
+  billingProvider: true,
   stripeSubscriptionId: true,
   stripeCustomerId: true,
   stripePriceId: true,
   stripeProductId: true,
+  gocardlessCustomerId: true,
   planType: true,
   status: true,
   ownerType: true,
@@ -91,10 +93,12 @@ export async function GET(
 
   return NextResponse.json({
     id: subscription.id,
+    billingProvider: subscription.billingProvider,
     stripeSubscriptionId: subscription.stripeSubscriptionId,
     stripeCustomerId: subscription.stripeCustomerId,
     stripePriceId: subscription.stripePriceId,
     stripeProductId: subscription.stripeProductId,
+    gocardlessCustomerId: subscription.gocardlessCustomerId,
     planType: subscription.planType,
     status: subscription.status,
     ownerType: subscription.ownerType,

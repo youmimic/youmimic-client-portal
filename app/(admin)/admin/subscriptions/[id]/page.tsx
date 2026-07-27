@@ -32,10 +32,12 @@ export default async function AdminSubscriptionDetailPage({
     where: { id },
     select: {
       id: true,
+      billingProvider: true,
       stripeSubscriptionId: true,
       stripeCustomerId: true,
       stripePriceId: true,
       stripeProductId: true,
+      gocardlessCustomerId: true,
       planType: true,
       status: true,
       ownerType: true,
@@ -234,21 +236,39 @@ export default async function AdminSubscriptionDetailPage({
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <DetailRow
-            label="Stripe Subscription ID"
-            value={subscription.stripeSubscriptionId ?? "— (not yet linked by webhook)"}
-            mono
+            label="Billing Provider"
+            value={subscription.billingProvider === "GOCARDLESS" ? "GoCardless" : "Stripe"}
           />
-          <DetailRow label="Stripe Customer ID" value={subscription.stripeCustomerId} mono />
-          <DetailRow
-            label="Stripe Price ID"
-            value={subscription.stripePriceId ?? "—"}
-            mono
-          />
-          <DetailRow
-            label="Stripe Product ID"
-            value={subscription.stripeProductId ?? "—"}
-            mono
-          />
+          {subscription.billingProvider === "GOCARDLESS" ? (
+            <DetailRow
+              label="GoCardless Customer ID"
+              value={subscription.gocardlessCustomerId ?? "—"}
+              mono
+            />
+          ) : (
+            <>
+              <DetailRow
+                label="Stripe Subscription ID"
+                value={subscription.stripeSubscriptionId ?? "— (not yet linked by webhook)"}
+                mono
+              />
+              <DetailRow
+                label="Stripe Customer ID"
+                value={subscription.stripeCustomerId ?? "—"}
+                mono
+              />
+              <DetailRow
+                label="Stripe Price ID"
+                value={subscription.stripePriceId ?? "—"}
+                mono
+              />
+              <DetailRow
+                label="Stripe Product ID"
+                value={subscription.stripeProductId ?? "—"}
+                mono
+              />
+            </>
+          )}
         </CardContent>
       </Card>
 

@@ -10,8 +10,10 @@ import { PlanBadge, StatusBadge } from "@/components/billing/status-badges";
 
 type SubscriptionRow = {
   id: string;
+  billingProvider: string;
   stripeSubscriptionId: string | null;
-  stripeCustomerId: string;
+  stripeCustomerId: string | null;
+  gocardlessCustomerId: string | null;
   planType: string;
   status: string;
   ownerType: string;
@@ -264,12 +266,23 @@ export default function AdminSubscriptionsPage() {
                         <StatusBadge status={sub.status} />
                       </td>
                       <td className="px-6 py-3 hidden md:table-cell">
-                        <div className="font-mono text-xs">
-                          {sub.stripeSubscriptionId ?? "—"}
-                        </div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {sub.stripeCustomerId}
-                        </div>
+                        {sub.billingProvider === "GOCARDLESS" ? (
+                          <>
+                            <div className="text-xs text-muted-foreground">GoCardless</div>
+                            <div className="font-mono text-xs">
+                              {sub.gocardlessCustomerId ?? "—"}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="font-mono text-xs">
+                              {sub.stripeSubscriptionId ?? "—"}
+                            </div>
+                            <div className="font-mono text-xs text-muted-foreground">
+                              {sub.stripeCustomerId ?? "—"}
+                            </div>
+                          </>
+                        )}
                       </td>
                       <td className="px-6 py-3 hidden lg:table-cell text-muted-foreground">
                         {sub.currentPeriodEnd

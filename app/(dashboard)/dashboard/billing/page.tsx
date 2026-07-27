@@ -43,6 +43,7 @@ async function fetchBillingData(userId: string) {
           currentPeriodEnd: true,
           cancelAtPeriodEnd: true,
           stripeCustomerId: true,
+          billingProvider: true,
           canceledAt: true,
         },
       }),
@@ -60,6 +61,7 @@ async function fetchBillingData(userId: string) {
               currentPeriodEnd: true,
               cancelAtPeriodEnd: true,
               stripeCustomerId: true,
+              billingProvider: true,
               canceledAt: true,
             },
           },
@@ -127,14 +129,17 @@ function resolveAction(
   planType: "CREATOR" | "ENTERPRISE",
   enterpriseId?: string,
 ): { action: BillingAction; label: string; variant: "default" | "outline" } {
+  // A missing stripeCustomerId only means "no real subscription" for
+  // Stripe-provider rows (e.g. an abandoned checkout). GoCardless-provider
+  // rows never have one by design — checking it here would otherwise show a
+  // "Subscribe" button to someone who is already an active paying customer.
+  const hasRealSub = !!sub && (sub.billingProvider !== "STRIPE" || !!sub.stripeCustomerId);
+
   if (enterpriseId !== undefined) {
     // Enterprise: self-serve checkout for initial setup only.
     // Once an active subscription exists, changes go through the YouMimic team.
     const noSub =
-      !sub ||
-      !sub.stripeCustomerId ||
-      sub.status === "CANCELED" ||
-      sub.status === "INCOMPLETE_EXPIRED";
+      !hasRealSub || sub!.status === "CANCELED" || sub!.status === "INCOMPLETE_EXPIRED";
 
     if (noSub) {
       return {
@@ -144,7 +149,7 @@ function resolveAction(
       };
     }
 
-    if (sub.status === "INCOMPLETE") {
+    if (sub!.status === "INCOMPLETE") {
       return {
         action: { type: "checkout", planType: "ENTERPRISE", enterpriseId },
         label: "Complete checkout",
@@ -156,12 +161,10 @@ function resolveAction(
     return { action: { type: "managed" }, label: "", variant: "outline" };
   }
 
-  // Personal plan (CREATOR) — fully self-serve.
+  // Personal plan (CREATOR) — fully self-serve, but only for Stripe: the
+  // customer portal is a Stripe API call and has no GoCardless equivalent.
   const noPortal =
-    !sub ||
-    !sub.stripeCustomerId ||
-    sub.status === "CANCELED" ||
-    sub.status === "INCOMPLETE_EXPIRED";
+    !hasRealSub || sub!.status === "CANCELED" || sub!.status === "INCOMPLETE_EXPIRED";
 
   if (noPortal) {
     return {
@@ -171,12 +174,16 @@ function resolveAction(
     };
   }
 
-  if (sub.status === "INCOMPLETE") {
+  if (sub!.status === "INCOMPLETE") {
     return {
       action: { type: "checkout", planType },
       label: "Complete checkout",
       variant: "default",
     };
+  }
+
+  if (sub!.billingProvider !== "STRIPE") {
+    return { action: { type: "managed" }, label: "", variant: "outline" };
   }
 
   return { action: { type: "portal" }, label: "Manage billing", variant: "outline" };
