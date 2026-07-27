@@ -58,6 +58,14 @@ model User {
   // without asserting it as the account's identity.
   stripeEmail      String?
 
+  // Raw GoCardless customer ID and whether GoCardless currently reports an
+  // active direct-debit mandate for them, from a manual reconciliation pass
+  // ahead of a future GoCardless integration. Kept separate from Subscription
+  // rather than faked into that (Stripe-shaped, stripeCustomerId-required)
+  // table.
+  gocardlessCustomerId    String?
+  gocardlessMandateActive Boolean @default(false)
+
   userRoles               UserRole[]
   enterprises             Enterprise[]      @relation("EnterpriseOwner")
   enterpriseMembers       EnterpriseMember[]
@@ -65,6 +73,7 @@ model User {
   avatars                 Avatar[]
   bookings                Booking[]
   emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
   invitesSent             Invite[]          @relation("InvitedByUser")
   systemEvents            SystemEvent[]
   emailLogs               EmailLog[]
@@ -351,6 +360,25 @@ model EmailVerificationToken {
 
   @@index([userId])
   @@map("email_verification_tokens")
+}
+
+// Same shape as EmailVerificationToken (separate table, not a shared one) —
+// keeping the two independent means a reset link and a stale verification
+// link can never be confused for one another, and each can carry its own
+// expiry policy (this one is shorter-lived: a reset link grants account
+// takeover if intercepted, not just an email-ownership check).
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 model Invite {
