@@ -22,6 +22,7 @@ import {
   StatusBadge,
   PaymentStatusBadge,
 } from "@/components/billing/status-badges";
+import { AvatarBillingBreakdown } from "@/components/dashboard/avatar-billing";
 
 export const metadata = {
   title: "Billing — YouMimic Portal",
@@ -55,6 +56,7 @@ async function fetchBillingData(userId: string) {
         select: {
           id: true,
           name: true,
+          provisioningMode: true,
           subscriptions: {
             where: { billingComponent: "STANDARD" },
             orderBy: { updatedAt: "desc" },
@@ -76,7 +78,13 @@ async function fetchBillingData(userId: string) {
               billingStatus: true,
               subscriptions: {
                 where: { billingComponent: "AVATAR_STORAGE" },
-                select: { unitAmountCents: true, currency: true, currentPeriodEnd: true },
+                select: {
+                  unitAmountCents: true,
+                  currency: true,
+                  currentPeriodEnd: true,
+                  provisioningFailedAt: true,
+                  provisioningFailureMsg: true,
+                },
                 take: 1,
               },
             },
@@ -368,7 +376,13 @@ type AvatarBillingRow = {
   id: string;
   name: string;
   billingStatus: "ACTIVE" | "PAUSED" | "ARCHIVED";
-  subscriptions: { unitAmountCents: number | null; currency: string; currentPeriodEnd: Date | null }[];
+  subscriptions: {
+    unitAmountCents: number | null;
+    currency: string;
+    currentPeriodEnd: Date | null;
+    provisioningFailedAt: Date | null;
+    provisioningFailureMsg: string | null;
+  }[];
 };
 
 function EnterprisePlanCard({
@@ -379,6 +393,7 @@ function EnterprisePlanCard({
   enterprise: {
     id: string;
     name: string;
+    provisioningMode: "SALES_ASSISTED" | "SELF_SERVE";
     subscriptions: SubData[];
   };
   platformFee?: { unitAmountCents: number | null; currency: string };
@@ -427,7 +442,25 @@ function EnterprisePlanCard({
         )}
 
         {(platformFee || (avatars && avatars.length > 0)) && (
-          <AvatarBillingBreakdown platformFee={platformFee ?? null} avatars={avatars ?? []} />
+          <AvatarBillingBreakdown
+            enterpriseId={enterprise.id}
+            provisioningMode={enterprise.provisioningMode}
+            platformFee={platformFee ?? null}
+            avatars={(avatars ?? []).map((a) => ({
+              id: a.id,
+              name: a.name,
+              billingStatus: a.billingStatus,
+              subscription: a.subscriptions[0]
+                ? {
+                    unitAmountCents: a.subscriptions[0].unitAmountCents,
+                    currency: a.subscriptions[0].currency,
+                    currentPeriodEnd: a.subscriptions[0].currentPeriodEnd?.toISOString() ?? null,
+                    provisioningFailedAt: a.subscriptions[0].provisioningFailedAt?.toISOString() ?? null,
+                    provisioningFailureMsg: a.subscriptions[0].provisioningFailureMsg,
+                  }
+                : null,
+            }))}
+          />
         )}
       </CardContent>
 
@@ -435,76 +468,6 @@ function EnterprisePlanCard({
         <BillingActionButton action={action} label={label} variant={variant} />
       </CardFooter>
     </Card>
-  );
-}
-
-function avatarIncludedInTotal(avatar: AvatarBillingRow): boolean {
-  const sub = avatar.subscriptions[0];
-  if (!sub || sub.unitAmountCents === null) return false;
-  if (avatar.billingStatus === "ACTIVE") return true;
-  return !!sub.currentPeriodEnd && sub.currentPeriodEnd >= new Date();
-}
-
-// Read-only itemized breakdown for Phase 1 avatar billing — Platform Access
-// Fee (flat, can legitimately be $0) plus one row per avatar under
-// management. Mirrors the admin Billing Breakdown card's total logic:
-// a paused/archived avatar keeps counting until its current period ends.
-function AvatarBillingBreakdown({
-  platformFee,
-  avatars,
-}: {
-  platformFee: { unitAmountCents: number | null; currency: string } | null;
-  avatars: AvatarBillingRow[];
-}) {
-  const currency = platformFee?.currency ?? avatars[0]?.subscriptions[0]?.currency ?? "AUD";
-  const totalCents =
-    (platformFee?.unitAmountCents ?? 0) +
-    avatars.reduce((sum, a) => {
-      const sub = a.subscriptions[0];
-      if (!avatarIncludedInTotal(a) || !sub || sub.unitAmountCents === null) return sum;
-      return sum + sub.unitAmountCents;
-    }, 0);
-
-  return (
-    <div className="rounded-md border text-sm">
-      <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
-        <span className="font-medium">Platform Access Fee</span>
-        <span className="tabular-nums">
-          {platformFee?.unitAmountCents !== null && platformFee?.unitAmountCents !== undefined
-            ? formatAmount(platformFee.unitAmountCents, currency)
-            : "—"}
-        </span>
-      </div>
-      {avatars.map((avatar) => {
-        const sub = avatar.subscriptions[0];
-        const included = avatarIncludedInTotal(avatar);
-        return (
-          <div
-            key={avatar.id}
-            className="flex items-center justify-between px-3 py-2 border-b last:border-b-0"
-          >
-            <span>
-              {avatar.name}
-              {avatar.billingStatus !== "ACTIVE" && (
-                <span className="ml-1.5 text-xs text-muted-foreground">
-                  ({avatar.billingStatus === "PAUSED" ? "paused" : "archived"}
-                  {included ? ", billed through current period" : ""})
-                </span>
-              )}
-            </span>
-            <span className="tabular-nums text-muted-foreground">
-              {sub?.unitAmountCents !== null && sub?.unitAmountCents !== undefined
-                ? formatAmount(sub.unitAmountCents, sub.currency)
-                : "—"}
-            </span>
-          </div>
-        );
-      })}
-      <div className="flex items-center justify-between px-3 py-2 font-semibold">
-        <span>Total / month</span>
-        <span className="tabular-nums">{formatAmount(totalCents, currency)}</span>
-      </div>
-    </div>
   );
 }
 

@@ -50,6 +50,32 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   return typeof details === "string" ? details : details.id;
 }
 
+// Phase 2 avatar billing broke the one-customer-one-subscription assumption
+// the stripeCustomerId fallback above relied on: a self-serve enterprise's
+// Stripe customer can hold a STANDARD plan subscription plus several
+// AVATAR_STORAGE subscriptions at once. When an invoice event's own
+// subscription id can't be resolved, this checks whether the customer-wide
+// fallback would actually be unambiguous before using it. Not restricted to
+// rows with a stripeSubscriptionId — an INCOMPLETE placeholder row (no id
+// yet) is still a live candidate the blanket fallback could hit.
+async function countLiveSubscriptionsForCustomer(cid: string): Promise<number> {
+  return prisma.subscription.count({
+    where: { stripeCustomerId: cid, status: { not: SubscriptionStatus.CANCELED } },
+  });
+}
+
+async function logAmbiguousInvoiceEvent(eventType: string, invoiceId: string | null, cid: string) {
+  console.error(`Ambiguous ${eventType} for customer ${cid} (invoice ${invoiceId}) — has multiple active subscriptions, no subscription id on the invoice. Skipped fallback update; needs manual review.`);
+  await prisma.systemEvent.create({
+    data: {
+      type: "stripe_webhook_ambiguous_invoice",
+      source: "stripe_webhook",
+      message: `${eventType}: could not resolve a single subscription for customer with multiple active subscriptions`,
+      metadata: { invoiceId, stripeCustomerId: cid, eventType },
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Handler helpers
 // ---------------------------------------------------------------------------
@@ -126,6 +152,24 @@ async function handleSubscriptionUpsert(sub: Stripe.Subscription) {
       data,
     });
   }
+
+  // Phase 2 avatar billing: once Stripe confirms the subscription is
+  // actually gone (not just scheduled via cancel_at_period_end), flip the
+  // avatar to ARCHIVED. Done here rather than in the customer-initiated
+  // cancel call so a subscription cancelled directly in Stripe (or one that
+  // fails to renew) is reflected too, not just self-serve cancellations.
+  if (sub.status === "canceled") {
+    const local = await prisma.subscription.findUnique({
+      where: { stripeSubscriptionId: sub.id },
+      select: { avatarId: true, billingComponent: true },
+    });
+    if (local?.billingComponent === "AVATAR_STORAGE" && local.avatarId) {
+      await prisma.avatar.update({
+        where: { id: local.avatarId },
+        data: { billingStatus: "ARCHIVED" },
+      });
+    }
+  }
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
@@ -134,8 +178,17 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 
   const subId = invoiceSubscriptionId(invoice);
 
+  if (!subId && (await countLiveSubscriptionsForCustomer(cid)) > 1) {
+    await logAmbiguousInvoiceEvent("invoice.payment_succeeded", invoice.id ?? null, cid);
+    return;
+  }
+
+  // Never attach a payment to an already-canceled row, even in the
+  // unambiguous (<=1 live subscription) case.
   const localSub = await prisma.subscription.findFirst({
-    where: subId ? { stripeSubscriptionId: subId } : { stripeCustomerId: cid },
+    where: subId
+      ? { stripeSubscriptionId: subId }
+      : { stripeCustomerId: cid, status: { not: SubscriptionStatus.CANCELED } },
     orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
@@ -161,8 +214,17 @@ async function handleInvoiceFailed(invoice: Stripe.Invoice) {
 
   const subId = invoiceSubscriptionId(invoice);
 
+  if (!subId && (await countLiveSubscriptionsForCustomer(cid)) > 1) {
+    await logAmbiguousInvoiceEvent("invoice.payment_failed", invoice.id ?? null, cid);
+    return;
+  }
+
+  // Never mark an already-canceled row PAST_DUE, even in the unambiguous
+  // (<=1 live subscription) case.
   await prisma.subscription.updateMany({
-    where: subId ? { stripeSubscriptionId: subId } : { stripeCustomerId: cid },
+    where: subId
+      ? { stripeSubscriptionId: subId }
+      : { stripeCustomerId: cid, status: { not: SubscriptionStatus.CANCELED } },
     data: { status: SubscriptionStatus.PAST_DUE },
   });
 }

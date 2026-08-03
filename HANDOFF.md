@@ -1,5 +1,58 @@
 # HANDOFF.md
 
+## Session: Enterprise Avatar Billing — Phase 2 (automated Stripe writes for self-serve enterprises) — 2026-08-03
+
+### Context
+
+User supplied an updated plan doc plus a Phase 2 coding-agent prompt, initially asking to "read both files, ask questions if needed" only. Four clarifying questions were asked and answered (cron infra, webhook hardening timing, verification depth, payment-method caching), all resolved to the doc's own recommended options. Built on explicit go-ahead. Phase 2 adds the first **live Stripe-write** surface in this codebase: automatically creating/cancelling a $99 AUD/month Stripe subscription per avatar for enterprises explicitly marked `SELF_SERVE`, while every other enterprise stays on Phase 1's manual admin path indefinitely.
+
+### What was inspected before writing code (Step 0, both docs required this)
+
+- `Subscription.cancelAtPeriodEnd` **already existed** (Phase-1-era field, line 251) — doc 2 proposed re-adding it as new; would have been a duplicate-field Prisma error. Reused, not re-added.
+- `customer.subscription.deleted` was **already routed** in the webhook switch (to the same handler as `.updated`) — doc 2 implied it needed adding as a new case. Only the handler's *logic* needed extending (flip `Avatar.billingStatus → ARCHIVED` when the subscription has `avatarId` set and Stripe reports `canceled`).
+- No existing Stripe idempotency-key usage anywhere in the codebase (only Resend email idempotency existed) — this session establishes the first one, `avatar-storage-${avatarId}`.
+- The enterprise's Stripe customer ID is only reliably found via its `STANDARD`-component subscription row (created at real checkout) — Phase 1's manually-entered `PLATFORM_FEE`/`AVATAR_STORAGE` rows often have no `stripeCustomerId` of their own.
+- **New risk identified, not in either doc**: the webhook's `stripeCustomerId`-only fallback path (used when an invoice event's own subscription id can't be resolved) was safe only because one customer never held more than one real subscription. Phase 2 breaks that — a self-serve enterprise's customer can hold a `STANDARD` subscription plus several `AVATAR_STORAGE` subscriptions at once. Flagged to the user and hardened this session (see below).
+- **Price gap found**: neither of the two existing recurring Stripe test-mode prices matched Phase 1's $99 AUD/month avatar-storage default (`STRIPE_AVATAR_CAPTURE_PRICE_ID` already in `.env` turned out to be a one-time $1,500 AUD charge — wrong shape entirely, unrelated to this feature). Created a new test-mode Product + recurring $99 AUD/month Price via the Stripe API (explicit user approval obtained first — an autonomous attempt to create it was correctly blocked by the environment's auto-mode classifier as an external-service write) and wired it in as `STRIPE_AVATAR_STORAGE_PRICE_ID`.
+
+### What changed
+
+- **`prisma/schema.prisma`**: `ProvisioningMode` enum (`SALES_ASSISTED` default / `SELF_SERVE`) on `Enterprise.provisioningMode`. `Subscription.provisioningFailedAt`/`provisioningFailureMsg` (both nullable — set only when a self-serve Stripe call fails, so a failed avatar is never silently left unbilled). Migration `20260803034439_enterprise_avatar_billing_phase2` — purely additive, hand-written (same non-interactive `prisma migrate dev` workaround as every prior session).
+- **`.env`** (gitignored, not committed): added `STRIPE_AVATAR_STORAGE_PRICE_ID` (new $99 AUD/mo test-mode Price, created this session) and `CRON_SECRET` (random 32-byte hex, checked by the retry-provisioning route's `Authorization: Bearer` header).
+- **RBAC/audit**: `canManageProvisioningMode` (ADMIN minimum). Reused the existing `SUBSCRIPTION` audit entity type for `set_enterprise_provisioning_mode` / `provision_avatar_subscription` / `cancel_avatar_subscription` — no new entity type needed.
+- **`lib/stripe/avatar-billing.ts`** (new): `provisionAvatarStorageSubscription(enterpriseId, avatarId)` — gates on `provisioningMode === SELF_SERVE`, resolves the enterprise's Stripe customer via its `STANDARD` subscription row, resolves the default payment method **live from Stripe every call** (no local caching, per confirmed decision — a card removed directly in Stripe must never be silently reused from a stale copy), creates one independent Stripe Subscription with idempotency key `avatar-storage-${avatarId}`, and on failure records `provisioningFailedAt`/`provisioningFailureMsg` on a (possibly newly created) placeholder row rather than swallowing the error. `cancelAvatarStorageSubscription(subscriptionId)` — always `cancel_at_period_end: true`, never immediate; `Avatar.billingStatus` is left alone until the webhook confirms Stripe actually ended it.
+- **API routes**: `PATCH /api/admin/enterprises/[id]/provisioning-mode` (admin-only; flipping to `SELF_SERVE` checks for a default payment method and returns a non-blocking `warning` if none exists yet, rather than silently allowing a mode nothing can use). `POST`/`DELETE /api/dashboard/enterprises/[id]/avatars/[avatarId]/storage-subscription` (enterprise-owner-authenticated, gated on `provisioningMode === SELF_SERVE`). `POST /api/internal/billing/retry-failed-provisioning` (cron-only, `CRON_SECRET` header, re-attempts every `AVATAR_STORAGE` row with `provisioningFailedAt` set using the same idempotency key so retries are safe).
+- **`vercel.json`** (new): hourly cron schedule pointing at the retry endpoint — no cron infrastructure existed in this repo before this session.
+- **Webhook (`app/api/stripe/webhook/route.ts`)**: `handleSubscriptionUpsert` now flips `Avatar.billingStatus → ARCHIVED` when a matched subscription is `AVATAR_STORAGE` and Stripe reports `status: "canceled"`. **Customer-id-fallback hardening** (the risk found in Step 0): both `handleInvoicePaid` and `handleInvoiceFailed` now check how many *live* (non-`CANCELED`) subscriptions share the customer before falling back to a customer-wide match when an invoice's own subscription id can't be resolved — if more than one, the fallback is skipped and a `SystemEvent` (`stripe_webhook_ambiguous_invoice`) is logged for manual review instead of blanket-updating every subscription on that customer. Also fixed a related bug the verification pass caught directly (see below): the fallback path itself, even in the unambiguous case, could previously mark an already-`CANCELED` subscription back to `PAST_DUE` — both fallback queries now explicitly exclude `CANCELED` rows.
+- **UI**: `ProvisioningModeCard` (admin, `/admin/enterprises/[id]`) — mode toggle + inline payment-method warning. `components/dashboard/avatar-billing.tsx` (new client component) replaces the old server-rendered read-only breakdown on `/dashboard/billing` — adds "Add avatar" / "Remove" actions when `provisioningMode === SELF_SERVE`, shows a "contact your account manager to change avatars" note otherwise, and surfaces `provisioningFailedAt`/`provisioningFailureMsg` inline (both admin and customer views) when a self-serve provision attempt has failed and is awaiting cron retry.
+
+### A real bug caught by verification, not by review
+
+The customer-id-fallback hardening above was written correctly in intent but the **first** implementation only counted candidate subscriptions with a non-null `stripeSubscriptionId`, and separately the "safe" (unambiguous) fallback path had no `status` filter at all. Running the actual Playwright + real-Stripe verification (not just typecheck/build) caught this concretely: a simulated `invoice.payment_failed` event marked an already-`CANCELED` avatar subscription (and the untouched `STANDARD` row) back to `PAST_DUE`. Fixed by (a) counting *live* subscriptions by `status`, not by whether a Stripe id is already attached, and (b) excluding `CANCELED` rows from both fallback queries unconditionally, not just under the ambiguity guard. Re-ran the full verification pass afterward — all 24 assertions pass.
+
+### Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged, unrelated)
+npm run typecheck → clean
+npm run build     → clean, all new routes registered (provisioning-mode, dashboard/.../storage-subscription, internal/billing/retry-failed-provisioning)
+```
+
+Full Playwright + **real Stripe test-mode API** pass (disposable synthetic fixtures — admin/owner/enterprise/2 avatars named "Verify Avatar One/Two", zero real customer data — all deleted afterward, zero orphaned rows confirmed including `admin_logs`; every real Stripe test object — 2 subscriptions, 1 customer, 1 payment method — canceled/detached/deleted afterward):
+- Admin flips enterprise to `SELF_SERVE` via the real UI; payment-method warning correctly surfaces (customer has no card yet).
+- Add-avatar correctly blocked (`422 NO_PAYMENT_METHOD`) before a card is attached.
+- Attached a real Stripe test card (`pm_card_visa`); added two avatars — confirmed **two independent real $99 AUD/month Stripe subscriptions** exist via the Stripe API (not just local DB state).
+- Idempotency confirmed at the Stripe layer directly: repeating the exact original `stripe.subscriptions.create` call with the same idempotency key returns the same subscription id, not a new one; app-level `ALREADY_EXISTS` guard also confirmed independently.
+- Removed one avatar; confirmed `cancel_at_period_end: true` via a real Stripe API read-back; avatar stayed `ACTIVE` locally (billed through period end) until a simulated `customer.subscription.deleted` webhook flipped it to `ARCHIVED` and the local subscription row to `CANCELED`.
+- Confirmed `SALES_ASSISTED` enterprises get a `403` on the self-serve API and see "contact your account manager" messaging with no add/remove affordance in the UI.
+- Confirmed the customer-id-fallback hardening directly: a simulated ambiguous `invoice.payment_failed` (customer had 2 live subscriptions, no resolvable subscription id) logged exactly one `SystemEvent` and marked nothing `PAST_DUE`; a control event with a resolvable subscription id still correctly marked exactly that one subscription `PAST_DUE`.
+
+### Not done / next
+
+- No bulk "flip many enterprises to SELF_SERVE" admin action — one at a time via the detail page, matching how every other admin toggle in this app works today.
+- The retry-failed-provisioning cron is hourly and untested against Vercel's actual production cron delivery (only the route itself was verified, via a direct authenticated call) — worth a one-time production smoke check after the first real deploy.
+- `CONSOLIDATED` avatar billing mode, self-serve custom per-avatar pricing, and automatic enterprise migration to `SELF_SERVE` remain explicitly out of scope per both planning docs.
+
 ## Session: Enterprise Avatar Billing — Phase 1 — 2026-07-27
 
 ### Context

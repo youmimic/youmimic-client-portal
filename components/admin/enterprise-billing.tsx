@@ -321,6 +321,76 @@ function ContactForm({
 }
 
 // ---------------------------------------------------------------------------
+// Provisioning mode (Phase 2 — automated Stripe writes for self-serve)
+// ---------------------------------------------------------------------------
+
+export function ProvisioningModeCard({
+  enterpriseId,
+  provisioningMode,
+  canManage,
+}: {
+  enterpriseId: string;
+  provisioningMode: "SALES_ASSISTED" | "SELF_SERVE";
+  canManage: boolean;
+}) {
+  const router = useRouter();
+  const [state, setState] = useState<ActionState>(idle);
+  const [warning, setWarning] = useState<string | null>(null);
+
+  async function handleChange(next: "SALES_ASSISTED" | "SELF_SERVE") {
+    setState({ loading: true, error: null });
+    setWarning(null);
+    try {
+      const json = (await apiCall(`/api/admin/enterprises/${enterpriseId}/provisioning-mode`, "PATCH", {
+        provisioningMode: next,
+      })) as { warning?: string | null };
+      if (json.warning) setWarning(json.warning);
+      router.refresh();
+    } catch (e) {
+      setState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+      return;
+    }
+    setState(idle);
+  }
+
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="font-medium">Avatar billing mode</div>
+          <div className="text-xs text-muted-foreground">
+            {provisioningMode === "SELF_SERVE"
+              ? "Customer can add/remove avatar subscriptions themselves — live Stripe writes."
+              : "Manual — avatar billing is entered here by an admin (Phase 1)."}
+          </div>
+        </div>
+        {canManage && (
+          <Select
+            value={provisioningMode}
+            onValueChange={(v) => handleChange((v ?? "SALES_ASSISTED") as "SALES_ASSISTED" | "SELF_SERVE")}
+            name="provisioning-mode"
+          >
+            <SelectTrigger id="provisioning-mode" className="w-45" disabled={state.loading}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="SALES_ASSISTED">Sales-assisted</SelectItem>
+              <SelectItem value="SELF_SERVE">Self-serve</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+      {state.error && <p className="text-destructive">{state.error}</p>}
+      {warning && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+          {warning}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Billing breakdown
 // ---------------------------------------------------------------------------
 
@@ -342,6 +412,8 @@ type AvatarRow = {
     unitAmountCents: number | null;
     currency: string;
     currentPeriodEnd: string | null;
+    provisioningFailedAt?: string | null;
+    provisioningFailureMsg?: string | null;
   } | null;
 };
 
@@ -475,42 +547,49 @@ export function EnterpriseBillingBreakdownCard({
           avatars.map((avatar) => {
             const included = isIncludedInTotal(avatar);
             return (
-              <div key={avatar.id} className="flex items-center justify-between gap-3 py-2 border-b">
-                <div>
-                  <div className="font-medium">{avatar.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {[avatar.contactName, avatar.contactPhone].filter(Boolean).join(" · ") || "No avatar contact on file"}
-                    {" · "}
-                    <span
-                      className={
-                        avatar.billingStatus === "ACTIVE"
-                          ? "text-green-600 dark:text-green-400"
-                          : avatar.billingStatus === "PAUSED"
-                            ? "text-amber-600 dark:text-amber-400"
-                            : "text-muted-foreground"
-                      }
-                    >
-                      {avatar.billingStatus === "ACTIVE" ? "Active" : avatar.billingStatus === "PAUSED" ? "Paused" : "Archived"}
-                    </span>
-                    {avatar.billingStatus !== "ACTIVE" && (
-                      <span className="text-muted-foreground">
-                        {included ? " — billed through current period" : " — no longer billed"}
+              <div key={avatar.id} className="py-2 border-b">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{avatar.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {[avatar.contactName, avatar.contactPhone].filter(Boolean).join(" · ") || "No avatar contact on file"}
+                      {" · "}
+                      <span
+                        className={
+                          avatar.billingStatus === "ACTIVE"
+                            ? "text-green-600 dark:text-green-400"
+                            : avatar.billingStatus === "PAUSED"
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-muted-foreground"
+                        }
+                      >
+                        {avatar.billingStatus === "ACTIVE" ? "Active" : avatar.billingStatus === "PAUSED" ? "Paused" : "Archived"}
                       </span>
+                      {avatar.billingStatus !== "ACTIVE" && (
+                        <span className="text-muted-foreground">
+                          {included ? " — billed through current period" : " — no longer billed"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="tabular-nums font-medium">
+                      {avatar.subscription?.unitAmountCents !== null && avatar.subscription?.unitAmountCents !== undefined
+                        ? formatAmount(avatar.subscription.unitAmountCents, avatar.subscription.currency)
+                        : "Not priced"}
+                    </span>
+                    {canManage && (
+                      <Button variant="ghost" size="xs" onClick={() => openSubDialog(avatar)}>
+                        {avatar.subscription ? "Edit" : "Add subscription"}
+                      </Button>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="tabular-nums font-medium">
-                    {avatar.subscription?.unitAmountCents !== null && avatar.subscription?.unitAmountCents !== undefined
-                      ? formatAmount(avatar.subscription.unitAmountCents, avatar.subscription.currency)
-                      : "Not priced"}
-                  </span>
-                  {canManage && (
-                    <Button variant="ghost" size="xs" onClick={() => openSubDialog(avatar)}>
-                      {avatar.subscription ? "Edit" : "Add subscription"}
-                    </Button>
-                  )}
-                </div>
+                {avatar.subscription?.provisioningFailedAt && (
+                  <p className="text-xs text-destructive mt-1">
+                    Self-serve provisioning failed: {avatar.subscription.provisioningFailureMsg ?? "Unknown error"} — retried automatically by cron.
+                  </p>
+                )}
               </div>
             );
           })

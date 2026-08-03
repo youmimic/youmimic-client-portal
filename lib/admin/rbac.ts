@@ -122,3 +122,10 @@ export function canManageEnterpriseBilling(role: AdminRoleValue): boolean {
 export function canManageEnterpriseContacts(role: AdminRoleValue): boolean {
   return hasMinRole(role, "ADMIN");
 }
+
+// Phase 2 avatar billing automation — same ADMIN-minimum tier, gates the
+// provisioningMode toggle that turns on live Stripe writes for an
+// enterprise's avatars.
+export function canManageProvisioningMode(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}

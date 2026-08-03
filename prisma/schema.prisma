@@ -143,6 +143,16 @@ enum AvatarBillingMode {
   CONSOLIDATED
 }
 
+// Phase 2 avatar billing automation — gates whether Stripe subscription
+// writes for this enterprise's avatars happen automatically (self-serve) or
+// stay on Phase 1's manual admin path (sales-assisted). Defaults to
+// SALES_ASSISTED so every enterprise migrated from Phase 1 is unaffected
+// until an admin explicitly flips one.
+enum ProvisioningMode {
+  SALES_ASSISTED
+  SELF_SERVE
+}
+
 model Enterprise {
   id                String            @id @default(cuid())
   name              String
@@ -151,6 +161,7 @@ model Enterprise {
   suspendedAt       DateTime?
   suspensionReason  String?
   avatarBillingMode AvatarBillingMode @default(SEPARATE)
+  provisioningMode  ProvisioningMode  @default(SALES_ASSISTED)
   createdAt         DateTime          @default(now())
 
   // Raw HeyGen workspace identifier (e.g. "YM502_Concinnity"), preserved
@@ -262,6 +273,13 @@ model Subscription {
   avatar               Avatar?            @relation(fields: [avatarId], references: [id])
   unitAmountCents      Int?
   currency             String             @default("AUD")
+
+  // Phase 2 avatar billing automation — set when a self-serve Stripe
+  // provision/cancel call fails, so the row is never silently left unbilled.
+  // Cleared on the next successful attempt (initial or retried via the
+  // internal cron). Both null on every pre-Phase-2 row.
+  provisioningFailedAt   DateTime?
+  provisioningFailureMsg String?
 
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt

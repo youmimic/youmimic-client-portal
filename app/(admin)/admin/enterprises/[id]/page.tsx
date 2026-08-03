@@ -10,6 +10,7 @@ import {
   canManageEnterpriseMembers,
   canManageEnterpriseBilling,
   canManageEnterpriseContacts,
+  canManageProvisioningMode,
 } from "@/lib/admin/rbac";
 import { ENTITY_TYPES } from "@/lib/admin/audit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import {
 import {
   EnterpriseContactsCard,
   EnterpriseBillingBreakdownCard,
+  ProvisioningModeCard,
 } from "@/components/admin/enterprise-billing";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +50,7 @@ export default async function AdminEnterpriseDetailPage({
       status: true,
       suspendedAt: true,
       suspensionReason: true,
+      provisioningMode: true,
       createdAt: true,
       owner: { select: { id: true, email: true, name: true } },
       subscriptions: {
@@ -89,7 +92,14 @@ export default async function AdminEnterpriseDetailPage({
           billingStatus: true,
           subscriptions: {
             where: { billingComponent: "AVATAR_STORAGE" },
-            select: { id: true, unitAmountCents: true, currency: true, currentPeriodEnd: true },
+            select: {
+              id: true,
+              unitAmountCents: true,
+              currency: true,
+              currentPeriodEnd: true,
+              provisioningFailedAt: true,
+              provisioningFailureMsg: true,
+            },
             take: 1,
           },
         },
@@ -109,6 +119,7 @@ export default async function AdminEnterpriseDetailPage({
   const canManageMembers = canManageEnterpriseMembers(actorRole);
   const canManageBilling = canManageEnterpriseBilling(actorRole);
   const canManageContacts = canManageEnterpriseContacts(actorRole);
+  const canManageProvisioning = canManageProvisioningMode(actorRole);
 
   const eligibleNewOwners = enterprise.members
     .filter((member) => member.user.id !== enterprise.owner?.id)
@@ -269,8 +280,8 @@ export default async function AdminEnterpriseDetailPage({
         </Card>
       </div>
 
-      {/* Contacts + Billing breakdown */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* Contacts + Provisioning mode + Billing breakdown */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Contacts</CardTitle>
@@ -280,6 +291,19 @@ export default async function AdminEnterpriseDetailPage({
               enterpriseId={enterprise.id}
               contacts={enterprise.contacts}
               canManage={canManageContacts}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Provisioning</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ProvisioningModeCard
+              enterpriseId={enterprise.id}
+              provisioningMode={enterprise.provisioningMode}
+              canManage={canManageProvisioning}
             />
           </CardContent>
         </Card>
@@ -305,6 +329,9 @@ export default async function AdminEnterpriseDetailPage({
                       currency: avatar.subscriptions[0].currency,
                       currentPeriodEnd:
                         avatar.subscriptions[0].currentPeriodEnd?.toISOString() ?? null,
+                      provisioningFailedAt:
+                        avatar.subscriptions[0].provisioningFailedAt?.toISOString() ?? null,
+                      provisioningFailureMsg: avatar.subscriptions[0].provisioningFailureMsg,
                     }
                   : null,
               }))}

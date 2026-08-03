@@ -220,6 +220,19 @@ export type UpdateAvatarStorageSubscriptionInput = z.infer<
   typeof updateAvatarStorageSubscriptionSchema
 >;
 
+// ---------------------------------------------------------------------------
+// Enterprise avatar billing (Phase 2 — automated Stripe writes for
+// self-serve enterprises)
+// ---------------------------------------------------------------------------
+
+export const PROVISIONING_MODES = ["SALES_ASSISTED", "SELF_SERVE"] as const;
+
+export const setProvisioningModeSchema = z.object({
+  provisioningMode: z.enum(PROVISIONING_MODES),
+});
+
+export type SetProvisioningModeInput = z.infer<typeof setProvisioningModeSchema>;
+
 // Mirrors the BillingOwnerType enum in prisma/schema.prisma.
 export const BILLING_OWNER_TYPES = ["USER", "ENTERPRISE"] as const;
 const OWNER_TYPE_FILTER = [...BILLING_OWNER_TYPES, "all"] as const;
