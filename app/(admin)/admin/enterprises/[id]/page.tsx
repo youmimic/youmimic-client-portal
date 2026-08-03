@@ -8,6 +8,8 @@ import {
   canViewEnterprises,
   canManageEnterprises,
   canManageEnterpriseMembers,
+  canManageEnterpriseBilling,
+  canManageEnterpriseContacts,
 } from "@/lib/admin/rbac";
 import { ENTITY_TYPES } from "@/lib/admin/audit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +20,10 @@ import {
   EditEnterpriseNameDialog,
   EnterpriseStatusActions,
 } from "@/components/admin/enterprise-actions";
+import {
+  EnterpriseContactsCard,
+  EnterpriseBillingBreakdownCard,
+} from "@/components/admin/enterprise-billing";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +51,9 @@ export default async function AdminEnterpriseDetailPage({
       createdAt: true,
       owner: { select: { id: true, email: true, name: true } },
       subscriptions: {
+        // STANDARD only — Phase 1 avatar billing added PLATFORM_FEE /
+        // AVATAR_STORAGE rows that must not leak into this plan/status summary.
+        where: { billingComponent: "STANDARD" },
         select: { planType: true, status: true },
         orderBy: { createdAt: "desc" },
         take: 1,
@@ -67,13 +76,39 @@ export default async function AdminEnterpriseDetailPage({
         orderBy: { createdAt: "desc" },
         take: 20,
       },
+      contacts: {
+        select: { id: true, type: true, name: true, email: true, phone: true },
+        orderBy: { createdAt: "asc" },
+      },
+      avatars: {
+        select: {
+          id: true,
+          name: true,
+          contactName: true,
+          contactPhone: true,
+          billingStatus: true,
+          subscriptions: {
+            where: { billingComponent: "AVATAR_STORAGE" },
+            select: { id: true, unitAmountCents: true, currency: true, currentPeriodEnd: true },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
 
   if (!enterprise) notFound();
 
+  const platformFeeSubscription = await prisma.subscription.findFirst({
+    where: { enterpriseId: id, billingComponent: "PLATFORM_FEE" },
+    select: { id: true, unitAmountCents: true, currency: true, billingProvider: true },
+  });
+
   const canManage = canManageEnterprises(actorRole);
   const canManageMembers = canManageEnterpriseMembers(actorRole);
+  const canManageBilling = canManageEnterpriseBilling(actorRole);
+  const canManageContacts = canManageEnterpriseContacts(actorRole);
 
   const eligibleNewOwners = enterprise.members
     .filter((member) => member.user.id !== enterprise.owner?.id)
@@ -83,10 +118,17 @@ export default async function AdminEnterpriseDetailPage({
       name: member.user.name,
     }));
 
+  const avatarSubscriptionIds = enterprise.avatars
+    .map((a) => a.subscriptions[0]?.id)
+    .filter((v): v is string => !!v);
+
   const relatedIds = [
     enterprise.id,
     ...enterprise.members.map((m) => m.id),
     ...enterprise.invites.map((i) => i.id),
+    ...enterprise.contacts.map((c) => c.id),
+    ...avatarSubscriptionIds,
+    ...(platformFeeSubscription ? [platformFeeSubscription.id] : []),
   ];
 
   const auditLog = await prisma.adminLog.findMany({
@@ -96,6 +138,8 @@ export default async function AdminEnterpriseDetailPage({
           ENTITY_TYPES.ENTERPRISE,
           ENTITY_TYPES.ENTERPRISE_MEMBER,
           ENTITY_TYPES.ENTERPRISE_INVITE,
+          ENTITY_TYPES.ENTERPRISE_CONTACT,
+          ENTITY_TYPES.SUBSCRIPTION,
         ],
       },
       entityId: { in: relatedIds },
@@ -221,6 +265,51 @@ export default async function AdminEnterpriseDetailPage({
                 canManage={canManage}
               />
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Contacts + Billing breakdown */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Contacts</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EnterpriseContactsCard
+              enterpriseId={enterprise.id}
+              contacts={enterprise.contacts}
+              canManage={canManageContacts}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Billing Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EnterpriseBillingBreakdownCard
+              enterpriseId={enterprise.id}
+              platformFee={platformFeeSubscription}
+              avatars={enterprise.avatars.map((avatar) => ({
+                id: avatar.id,
+                name: avatar.name,
+                contactName: avatar.contactName,
+                contactPhone: avatar.contactPhone,
+                billingStatus: avatar.billingStatus,
+                subscription: avatar.subscriptions[0]
+                  ? {
+                      id: avatar.subscriptions[0].id,
+                      unitAmountCents: avatar.subscriptions[0].unitAmountCents,
+                      currency: avatar.subscriptions[0].currency,
+                      currentPeriodEnd:
+                        avatar.subscriptions[0].currentPeriodEnd?.toISOString() ?? null,
+                    }
+                  : null,
+              }))}
+              canManage={canManageBilling}
+            />
           </CardContent>
         </Card>
       </div>

@@ -149,14 +149,16 @@ export default async function AdminBookingDetailPage({
   // Subscription links to a User or an Enterprise, not a Booking. Show the
   // most recent subscription for whichever owns this booking as read-only
   // context (same "most recent row" pattern used for enterprise plan/status).
+  // billingComponent: STANDARD — excludes Phase 1 avatar-billing rows
+  // (PLATFORM_FEE / AVATAR_STORAGE), which aren't the plan this context is about.
   const subscription = booking.enterpriseId
     ? await prisma.subscription.findFirst({
-        where: { enterpriseId: booking.enterpriseId },
+        where: { enterpriseId: booking.enterpriseId, billingComponent: "STANDARD" },
         select: { planType: true, status: true },
         orderBy: { createdAt: "desc" },
       })
     : await prisma.subscription.findFirst({
-        where: { userId: booking.userId },
+        where: { userId: booking.userId, billingComponent: "STANDARD" },
         select: { planType: true, status: true },
         orderBy: { createdAt: "desc" },
       });

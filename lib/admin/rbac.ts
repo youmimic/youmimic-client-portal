@@ -110,3 +110,15 @@ export function canManageBookings(role: AdminRoleValue): boolean {
 export function canViewSubscriptions(role: AdminRoleValue): boolean {
   return hasMinRole(role, "BILLING_ADMIN");
 }
+
+// Enterprise avatar billing (Phase 1) — same ADMIN-minimum tier as
+// canManageEnterprises, kept as its own named permission since it gates a
+// distinct write surface (contacts, platform fee, avatar storage pricing)
+// rather than being folded into the general enterprise-management check.
+export function canManageEnterpriseBilling(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}
+
+export function canManageEnterpriseContacts(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}

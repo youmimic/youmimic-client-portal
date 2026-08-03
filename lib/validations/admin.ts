@@ -132,6 +132,94 @@ export const suspendEnterpriseSchema = z.object({
 
 export type SuspendEnterpriseInput = z.infer<typeof suspendEnterpriseSchema>;
 
+// ---------------------------------------------------------------------------
+// Enterprise avatar billing (Phase 1 — data model + manual/admin-driven
+// billing; see updates/2026-07-27-enterprise-avatar-billing-phase1.md)
+// ---------------------------------------------------------------------------
+
+export const ENTERPRISE_CONTACT_TYPES = ["BILLING", "KEY_CONTACT"] as const;
+
+export const addEnterpriseContactSchema = z.object({
+  type: z.enum(ENTERPRISE_CONTACT_TYPES),
+  name: z.string().trim().min(1, "Name is required").max(200),
+  email: adminEmailSchema.optional(),
+  phone: z.string().trim().max(50).optional(),
+});
+
+export type AddEnterpriseContactInput = z.infer<typeof addEnterpriseContactSchema>;
+
+// All fields independently optional so a caller can update just one.
+// email/phone use .nullable() (not just .optional()) so a caller can
+// explicitly clear a value — omitting the field means "leave as-is",
+// sending null means "remove it".
+export const updateEnterpriseContactSchema = z.object({
+  type: z.enum(ENTERPRISE_CONTACT_TYPES).optional(),
+  name: z.string().trim().min(1, "Name is required").max(200).optional(),
+  email: adminEmailSchema.nullable().optional(),
+  phone: z.string().trim().max(50).nullable().optional(),
+});
+
+export type UpdateEnterpriseContactInput = z.infer<typeof updateEnterpriseContactSchema>;
+
+// Mirrors the BillingProvider enum in prisma/schema.prisma.
+export const BILLING_PROVIDERS = ["STRIPE", "GOCARDLESS"] as const;
+
+export const AVATAR_BILLING_STATUSES = ["ACTIVE", "PAUSED", "ARCHIVED"] as const;
+
+const optionalIsoDate = z
+  .string()
+  .refine((val) => !isNaN(Date.parse(val)), "Invalid date")
+  .nullable()
+  .optional();
+
+// Upserts the enterprise's single PLATFORM_FEE Subscription row.
+// unitAmountCents explicitly allows 0 (a real, negotiated $0 platform fee —
+// not the same as "not yet priced", which is why the underlying column is
+// nullable but this input requires an actual number once submitted).
+export const setPlatformFeeSchema = z.object({
+  unitAmountCents: z.number().int().min(0, "Amount cannot be negative"),
+  currency: z.string().trim().length(3).default("AUD"),
+  billingProvider: z.enum(BILLING_PROVIDERS).default("STRIPE"),
+  stripeCustomerId: z.string().trim().min(1).optional(),
+  gocardlessCustomerId: z.string().trim().min(1).optional(),
+});
+
+export type SetPlatformFeeInput = z.infer<typeof setPlatformFeeSchema>;
+
+// Creates one avatar's AVATAR_STORAGE Subscription row. unitAmountCents
+// defaults to 9900 ($99.00) but is always a real, editable field — per-avatar
+// pricing genuinely varies (confirmed: two avatars at $99, a third at $10 on
+// the same enterprise), so nothing here should ever be treated as a fixed
+// constant by the caller.
+export const createAvatarStorageSubscriptionSchema = z.object({
+  unitAmountCents: z.number().int().min(0).default(9900),
+  currency: z.string().trim().length(3).default("AUD"),
+  billingProvider: z.enum(BILLING_PROVIDERS).default("STRIPE"),
+  stripeCustomerId: z.string().trim().min(1).optional(),
+  stripeSubscriptionId: z.string().trim().min(1).optional(),
+  gocardlessCustomerId: z.string().trim().min(1).optional(),
+  currentPeriodEnd: optionalIsoDate,
+});
+
+export type CreateAvatarStorageSubscriptionInput = z.infer<
+  typeof createAvatarStorageSubscriptionSchema
+>;
+
+// billingStatus here also drives Avatar.billingStatus (the two are kept in
+// sync by the route handler, not by a DB trigger) — pausing/archiving here
+// is what the Billing Breakdown total's period-end drop-off logic reads.
+export const updateAvatarStorageSubscriptionSchema = z.object({
+  unitAmountCents: z.number().int().min(0).optional(),
+  billingStatus: z.enum(AVATAR_BILLING_STATUSES).optional(),
+  currentPeriodEnd: optionalIsoDate,
+  stripeSubscriptionId: z.string().trim().min(1).nullable().optional(),
+  gocardlessCustomerId: z.string().trim().min(1).nullable().optional(),
+});
+
+export type UpdateAvatarStorageSubscriptionInput = z.infer<
+  typeof updateAvatarStorageSubscriptionSchema
+>;
+
 // Mirrors the BillingOwnerType enum in prisma/schema.prisma.
 export const BILLING_OWNER_TYPES = ["USER", "ENTERPRISE"] as const;
 const OWNER_TYPE_FILTER = [...BILLING_OWNER_TYPES, "all"] as const;

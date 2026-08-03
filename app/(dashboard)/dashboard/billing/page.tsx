@@ -35,7 +35,10 @@ async function fetchBillingData(userId: string) {
   const [personalSub, ownedEnterprises, memberEnterprises, recentPayments] =
     await Promise.all([
       prisma.subscription.findFirst({
-        where: { userId, ownerType: "USER" },
+        // billingComponent: STANDARD — Phase 1 avatar billing added
+        // PLATFORM_FEE/AVATAR_STORAGE rows that must never be picked up here
+        // instead of the actual plan-level subscription.
+        where: { userId, ownerType: "USER", billingComponent: "STANDARD" },
         orderBy: { updatedAt: "desc" },
         select: {
           planType: true,
@@ -53,6 +56,7 @@ async function fetchBillingData(userId: string) {
           id: true,
           name: true,
           subscriptions: {
+            where: { billingComponent: "STANDARD" },
             orderBy: { updatedAt: "desc" },
             take: 1,
             select: {
@@ -64,6 +68,19 @@ async function fetchBillingData(userId: string) {
               billingProvider: true,
               canceledAt: true,
             },
+          },
+          avatars: {
+            select: {
+              id: true,
+              name: true,
+              billingStatus: true,
+              subscriptions: {
+                where: { billingComponent: "AVATAR_STORAGE" },
+                select: { unitAmountCents: true, currency: true, currentPeriodEnd: true },
+                take: 1,
+              },
+            },
+            orderBy: { createdAt: "asc" },
           },
         },
         orderBy: { createdAt: "asc" },
@@ -113,7 +130,23 @@ async function fetchBillingData(userId: string) {
       }),
     ]);
 
-  return { personalSub, ownedEnterprises, memberEnterprises, recentPayments };
+  // Platform Access Fee (Phase 1 avatar billing) — one row per enterprise,
+  // fetched separately since it depends on the enterprise ids above and
+  // can't share a select with the STANDARD subscriptions query on the same
+  // relation.
+  const enterpriseIds = ownedEnterprises.map((e) => e.id);
+  const platformFees =
+    enterpriseIds.length > 0
+      ? await prisma.subscription.findMany({
+          where: { enterpriseId: { in: enterpriseIds }, billingComponent: "PLATFORM_FEE" },
+          select: { enterpriseId: true, unitAmountCents: true, currency: true },
+        })
+      : [];
+  const platformFeeByEnterprise = new Map(
+    platformFees.map((f) => [f.enterpriseId, f]),
+  );
+
+  return { personalSub, ownedEnterprises, memberEnterprises, recentPayments, platformFeeByEnterprise };
 }
 
 type SubData = NonNullable<
@@ -331,14 +364,25 @@ function PersonalPlanCard({ sub }: { sub: SubData | null }) {
 // Enterprise plan card (owner)
 // ---------------------------------------------------------------------------
 
+type AvatarBillingRow = {
+  id: string;
+  name: string;
+  billingStatus: "ACTIVE" | "PAUSED" | "ARCHIVED";
+  subscriptions: { unitAmountCents: number | null; currency: string; currentPeriodEnd: Date | null }[];
+};
+
 function EnterprisePlanCard({
   enterprise,
+  platformFee,
+  avatars,
 }: {
   enterprise: {
     id: string;
     name: string;
     subscriptions: SubData[];
   };
+  platformFee?: { unitAmountCents: number | null; currency: string };
+  avatars?: AvatarBillingRow[];
 }) {
   const sub = enterprise.subscriptions[0] ?? null;
   const { action, label, variant } = resolveAction(
@@ -369,7 +413,7 @@ function EnterprisePlanCard({
         )}
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="space-y-4">
         {sub &&
         !["CANCELED", "INCOMPLETE_EXPIRED"].includes(sub.status ?? "") ? (
           <SubscriptionDetails sub={sub} />
@@ -381,12 +425,86 @@ function EnterprisePlanCard({
             </p>
           </div>
         )}
+
+        {(platformFee || (avatars && avatars.length > 0)) && (
+          <AvatarBillingBreakdown platformFee={platformFee ?? null} avatars={avatars ?? []} />
+        )}
       </CardContent>
 
       <CardFooter>
         <BillingActionButton action={action} label={label} variant={variant} />
       </CardFooter>
     </Card>
+  );
+}
+
+function avatarIncludedInTotal(avatar: AvatarBillingRow): boolean {
+  const sub = avatar.subscriptions[0];
+  if (!sub || sub.unitAmountCents === null) return false;
+  if (avatar.billingStatus === "ACTIVE") return true;
+  return !!sub.currentPeriodEnd && sub.currentPeriodEnd >= new Date();
+}
+
+// Read-only itemized breakdown for Phase 1 avatar billing — Platform Access
+// Fee (flat, can legitimately be $0) plus one row per avatar under
+// management. Mirrors the admin Billing Breakdown card's total logic:
+// a paused/archived avatar keeps counting until its current period ends.
+function AvatarBillingBreakdown({
+  platformFee,
+  avatars,
+}: {
+  platformFee: { unitAmountCents: number | null; currency: string } | null;
+  avatars: AvatarBillingRow[];
+}) {
+  const currency = platformFee?.currency ?? avatars[0]?.subscriptions[0]?.currency ?? "AUD";
+  const totalCents =
+    (platformFee?.unitAmountCents ?? 0) +
+    avatars.reduce((sum, a) => {
+      const sub = a.subscriptions[0];
+      if (!avatarIncludedInTotal(a) || !sub || sub.unitAmountCents === null) return sum;
+      return sum + sub.unitAmountCents;
+    }, 0);
+
+  return (
+    <div className="rounded-md border text-sm">
+      <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
+        <span className="font-medium">Platform Access Fee</span>
+        <span className="tabular-nums">
+          {platformFee?.unitAmountCents !== null && platformFee?.unitAmountCents !== undefined
+            ? formatAmount(platformFee.unitAmountCents, currency)
+            : "—"}
+        </span>
+      </div>
+      {avatars.map((avatar) => {
+        const sub = avatar.subscriptions[0];
+        const included = avatarIncludedInTotal(avatar);
+        return (
+          <div
+            key={avatar.id}
+            className="flex items-center justify-between px-3 py-2 border-b last:border-b-0"
+          >
+            <span>
+              {avatar.name}
+              {avatar.billingStatus !== "ACTIVE" && (
+                <span className="ml-1.5 text-xs text-muted-foreground">
+                  ({avatar.billingStatus === "PAUSED" ? "paused" : "archived"}
+                  {included ? ", billed through current period" : ""})
+                </span>
+              )}
+            </span>
+            <span className="tabular-nums text-muted-foreground">
+              {sub?.unitAmountCents !== null && sub?.unitAmountCents !== undefined
+                ? formatAmount(sub.unitAmountCents, sub.currency)
+                : "—"}
+            </span>
+          </div>
+        );
+      })}
+      <div className="flex items-center justify-between px-3 py-2 font-semibold">
+        <span>Total / month</span>
+        <span className="tabular-nums">{formatAmount(totalCents, currency)}</span>
+      </div>
+    </div>
   );
 }
 
@@ -542,7 +660,7 @@ export default async function BillingPage({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const { personalSub, ownedEnterprises, memberEnterprises, recentPayments } =
+  const { personalSub, ownedEnterprises, memberEnterprises, recentPayments, platformFeeByEnterprise } =
     await fetchBillingData(session.user.id);
 
   const isEnterpriseOwner = ownedEnterprises.length > 0;
@@ -583,7 +701,12 @@ export default async function BillingPage({
           </h2>
           <div className="space-y-4">
             {ownedEnterprises.map((enterprise) => (
-              <EnterprisePlanCard key={enterprise.id} enterprise={enterprise} />
+              <EnterprisePlanCard
+                key={enterprise.id}
+                enterprise={enterprise}
+                platformFee={platformFeeByEnterprise.get(enterprise.id)}
+                avatars={enterprise.avatars}
+              />
             ))}
           </div>
         </section>

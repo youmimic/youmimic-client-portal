@@ -45,15 +45,18 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
 
+      // billingComponent: STANDARD — Phase 1 avatar-billing rows
+      // (PLATFORM_FEE / AVATAR_STORAGE) are manually managed, not Stripe
+      // self-serve, and often have no stripeCustomerId at all in Phase 1.
       const sub = await prisma.subscription.findFirst({
-        where: { enterpriseId, ownerType: "ENTERPRISE" },
+        where: { enterpriseId, ownerType: "ENTERPRISE", billingComponent: "STANDARD" },
         orderBy: { updatedAt: "desc" },
         select: { stripeCustomerId: true },
       });
       stripeCustomerId = sub?.stripeCustomerId ?? null;
     } else {
       const sub = await prisma.subscription.findFirst({
-        where: { userId: session.user.id, ownerType: "USER" },
+        where: { userId: session.user.id, ownerType: "USER", billingComponent: "STANDARD" },
         orderBy: { updatedAt: "desc" },
         select: { stripeCustomerId: true },
       });

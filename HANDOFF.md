@@ -1,5 +1,44 @@
 # HANDOFF.md
 
+## Session: Enterprise Avatar Billing — Phase 1 — 2026-07-27
+
+### Context
+
+User supplied two pre-written planning documents (an implementation plan and a ready-to-execute coding-agent prompt) for a new enterprise pricing model: a per-enterprise **Platform Access Fee** (flat, monthly, can be negotiated to $0) plus a per-avatar **Avatar Storage Fee** ($99 AUD/avatar/month, genuinely variable per deal), plus structured **Billing/Key Contacts** per enterprise and a **Name/Phone contact** per avatar. Explicitly Phase 1 only — data model + admin/customer UI + manual billing entry, **no live Stripe API writes**.
+
+### What was inspected before writing code (both documents explicitly required this)
+
+- `Avatar` had none of the contact fields the plan assumed might already exist (`contactName`/`contactPhone`) — confirmed absent, added fresh.
+- No code anywhere in the repo called `stripe.subscriptions.create/update/cancel` or `stripe.subscriptionItems.*` — confirmed via full-repo grep. This is genuinely the first schema designed with that future capability in mind, not an extension of an existing automation.
+- One inaccuracy in the planning docs' framing, flagged back to the user before implementing: doc 1 cited "multiple concurrent avatar subscriptions billed to one card" as precedent for the earlier `stripeCustomerId` uniqueness relaxation. That reasoning actually conflated two different things — a legitimate case (SSAA: two different products on one customer) and the Joel Starkey situation (a checkout-retry *bug* being fixed today by consolidating to one subscription with quantity, i.e. the opposite direction). Didn't change the plan's `SEPARATE`-mode default (that was justified independently by real client preference), just corrected the stated reasoning.
+- Four clarifying questions were asked and resolved before implementation: pause/archive billing runs through `currentPeriodEnd` rather than stopping immediately; new billing-component rows keep `planType: ENTERPRISE`; avatar provisioning is a **permanent hybrid** (mostly self-serve eventually, sales-assisted stays a real permanent path, not a stopgap); per-avatar pricing is confirmed genuinely variable even within one enterprise.
+
+### What changed
+
+- **`prisma/schema.prisma`**: `BillingComponent` enum (`STANDARD` default / `PLATFORM_FEE` / `AVATAR_STORAGE`) on `Subscription`, plus `avatarId` (FK → `Avatar`, `@@unique` — one storage subscription per avatar, enforced at the DB level), `unitAmountCents` (nullable — null means "not yet priced," never a hardcoded default), `currency`. `AvatarBillingMode` enum (`SEPARATE` default / `CONSOLIDATED`) on `Enterprise`, read by a future Phase 2, not by anything in Phase 1. New `EnterpriseContact` model (`BILLING` / `KEY_CONTACT`). `Avatar` gained `contactName`, `contactPhone`, `billingStatus` (`ACTIVE` / `PAUSED` / `ARCHIVED`). Migration `20260803021234_enterprise_avatar_billing_phase1` — purely additive, hand-written (same non-interactive `prisma migrate dev` limitation hit twice already this week), verified all 15 pre-existing subscriptions landed on `billingComponent: STANDARD` and all 12 enterprises on `avatarBillingMode: SEPARATE`.
+- **RBAC/audit**: `canManageEnterpriseBilling`, `canManageEnterpriseContacts` (both ADMIN minimum, matching `canManageEnterprises`). New `ENTERPRISE_CONTACT` audit entity type; reused the existing `SUBSCRIPTION` type for the two billing-mutation actions.
+- **API**: contacts CRUD, `PUT .../platform-fee` (real upsert semantics — explicitly allows and correctly displays `$0`, not "unset"), `POST`/`PATCH .../avatars/[avatarId]/storage-subscription[/subId]`. Every mutation writes an `AdminLog` entry.
+- **Admin UI** (`/admin/enterprises/[id]`): new Contacts card and Billing Breakdown card (platform fee + one row per avatar + a computed monthly total that correctly keeps a paused/archived avatar in the total until its `currentPeriodEnd` passes, then drops it).
+- **Customer UI** (`/dashboard/billing`): read-only itemized breakdown for enterprise owners, same total logic as the admin view.
+- **A real regression caught and fixed before it shipped**: seven existing read sites across the app (customer billing page, admin enterprise list/detail, Stripe checkout-session and customer-portal routes, admin booking detail x2) all picked "the most recently updated/created subscription for this owner" with no filter — which would have silently started returning the new `PLATFORM_FEE`/`AVATAR_STORAGE` rows instead of the actual plan subscription the moment any enterprise had both. Every one of those sites now filters to `billingComponent: STANDARD`. `lib/subscription.ts`'s `userHasActiveSubscription()` was deliberately left unfiltered — an enterprise with only avatar billing configured is still a real active customer and should stay ungated.
+
+### Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean, all new routes registered
+```
+
+Full Playwright click-through with disposable fixtures (synthetic admin/owner/enterprise/2 avatars, all deleted afterward, zero orphaned rows confirmed): added a Billing and a Key contact; set the platform fee to `$0` (confirmed it displays as `$0.00`, not blank); created two avatar storage subscriptions at `$99` each (total `$198.00`); edited one down to `$10` to confirm genuine per-avatar price variance flows through (total `$109.00`); paused that avatar with a past `currentPeriodEnd` and confirmed it correctly dropped out of the total (`$99.00`) with a "no longer billed" note; confirmed the customer-facing billing page shows the identical breakdown; confirmed an `AdminLog` row exists for every single mutation performed. One self-inflicted test flake caught and fixed mid-session (a `waitForTimeout(800)` was shorter than the RSC refresh — switched to waiting on the actual resulting text; the real total was correct on a fresh page load throughout).
+
+### Not done / next (per the coding-agent prompt's own recommended next milestone)
+
+- **Phase 2** (automated Stripe writes: `provisionAvatarStorageSubscription`, `cancelAvatarStorageSubscription`, outbox pattern, webhook extension) — deliberately not started. Stays on the roadmap per this session's resolved answer (permanent hybrid provisioning), not deprioritized, but no code written yet.
+- No UI yet to *create* an Avatar itself — Phase 1 assumes avatars already exist (via HeyGen import or the existing dashboard/avatars flow) and only adds billing on top of them.
+- `/admin/enterprises` list page doesn't yet surface a billing-component filter on the general Subscriptions list — low priority, admins can already see everything on each enterprise's own detail page.
+- The 2×$99+1×$10 real-world pricing example mentioned by the user during scoping was not reconciled into the data this session (no Stripe access here to look it up) — flagged as a follow-up data-entry task once this admin UI exists, per the user's own explicit call not to block Phase 1 on it.
+
 ## Session: GoCardless subscription activation (schema + real Subscription rows) — 2026-07-27
 
 ### Context

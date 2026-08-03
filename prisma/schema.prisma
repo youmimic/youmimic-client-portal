@@ -132,28 +132,61 @@ model RolePermission {
   @@map("role_permissions")
 }
 
+// Phase 1 avatar billing: whether an enterprise's avatars are billed as fully
+// independent subscriptions/invoices (default — matches confirmed client
+// preference for separate charges) or bundled into one combined subscription.
+// Phase 1 always creates one Subscription row per avatar regardless of this
+// setting — it's read by the (future) Phase 2 automation to decide how many
+// Stripe subscriptions to create, not by anything in Phase 1 itself.
+enum AvatarBillingMode {
+  SEPARATE
+  CONSOLIDATED
+}
+
 model Enterprise {
-  id               String           @id @default(cuid())
-  name             String
-  ownerUserId      String
-  status           EnterpriseStatus @default(active)
-  suspendedAt      DateTime?
-  suspensionReason String?
-  createdAt        DateTime         @default(now())
+  id                String            @id @default(cuid())
+  name              String
+  ownerUserId       String
+  status            EnterpriseStatus  @default(active)
+  suspendedAt       DateTime?
+  suspensionReason  String?
+  avatarBillingMode AvatarBillingMode @default(SEPARATE)
+  createdAt         DateTime          @default(now())
 
   // Raw HeyGen workspace identifier (e.g. "YM502_Concinnity"), preserved
   // alongside the cleaned display name for a future HeyGen integration.
   heygenWorkspaceId String?
 
-  owner         User               @relation("EnterpriseOwner", fields: [ownerUserId], references: [id])
+  owner         User                @relation("EnterpriseOwner", fields: [ownerUserId], references: [id])
   members       EnterpriseMember[]
   subscriptions Subscription[]
   avatars       Avatar[]
   bookings      Booking[]
   invites       Invite[]
+  contacts      EnterpriseContact[]
 
   @@index([ownerUserId])
   @@map("enterprises")
+}
+
+enum EnterpriseContactType {
+  BILLING
+  KEY_CONTACT
+}
+
+model EnterpriseContact {
+  id           String                @id @default(cuid())
+  enterpriseId String
+  type         EnterpriseContactType
+  name         String
+  email        String?
+  phone        String?
+  createdAt    DateTime              @default(now())
+
+  enterprise Enterprise @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+
+  @@index([enterpriseId])
+  @@map("enterprise_contacts")
 }
 
 model EnterpriseMember {
@@ -173,6 +206,17 @@ model EnterpriseMember {
 enum BillingProvider {
   STRIPE
   GOCARDLESS
+}
+
+// Enterprise avatar billing (Phase 1 — data model + manual/admin-driven
+// billing, no live Stripe writes). STANDARD is the default so every
+// pre-existing row (plan-level subscriptions) is unaffected. PLATFORM_FEE is
+// a single row per enterprise; AVATAR_STORAGE is one row per avatar — see the
+// @@unique([avatarId]) constraint below.
+enum BillingComponent {
+  STANDARD
+  PLATFORM_FEE
+  AVATAR_STORAGE
 }
 
 model Subscription {
@@ -208,6 +252,17 @@ model Subscription {
   canceledAt           DateTime?
   trialEndsAt          DateTime?
 
+  // Enterprise avatar billing (Phase 1). unitAmountCents is nullable and
+  // stored per-row rather than derived from one shared constant — per-avatar
+  // pricing genuinely varies (confirmed: e.g. two avatars at $99 and a third
+  // at $10 on the same enterprise), so this is always an editable value, not
+  // a hardcoded default baked into UI copy. null = not yet priced.
+  billingComponent     BillingComponent   @default(STANDARD)
+  avatarId             String?
+  avatar               Avatar?            @relation(fields: [avatarId], references: [id])
+  unitAmountCents      Int?
+  currency             String             @default("AUD")
+
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
@@ -215,12 +270,14 @@ model Subscription {
   enterprise           Enterprise?        @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   payments             Payment[]
 
+  @@unique([avatarId])
   @@index([userId])
   @@index([enterpriseId])
   @@index([ownerType])
   @@index([status])
   @@index([planType])
   @@index([stripeCustomerId])
+  @@index([billingComponent])
   @@map("subscriptions")
 }
 
@@ -262,6 +319,12 @@ model Payment {
   @@map("payments")
 }
 
+enum AvatarBillingStatus {
+  ACTIVE
+  PAUSED   // temporarily excluded from new billing, data retained
+  ARCHIVED // fully decommissioned
+}
+
 model Avatar {
   id             String   @id @default(cuid())
   userId         String
@@ -274,8 +337,16 @@ model Avatar {
   metadata       Json?
   createdAt      DateTime @default(now())
 
-  user       User        @relation(fields: [userId], references: [id])
-  enterprise Enterprise? @relation(fields: [enterpriseId], references: [id])
+  // Phase 1 avatar billing — Name/Phone contact for this specific avatar
+  // (distinct from the enterprise-level Billing/Key contacts). Did not exist
+  // before this migration — confirmed by reading the live schema first.
+  contactName   String?
+  contactPhone  String?
+  billingStatus AvatarBillingStatus @default(ACTIVE)
+
+  user          User          @relation(fields: [userId], references: [id])
+  enterprise    Enterprise?   @relation(fields: [enterpriseId], references: [id])
+  subscriptions Subscription[]
 
   @@index([userId])
   @@index([enterpriseId])

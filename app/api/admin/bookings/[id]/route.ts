@@ -85,14 +85,16 @@ export async function GET(
   // subscription for whichever owns this booking (enterprise if set, else
   // the booking's user) as read-only context, same "most recent row"
   // pattern already used for enterprise plan/status derivation.
+  // billingComponent: STANDARD — excludes Phase 1 avatar-billing rows
+  // (PLATFORM_FEE / AVATAR_STORAGE), which aren't the plan this context is about.
   const subscription = booking.enterpriseId
     ? await prisma.subscription.findFirst({
-        where: { enterpriseId: booking.enterpriseId },
+        where: { enterpriseId: booking.enterpriseId, billingComponent: "STANDARD" },
         select: { planType: true, status: true },
         orderBy: { createdAt: "desc" },
       })
     : await prisma.subscription.findFirst({
-        where: { userId: booking.userId },
+        where: { userId: booking.userId, billingComponent: "STANDARD" },
         select: { planType: true, status: true },
         orderBy: { createdAt: "desc" },
       });

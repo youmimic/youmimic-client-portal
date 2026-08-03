@@ -19,6 +19,10 @@ const ENTERPRISE_LIST_SELECT = {
     select: { id: true, email: true, name: true },
   },
   subscriptions: {
+    // STANDARD only — excludes Phase 1 avatar-billing rows (PLATFORM_FEE /
+    // AVATAR_STORAGE) so this list preview shows the enterprise's actual
+    // plan, not whichever billing-component row was touched most recently.
+    where: { billingComponent: "STANDARD" },
     select: { planType: true, status: true },
     orderBy: { createdAt: "desc" as const },
     take: 1,

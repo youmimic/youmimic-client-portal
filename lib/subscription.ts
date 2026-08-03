@@ -10,6 +10,11 @@ const ACTIVE_STATUSES: SubscriptionStatus[] = [
 // OR if the user owns an enterprise that has an active subscription (ENTERPRISE plan).
 // Enterprise subscriptions have userId=null and enterpriseId set, so they cannot
 // be found by userId alone — we also check the enterprise owner relationship.
+//
+// Deliberately NOT filtered to billingComponent: STANDARD — an enterprise
+// with only a PLATFORM_FEE or AVATAR_STORAGE row (Phase 1 avatar billing) is
+// still a real, active paying customer and should unlock gated features the
+// same as a STANDARD plan subscription would.
 export async function userHasActiveSubscription(userId: string): Promise<boolean> {
   const personalSub = await prisma.subscription.findFirst({
     where: { userId, status: { in: ACTIVE_STATUSES } },

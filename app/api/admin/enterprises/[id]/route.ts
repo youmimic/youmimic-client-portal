@@ -14,6 +14,8 @@ const ENTERPRISE_DETAIL_SELECT = {
     select: { id: true, email: true, name: true },
   },
   subscriptions: {
+    // STANDARD only — see the matching comment in the enterprises list route.
+    where: { billingComponent: "STANDARD" },
     select: { planType: true, status: true },
     orderBy: { createdAt: "desc" as const },
     take: 1,

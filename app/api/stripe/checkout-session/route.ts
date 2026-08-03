@@ -79,13 +79,15 @@ export async function POST(req: Request) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   try {
+    // billingComponent: STANDARD — must never reuse a Phase 1 avatar-billing
+    // row's (PLATFORM_FEE / AVATAR_STORAGE) stripeCustomerId here.
     const existingSub =
       planType === "CREATOR"
         ? await prisma.subscription.findFirst({
-            where: { userId: session.user.id, ownerType: "USER" },
+            where: { userId: session.user.id, ownerType: "USER", billingComponent: "STANDARD" },
           })
         : await prisma.subscription.findFirst({
-            where: { enterpriseId, ownerType: "ENTERPRISE" },
+            where: { enterpriseId, ownerType: "ENTERPRISE", billingComponent: "STANDARD" },
           });
 
     let stripeCustomerId: string;
