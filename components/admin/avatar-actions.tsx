@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -65,11 +67,27 @@ type Avatar = {
   status: string;
   heygenAvatarId: string | null;
   enterpriseId: string | null;
+  previewUrl: string | null;
 };
 
 type EnterpriseOption = { id: string; name: string };
 
 const NO_ENTERPRISE = "__none__";
+
+function AvatarThumbnail({ previewUrl, name }: { previewUrl: string | null; name: string }) {
+  if (previewUrl) {
+    return (
+      <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-muted">
+        <Image src={previewUrl} alt={`${name} preview`} fill unoptimized className="object-cover" sizes="44px" />
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-muted">
+      <UserCircle2 className="h-6 w-6 text-muted-foreground/40" aria-hidden="true" />
+    </div>
+  );
+}
 
 export function UserAvatarsCard({
   userId,
@@ -165,24 +183,27 @@ export function UserAvatarsCard({
         ) : (
           avatars.map((avatar) => (
             <div key={avatar.id} className="flex items-center justify-between gap-3 py-2 border-t first:border-t-0">
-              <div className="min-w-0">
-                <div className="font-medium truncate">{avatar.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  <span className={STATUS_CLASS[avatar.status] ?? ""}>
-                    {STATUS_LABEL[avatar.status] ?? avatar.status}
-                  </span>
-                  {avatar.heygenAvatarId && (
-                    <>
-                      {" · "}
-                      <span className="font-mono truncate">{avatar.heygenAvatarId}</span>
-                    </>
-                  )}
-                  {avatar.enterpriseId && (
-                    <>
-                      {" · "}
-                      {enterpriseOptions.find((e) => e.id === avatar.enterpriseId)?.name ?? "Unknown enterprise"}
-                    </>
-                  )}
+              <div className="flex items-center gap-3 min-w-0">
+                <AvatarThumbnail previewUrl={avatar.previewUrl} name={avatar.name} />
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{avatar.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    <span className={STATUS_CLASS[avatar.status] ?? ""}>
+                      {STATUS_LABEL[avatar.status] ?? avatar.status}
+                    </span>
+                    {avatar.heygenAvatarId && (
+                      <>
+                        {" · "}
+                        <span className="font-mono truncate">{avatar.heygenAvatarId}</span>
+                      </>
+                    )}
+                    {avatar.enterpriseId && (
+                      <>
+                        {" · "}
+                        {enterpriseOptions.find((e) => e.id === avatar.enterpriseId)?.name ?? "Unknown enterprise"}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
               {canManage && (

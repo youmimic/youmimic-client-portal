@@ -8,20 +8,65 @@ interface HeyGenListedAvatar {
   avatar_name: string;
 }
 
-async function fetchAllHeyGenAvatars(): Promise<HeyGenListedAvatar[]> {
+interface HeyGenAvatarGroup {
+  id: string;
+  name: string;
+  group_type: string;
+}
+
+function heygenHeaders(): HeadersInit {
   const apiKey = process.env.HEYGEN_API_KEY;
   if (!apiKey || apiKey === "...") {
     throw new Error("HEYGEN_API_KEY is not configured");
   }
+  return { "x-api-key": apiKey };
+}
 
-  const res = await fetch(`${HEYGEN_API_BASE}/v2/avatars`, {
-    headers: { "x-api-key": apiKey },
-  });
-  if (!res.ok) {
-    throw new Error(`HeyGen API returned ${res.status}`);
+// Deliberately NOT using GET /v2/avatars (the flat "list every avatar"
+// endpoint) as the source — confirmed against the real account that it's
+// missing real, private avatars entirely (e.g. an enterprise's whole set of
+// looks absent with no error), on top of being HeyGen's own documented
+// legacy endpoint (sunsetting 2026-10-31). The group-based enumeration below
+// is the same data HeyGen's own dashboard is built on and was verified
+// complete: every PRIVATE avatar_group's own avatars endpoint reliably
+// returned every look, including the ones the flat list dropped.
+async function fetchAllHeyGenAvatars(): Promise<HeyGenListedAvatar[]> {
+  const headers = heygenHeaders();
+
+  const groupsRes = await fetch(`${HEYGEN_API_BASE}/v2/avatar_group.list`, { headers });
+  if (!groupsRes.ok) {
+    throw new Error(`HeyGen API returned ${groupsRes.status} listing avatar groups`);
   }
-  const json = (await res.json()) as { data?: { avatars?: HeyGenListedAvatar[] } };
-  return json.data?.avatars ?? [];
+  const groupsJson = (await groupsRes.json()) as { data?: { avatar_group_list?: HeyGenAvatarGroup[] } };
+  const privateGroups = (groupsJson.data?.avatar_group_list ?? []).filter((g) => g.group_type === "PRIVATE");
+
+  const seen = new Set<string>();
+  const avatars: HeyGenListedAvatar[] = [];
+
+  for (const group of privateGroups) {
+    const res = await fetch(`${HEYGEN_API_BASE}/v2/avatar_group/${group.id}/avatars`, { headers });
+    if (!res.ok) continue; // one bad group shouldn't fail the whole import
+
+    const json = (await res.json()) as { data?: { avatar_list?: unknown[] } };
+    for (const item of json.data?.avatar_list ?? []) {
+      // Some groups (e.g. "Talking Photo" style entries) return a
+      // completely different shape (`id`/`name` instead of
+      // `avatar_id`/`avatar_name`, no workspace-code-bearing name at all) —
+      // skip anything that doesn't match the Photo Avatar look shape we
+      // actually match against, rather than guessing at a different field.
+      const candidate = item as Partial<HeyGenListedAvatar>;
+      if (typeof candidate.avatar_id !== "string" || typeof candidate.avatar_name !== "string") continue;
+
+      // The same look has been observed duplicated within a single group's
+      // response — dedupe defensively regardless of cause.
+      if (seen.has(candidate.avatar_id)) continue;
+      seen.add(candidate.avatar_id);
+
+      avatars.push({ avatar_id: candidate.avatar_id, avatar_name: candidate.avatar_name });
+    }
+  }
+
+  return avatars;
 }
 
 const WORKSPACE_CODE_PATTERN = /YM(\d+)/;

@@ -68,6 +68,7 @@ export default async function AdminUserDetailPage({
           status: true,
           heygenAvatarId: true,
           enterpriseId: true,
+          previewUrl: true,
         },
       },
       adminLogsAsTarget: {

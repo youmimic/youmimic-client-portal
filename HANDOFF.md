@@ -59,12 +59,27 @@ Presented these numbers to the user before writing any import logic; they chose 
 
 **Ran it for real, with the user's explicit go-ahead**: 54 avatars created across those 4 real enterprises, then immediately live-synced against HeyGen — all 54 landed as `status: ready` with real preview image/video URLs, no failures. Executed via a one-off script running the identical matching/creation logic (not the HTTP route, to avoid needing a real admin's password) — audited under the account owner's own existing SUPER_ADMIN account, same as any other admin action. Per-enterprise breakdown is in the gitignored `updates/` entry.
 
+### Addendum, same day — admin thumbnails
+
+User pointed out the admin "Avatars" card (`components/admin/avatar-actions.tsx`) was text-only despite avatars being inherently visual — a real gap, not a misunderstanding. Added a small `AvatarThumbnail` (44×44, real `previewUrl` via `next/image unoptimized`, `UserCircle2` placeholder otherwise) to each row, matching the pattern already used on the customer dashboard. Added `previewUrl` to the admin user detail page's `avatars` select. Verified visually against the real imported data (screenshot against a real enterprise's 32 avatars, all rendering real HeyGen thumbnails, not placeholders) via a disposable read-only admin login, deleted afterward.
+
+### Addendum, same day — import correction (real bugs found via user spot-check)
+
+User asked why one specific enterprise had zero imported avatars despite having a real HeyGen group. Investigating that single question surfaced two real bugs in the original bulk import, not just the one missing enterprise:
+
+1. **The data source itself was wrong.** `GET /v2/avatars` (the flat "list every avatar" endpoint the original import used) is HeyGen's own documented legacy endpoint (sunsetting 2026-10-31) and, confirmed directly, silently omits real private avatars entirely — the flagged enterprise's whole set of looks simply wasn't in that response, no error, nothing to catch. The reliable source turned out to be `GET /v2/avatar_group.list` (11 real `PRIVATE` groups total) plus `GET /v2/avatar_group/{id}/avatars` per group — the same data HeyGen's own dashboard is built on. Re-enumerating this way found **69 real avatars total**, not the 1,330-minus-noise figure the flat list implied.
+2. **Every avatar from the original import had been inserted twice.** The flat list's response apparently contained duplicate entries per avatar, and the import didn't dedupe within a single fetch (only against rows already in the DB from a *previous* run) — so the original "54 created" was actually 27 real avatars, each duplicated once. Confirmed by cross-checking DB rows against the real group data: 32 DB rows for one enterprise mapped onto only 21 unique real looks, which is only possible with duplicates.
+
+Fixed both in `lib/heygen/import-avatars.ts`: `fetchAllHeyGenAvatars()` now enumerates avatar groups instead of the flat list, defensively skips items that don't match the expected shape (one HeyGen group turned out to hold a completely different object type — Talking Photo entries, not Photo Avatar looks), and dedupes by `avatar_id` within a single fetch regardless of cause.
+
+**Cleanup performed on real data**: deleted the 27 duplicate rows (kept the earlier-created row of each pair — verified identical `name`/`heygenAvatarId` before deleting, not just assumed), then re-ran the corrected import, which added the missing avatars for the originally-flagged enterprise plus four more enterprises that had also silently gotten zero or partial avatars from the same root cause. Re-synced all 50 resulting rows against live HeyGen data afterward — all landed as `Ready` with real preview images, zero failures, zero duplicates confirmed by direct query. Exact per-enterprise numbers are customer data — recorded in the gitignored `updates/` entry, not here.
+
 ### Not done / next
 
 - No webhook receiver — sync is pull-only, triggered by dashboard page loads. `HEYGEN_WEBHOOK_SECRET` is present in `.env` but still empty/unconfigured; a push-based sync would need it wired up.
 - No self-serve avatar creation (photo upload + HeyGen training pipeline) — explicitly out of scope per this session's decision; would need new schema, file uploads, and likely the webhook receiver above for async training status.
-- Admin "Link Avatar" (single-avatar dialog) still has no way to browse/search HeyGen avatars by name when picking an ID — the new bulk importer solves this for the 54 confidently-matched ones, but manual linking of anything else still means copy-pasting a raw `avatar_id`.
-- The 1,272 avatars with no recognizable `YM###` code, and the 4 under the unknown `YM516` code, remain unlinked. Whether any of those are real, unimported client avatars (vs. genuinely unrelated stock/library avatars) hasn't been determined — would need either a name-based fuzzy-match pass (real mismatch risk, deliberately not attempted this session) or manual review.
+- Admin "Link Avatar" (single-avatar dialog) still has no way to browse/search HeyGen avatars by name when picking an ID — the bulk importer solves this for confidently-matched avatars, but manual linking of anything else still means copy-pasting a raw `avatar_id`.
+- Of the 69 real avatars across all 11 private HeyGen groups, 50 are now linked. The remaining 19 are correctly unmatched, not missed: some carry no `YM###` code at all (one group is a different HeyGen object type — Talking Photo, not Photo Avatar — and unrelated to this matching scheme entirely; another uses a malformed `YM_Name` code with no digits), and a couple carry the still-unmatched `YM516` code (a real client with no corresponding `Enterprise` row in the portal). None of this was guessed past — same principle as before.
 
 ## Session: Enterprise Avatar Billing — Phase 2 (automated Stripe writes for self-serve enterprises) — 2026-08-03
 
