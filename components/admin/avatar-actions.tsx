@@ -111,6 +111,22 @@ export function UserAvatarsCard({
   const [enterpriseId, setEnterpriseId] = useState(NO_ENTERPRISE);
   const [state, setState] = useState<ActionState>(idle);
 
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<{ avatarId: string; message: string } | null>(null);
+
+  async function handleSync(avatar: Avatar) {
+    setSyncingId(avatar.id);
+    setSyncError(null);
+    try {
+      await apiCall(`/api/admin/users/${userId}/avatars/${avatar.id}/sync`, "POST");
+      router.refresh();
+    } catch (e) {
+      setSyncError({ avatarId: avatar.id, message: e instanceof Error ? e.message : "Unknown error" });
+    } finally {
+      setSyncingId(null);
+    }
+  }
+
   function resetForm() {
     setName("");
     setHeygenAvatarId("");
@@ -212,10 +228,21 @@ export function UserAvatarsCard({
                       </>
                     )}
                   </div>
+                  {syncError?.avatarId === avatar.id && (
+                    <p className="text-xs text-destructive">{syncError.message}</p>
+                  )}
                 </div>
               </div>
               {canManage && (
                 <div className="flex gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    disabled={syncingId === avatar.id}
+                    onClick={() => handleSync(avatar)}
+                  >
+                    {syncingId === avatar.id ? "Syncing…" : "Sync now"}
+                  </Button>
                   <Button variant="ghost" size="xs" onClick={() => openEdit(avatar)}>
                     Edit
                   </Button>

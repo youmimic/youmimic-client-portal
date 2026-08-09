@@ -47,6 +47,17 @@ shows it when present, and Avatar Studio's look picker now shows a preview playe
 whichever look is currently selected (switching looks swaps the preview clip). Verified
 via the same disposable-fixture approach; lint/typecheck/build all clean.
 
+**Second follow-up, same session:** a manually-linked avatar for a real customer kept
+showing "pending" in admin even after the HeyGen id was corrected. Root cause: the
+admin panel only ever displays the DB's last-known state — it never had a way to
+trigger a live HeyGen pull itself (only the customer's own dashboard page did that, on
+load). Added a "Sync now" button to each avatar row in the admin user detail page,
+backed by a new admin-only route that runs the same sync logic directly. Used it to fix
+the real customer's avatar; confirmed it now shows "Ready" with real preview/video data
+pulled from HeyGen. Also flagged (and got confirmation on, no action needed) an
+unrelated finding noticed while verifying — a specific real account carries
+`SUPER_ADMIN`, confirmed intentional.
+
 ## Session: Set every enterprise's Platform Access Fee to $0 — 2026-08-09
 
 User asked to set the Platform Access Fee to $0 for every enterprise. Checked current state first before touching anything: of 12 enterprises, 6 already had a `PLATFORM_FEE` row already set to `$0`, and 6 had no row at all (`unitAmountCents` shows as "Not set" in the admin UI until a row exists — a deliberately different state from "$0" per Phase 1's original design). Crucially, **none** had a non-zero fee, so this was purely additive — no real existing negotiated fee was at risk of being overwritten, which is why this was executed directly rather than paused for confirmation first.
