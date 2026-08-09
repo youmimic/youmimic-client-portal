@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { AddEnterpriseDialog } from "@/components/admin/add-enterprise-dialog";
+import { HeyGenImportDialog } from "@/components/admin/heygen-import-dialog";
 
 type EnterpriseRow = {
   id: string;
@@ -138,7 +139,10 @@ export default function AdminEnterprisesPage() {
             {data ? `${data.totalItems.toLocaleString()} total` : "Loading…"}
           </p>
         </div>
-        <AddEnterpriseDialog onCreated={() => setRefreshTick((t) => t + 1)} />
+        <div className="flex items-center gap-2">
+          <HeyGenImportDialog />
+          <AddEnterpriseDialog onCreated={() => setRefreshTick((t) => t + 1)} />
+        </div>
       </div>
 
       <Card>

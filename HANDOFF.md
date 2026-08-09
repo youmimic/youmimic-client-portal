@@ -44,12 +44,27 @@ Full Playwright pass against the **real HeyGen API** (test-mode Stripe key is se
 - A second avatar with a garbage `heygenAvatarId` doesn't break the page — it and the real avatar both render correctly (graceful per-avatar degradation confirmed).
 - Edit (rename) and Remove both work; Remove is correctly blocked (`409`) while an `AVATAR_STORAGE` subscription still points at the avatar, and succeeds once that subscription is gone.
 
+### Addendum, same day — bulk HeyGen avatar import
+
+User asked where the "pull avatars" button was — the plan above deliberately hadn't built one yet. Built it, following the same "match only what's confident, skip and report the rest" principle already agreed for the linking feature.
+
+**Real data turned up a data-quality finding worth recording**: matching HeyGen avatar names to enterprises by the full `heygenWorkspaceId` string as a literal prefix only matched 6 of 1,330 real avatars. The actual naming convention across the account is inconsistent — some avatars carry a date-stamp prefix before the workspace code, some use a team member's name instead of the enterprise's own name after the code, and roughly 96% of all avatars in the account (1,272 of 1,330) have no `YM###` code in their name at all — these could be real client avatars named inconsistently, or could be unrelated stock/library avatars; there's no way to tell from the name alone. Re-matching on just the `YM###` numeric code (not the full string) raised the confident-match count to 54, across 4 of the portal's 10 HeyGen-linked enterprises, with one additional code appearing in 4 avatar names but matching no enterprise currently in the portal — flagged, not guessed at. (Exact enterprise names/counts are real customer data — recorded in the gitignored `updates/2026-08-09-avatar-section-heygen-sync.md`, not here.)
+
+Presented these numbers to the user before writing any import logic; they chose the conservative option (import only the 54 confident matches, leave everything else untouched).
+
+- **`lib/heygen/import-avatars.ts`** (new) — `planAvatarImport()` (dry-run: fetches all HeyGen avatars + all enterprises with a `heygenWorkspaceId`, matches by `YM###` code only, categorizes everything skipped by reason) and `executeAvatarImport(adminUserId)` (re-plans immediately before writing, so a stale preview can never be applied against changed data; creates one `Avatar` row per match — `userId` = the enterprise's `ownerUserId`, since there's no signal in the data for which specific team member an avatar belongs to; writes one audit log entry per created row).
+- **`app/api/admin/avatars/heygen-import/route.ts`** (new) — `POST`, `canManageAvatars` RBAC, body `{ dryRun }` (Zod-defaulted to `true` — a caller must explicitly opt into writing).
+- **`components/admin/heygen-import-dialog.tsx`** (new) — two-step preview → confirm dialog: opens already showing a dry-run breakdown by enterprise plus a skip-reason summary, only then offers a "Link N Avatars" button that calls again with `dryRun: false`.
+- **`app/(admin)/admin/enterprises/page.tsx`** — added the "Import Avatars from HeyGen" button next to the existing "Add Enterprise" button (same page, no new client-side RBAC gating added — matches this page's existing pattern of relying on the API's own 403 rather than hiding the button client-side).
+
+**Ran it for real, with the user's explicit go-ahead**: 54 avatars created across those 4 real enterprises, then immediately live-synced against HeyGen — all 54 landed as `status: ready` with real preview image/video URLs, no failures. Executed via a one-off script running the identical matching/creation logic (not the HTTP route, to avoid needing a real admin's password) — audited under the account owner's own existing SUPER_ADMIN account, same as any other admin action. Per-enterprise breakdown is in the gitignored `updates/` entry.
+
 ### Not done / next
 
-- No admin bulk-import for the ~1,330 existing real HeyGen avatars — this session only builds the linking mechanism, one avatar at a time. If backfilling the existing client base is wanted, that's its own milestone (likely scripted, given the volume).
 - No webhook receiver — sync is pull-only, triggered by dashboard page loads. `HEYGEN_WEBHOOK_SECRET` is present in `.env` but still empty/unconfigured; a push-based sync would need it wired up.
 - No self-serve avatar creation (photo upload + HeyGen training pipeline) — explicitly out of scope per this session's decision; would need new schema, file uploads, and likely the webhook receiver above for async training status.
-- Admin "Link Avatar" has no way to browse/search the ~1,330 real HeyGen avatars by name when picking an ID — currently requires knowing/copy-pasting the exact `avatar_id` from the HeyGen dashboard. A searchable picker calling `GET /v2/avatars` would remove that friction.
+- Admin "Link Avatar" (single-avatar dialog) still has no way to browse/search HeyGen avatars by name when picking an ID — the new bulk importer solves this for the 54 confidently-matched ones, but manual linking of anything else still means copy-pasting a raw `avatar_id`.
+- The 1,272 avatars with no recognizable `YM###` code, and the 4 under the unknown `YM516` code, remain unlinked. Whether any of those are real, unimported client avatars (vs. genuinely unrelated stock/library avatars) hasn't been determined — would need either a name-based fuzzy-match pass (real mismatch risk, deliberately not attempted this session) or manual review.
 
 ## Session: Enterprise Avatar Billing — Phase 2 (automated Stripe writes for self-serve enterprises) — 2026-08-03
 

@@ -260,6 +260,14 @@ export const updateAvatarSchema = z.object({
 
 export type UpdateAvatarInput = z.infer<typeof updateAvatarSchema>;
 
+// Bulk HeyGen avatar import — defaults to a dry run (preview only) so a
+// caller must explicitly opt into actually writing rows.
+export const heygenImportSchema = z.object({
+  dryRun: z.boolean().default(true),
+});
+
+export type HeygenImportInput = z.infer<typeof heygenImportSchema>;
+
 // Mirrors the BillingOwnerType enum in prisma/schema.prisma.
 export const BILLING_OWNER_TYPES = ["USER", "ENTERPRISE"] as const;
 const OWNER_TYPE_FILTER = [...BILLING_OWNER_TYPES, "all"] as const;
