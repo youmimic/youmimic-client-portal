@@ -128,24 +128,10 @@ function AvatarCard({ avatar }: { avatar: AvatarRow }) {
           Created {formatDate(avatar.createdAt)}
         </p>
 
-        {avatar.heygenAvatarId && (
-          <p
-            className="truncate font-mono text-xs text-muted-foreground/60"
-            title={avatar.heygenAvatarId}
-          >
-            ID: {avatar.heygenAvatarId}
-          </p>
-        )}
-
         {avatar.videoUrl && (
-          <a
-            href={avatar.videoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline"
-          >
-            Watch preview video
-          </a>
+          <video controls preload="none" poster={avatar.previewUrl ?? undefined} className="w-full rounded-md border">
+            <source src={avatar.videoUrl} type="video/mp4" />
+          </video>
         )}
 
         {avatar.status.toLowerCase() === "ready" && avatar.heygenAvatarId && (
