@@ -58,13 +58,15 @@ export const proxy = auth(async (req) => {
       return NextResponse.redirect(url);
     }
 
-    // requireSubscription: /dashboard/bookings requires an active subscription.
+    // requireSubscription: /dashboard/bookings and the Avatar Studio
+    // (/dashboard/avatars/[id]/studio) both require an active subscription.
     // hasActiveSubscription is written into the JWT at sign-in; undefined on
     // pre-migration tokens which are treated as false (fail closed).
-    if (
-      matchesPrefix(pathname, "/dashboard/bookings") &&
-      !user.hasActiveSubscription
-    ) {
+    const requiresSubscription =
+      matchesPrefix(pathname, "/dashboard/bookings") ||
+      /^\/dashboard\/avatars\/[^/]+\/studio(\/|$)/.test(pathname);
+
+    if (requiresSubscription && !user.hasActiveSubscription) {
       const url = new URL("/dashboard/billing", nextUrl.origin);
       url.searchParams.set("reason", "subscription-required");
       return NextResponse.redirect(url);

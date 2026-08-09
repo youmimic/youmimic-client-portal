@@ -76,6 +76,7 @@ model User {
   enterpriseMembers       EnterpriseMember[]
   subscriptions           Subscription[]
   avatars                 Avatar[]
+  generatedVideos         GeneratedVideo[]
   bookings                Booking[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -365,10 +366,55 @@ model Avatar {
   user          User          @relation(fields: [userId], references: [id])
   enterprise    Enterprise?   @relation(fields: [enterpriseId], references: [id])
   subscriptions Subscription[]
+  generatedVideos GeneratedVideo[]
 
   @@index([userId])
   @@index([enterpriseId])
   @@map("avatars")
+}
+
+enum VideoGenerationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// Avatar Studio (v1, script-only): one row per HeyGen video generation job.
+// Created synchronously when the job is accepted by HeyGen (status
+// PROCESSING, heygenVideoId set from the create response — HeyGen has no
+// separate "queued" state before it starts rendering). Completion is
+// primarily webhook-driven (see app/api/webhooks/heygen/route.ts); the
+// manual status-refresh route re-fetches from HeyGen directly as a fallback
+// for whenever the webhook endpoint isn't registered yet or was missed.
+model GeneratedVideo {
+  id              String                 @id @default(cuid())
+  userId          String
+  avatarId        String
+  script          String
+  status          VideoGenerationStatus  @default(PROCESSING)
+  heygenVideoId   String?                @unique
+  videoUrl        String?
+  thumbnailUrl    String?
+  errorMessage    String?
+  createdAt       DateTime               @default(now())
+  completedAt     DateTime?
+
+  // Last Heygen-Event-Id whose processing actually completed successfully —
+  // HeyGen's docs name this the *primary* replay/redelivery defense (the
+  // signature covers the body only, so a captured (body, signature) pair
+  // can be replayed with a fresh timestamp without breaking verification).
+  // Deliberately records the id only after a successful reconcile, not on
+  // receipt, so a retry following a genuine mid-processing failure is still
+  // reprocessed rather than skipped.
+  lastWebhookEventId String?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatar Avatar @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([avatarId])
+  @@map("generated_videos")
 }
 
 enum BookingStatus {

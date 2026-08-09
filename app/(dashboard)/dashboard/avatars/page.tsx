@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserCircle2 } from "lucide-react";
 import { auth } from "@/auth";
@@ -9,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { syncAvatarFromHeyGen } from "@/lib/heygen/sync";
 
 export const metadata = {
@@ -144,6 +146,12 @@ function AvatarCard({ avatar }: { avatar: AvatarRow }) {
           >
             Watch preview video
           </a>
+        )}
+
+        {avatar.status.toLowerCase() === "ready" && avatar.heygenAvatarId && (
+          <Button asChild size="sm" className="w-full">
+            <Link href={`/dashboard/avatars/${avatar.id}/studio`}>Use Avatar</Link>
+          </Button>
         )}
       </CardContent>
     </Card>

@@ -1,5 +1,61 @@
 # HANDOFF.md
 
+## Session: Avatar Studio v1 — script-to-video generation via HeyGen — 2026-08-09
+
+### Context
+
+User wanted a "Use Avatar" button on the customer avatars page that leads to a new Avatar Studio page where customers can generate a video of their avatar saying a script they write — the first content-generation (not just avatar-linking/status-sync) feature built on top of this session's earlier HeyGen work. Scoped via four `AskUserQuestion` decisions before writing code: v1 is script-only (avatar's own default HeyGen voice, no background/voice/aspect-ratio pickers); completion is webhook-driven (not polling); generated videos are persisted to a new table so users get a history; access is gated the same way `/dashboard/bookings` already is (active subscription required).
+
+### What was inspected before writing code
+
+- HeyGen's real video-generation API, pinned down via **safe validation probes** (deliberately incomplete/invalid request bodies that error before any video is created — confirmed zero cost): `POST /v3/videos` (`type: "avatar"`, `avatar_id`, `script`, `voice_id`, optional `callback_url`) → returns a `video_id` synchronously (no separate "queued" state); `GET /v3/videos/{id}` for status (`pending`/`processing`/`completed`/`failed`, `video_url`/`thumbnail_url` on completion). The older `v2/video/generate` endpoint is legacy (same sunset-2026-10-31 warning pattern seen on other v2 endpoints this session) — used v3 throughout.
+- **Confirmed the connected HeyGen account currently has insufficient credits** to generate any video at all (`402 insufficient_credit` on a real, otherwise-valid request) — a real, practical blocker independent of anything in this codebase. Flagged to the user; the code is correct and will work once credits are topped up.
+- HeyGen's webhook signature scheme (via `developers.heygen.com/docs/webhooks.md`, which — unlike most of their ReadMe-hosted pages — rendered real content instead of a JS shell): `Heygen-Signature` header, hex HMAC-SHA256 of the **raw** request body, plus a `Heygen-Timestamp` header to reject stale/replayed deliveries (~5 min skew tolerance). Mirrors the existing Stripe webhook route's raw-body-first pattern.
+- `lib/subscription.ts` / `app/api/bookings/route.ts` / `proxy.ts`'s existing `requireSubscription` gate for `/dashboard/bookings` — reused both layers exactly (middleware JWT-based gate for the page route, fresh DB check via `userHasActiveSubscription()` for the API route) rather than inventing a new access-control pattern.
+- No existing `Video`/`GeneratedVideo` model — confirmed via full schema read; this is genuinely new, not an extension.
+
+### What changed
+
+- **`prisma/schema.prisma`**: `VideoGenerationStatus` enum (`PENDING`/`PROCESSING`/`COMPLETED`/`FAILED`) and `GeneratedVideo` model (`userId`, `avatarId`, `script`, `status` default `PROCESSING` — HeyGen has no separate queued state, `heygenVideoId` unique, `videoUrl`, `thumbnailUrl`, `errorMessage`, `createdAt`, `completedAt`), cascade-deletes with both `User` and `Avatar`. Migration `20260809025028_avatar_studio_generated_videos` — additive only.
+- **`lib/heygen.ts`**: added `default_voice_id` to the existing avatar-look type; added `getHeyGenVideoStatus()` and `createHeyGenVideo()`; refactored the three HeyGen calls onto one shared `heygenFetch()` helper (auth header, 8s timeout, consistent error unwrapping) instead of duplicating that logic a third time.
+- **`lib/heygen/generate-video.ts`** (new): `generateAvatarVideo(userId, avatarId, script)` — verifies the avatar belongs to the caller and is `status: "ready"` with a `heygenAvatarId`, resolves the avatar's own default voice from HeyGen (no voice picker in v1), creates the HeyGen video job, and records a `GeneratedVideo` row immediately. On any failure (including the credits case), still records a `FAILED` row with the real error message rather than swallowing it — the attempt is never silently lost. `refreshGeneratedVideoStatus()` — the manual on-demand fallback, re-fetches authoritative state from HeyGen rather than trusting anything already in the DB.
+- **`app/api/dashboard/avatars/[avatarId]/generate-video/route.ts`** (new) — `POST`, auth + `userHasActiveSubscription()` + Zod-validated script (HeyGen's own 5000-char limit).
+- **`app/api/dashboard/videos/[id]/refresh/route.ts`** (new) — `POST`, manual "Check status" fallback for whenever the webhook hasn't fired.
+- **`app/api/webhooks/heygen/route.ts`** (new) — verifies `Heygen-Signature`/`Heygen-Timestamp` against `HEYGEN_WEBHOOK_SECRET` (raw body, `crypto.timingSafeEqual`), then treats the event purely as a "go check now" signal and re-fetches authoritative status from HeyGen rather than trusting webhook payload fields directly (matches HeyGen's own guidance for failure events, and means success/fail events are handled identically). Fails closed (`500`) if the secret isn't configured — it currently isn't; see "Not done" below.
+- **`proxy.ts`**: extended the existing `requireSubscription` gate to also cover `/dashboard/avatars/[id]/studio`, alongside `/dashboard/bookings` — one shared check, not a duplicated one.
+- **UI**: "Use Avatar" button added to ready avatars' cards on `/dashboard/avatars` (`components/dashboard/avatar-studio.tsx` + `app/(dashboard)/dashboard/avatars/[avatarId]/studio/page.tsx`) — script textarea with a character counter, a generation history list per avatar showing status badges, the rendered `<video>` once complete, the error message if failed, and a "Check status" button for anything still pending/processing.
+
+### Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean, all new routes registered
+```
+
+Full Playwright pass with disposable fixtures (a user with no subscription, a user with a real active `CREATOR` subscription, one avatar linked to a real HeyGen avatar ID — all deleted afterward, zero orphaned rows confirmed):
+
+- A user with no active subscription is correctly redirected away from the Studio route by the middleware gate (`/dashboard/billing?reason=subscription-required`) — never reaches the page at all.
+- "Use Avatar" appears only for `ready` avatars with a linked HeyGen ID, and correctly navigates to the Studio page.
+- Submitting a real script triggers a **real call to the live HeyGen API** — which correctly failed with the account's actual insufficient-credits error, surfaced clearly in the UI, and recorded as a `FAILED` row with the real error message rather than silently disappearing. This exercised the entire real pipeline end-to-end (validation, ownership/status checks, the actual HTTP call, DB write, UI rendering) short of an actual successful render, which isn't possible until credits are added.
+- Webhook signature verification independently confirmed with a temporary local secret: missing headers → `400`; wrong signature → `401`; correct HMAC → `200` and acknowledged.
+
+### Addendum, same day — corrected against HeyGen's real webhook docs
+
+User pasted the complete, real HeyGen webhooks documentation (the ReadMe-hosted pages had been returning JS-app shells to `WebFetch` all session, never the real content — this was the first time the actual spec was available). Diffed the implementation against it and fixed two real gaps:
+
+1. **Missing `Heygen-Event-Id` dedup.** The docs are explicit that `Heygen-Timestamp` freshness is defense-in-depth only, *not* real replay protection — the signature covers the request body alone, so a captured `(body, signature)` pair can be replayed indefinitely with a fresh timestamp attached without ever breaking verification. `Heygen-Event-Id` dedup is the documented *primary* defense. Added `GeneratedVideo.lastWebhookEventId` (migration `20260809031635_webhook_event_dedup`) — recorded only after a reconcile *succeeds*, not on receipt, so a retry following a genuine mid-processing failure still gets reprocessed rather than incorrectly skipped. Live-verified: an exact-same-event-id redelivery is now skipped (fast, no repeat HeyGen call — also reduces risk of exceeding HeyGen's 10-second/`2xx` response window under retry storms); a different event id for the same video still processes normally.
+2. **Wrong status code for a bad signature.** Was `400`; HeyGen's own reference implementation uses `401` specifically for signature failure (`400` stays reserved for missing headers / stale timestamp / bad JSON). Fixed and live-verified.
+
+**One real ambiguity surfaced, not guessed past**: this app never registers a persistent webhook endpoint (`POST /v3/webhooks/endpoints`) — it passes a one-off `callback_url` per video-generation request instead (HeyGen's alternative, no-endpoint-needed mechanism, per the same docs). The "Verifying Payloads" section is written entirely in terms of the registered-endpoint flow (a `secret` returned by `POST /v3/webhooks/endpoints` or the rotate-secret call) and never explicitly states whether one-off `callback_url` deliveries carry the same `Heygen-Signature`/`Heygen-Event-Id` headers, or are signed at all. If they aren't, every real callback delivery would currently fail `HEYGEN_WEBHOOK_SECRET` verification with a `401`. **Not resolved this session** — can't be tested without a live public URL receiving a real HeyGen delivery. Once deployed, the safest path is likely registering a real persistent endpoint via `POST /v3/webhooks/endpoints` (the unambiguous, fully-documented flow) rather than relying on the callback mechanism for anything security-relevant.
+
+### Not done / next
+
+- **The connected HeyGen account has no video-generation credits right now** — confirmed directly against the live API, not assumed. Nothing will actually render until credits are purchased in the HeyGen dashboard; the code path is otherwise fully verified.
+- **`HEYGEN_WEBHOOK_SECRET` is still unset**, and — per the addendum above — it's not yet confirmed that the `callback_url` delivery mechanism this app actually uses is signed the same way a registered endpoint's deliveries are. Registering a real endpoint requires a stable public HTTPS URL, which only exists once this is deployed (see the Vercel cron-deploy-fix session above). Until resolved, completion relies entirely on the manual "Check status" button in the UI, which does work independently.
+- v1 is deliberately script-only — no voice/background/aspect-ratio pickers, no editing/regenerating a video, no deleting old generations from history.
+- No usage limits or per-user generation caps — every request with an active subscription can generate, with no quota tracked yet (worth revisiting once HeyGen credits are flowing and real usage costs become visible).
+
 ## Session: Fix — Vercel cron schedule was silently blocking every deployment — 2026-08-09
 
 User reported Vercel's dashboard only showed the very old "feat: added go cardless data" commit as the latest deployment, despite nine newer commits already pushed to `origin/main` (confirmed via `git status -sb` — local `main` and `origin/main` were in sync, so this was never a git/push problem). The most recent entry in Vercel's deployment list was a manual "Redeploy" of that same old build, not a fresh build from a new push — meaning nothing newer had ever gone `Ready`.
