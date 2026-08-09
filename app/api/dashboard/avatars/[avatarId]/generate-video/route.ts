@@ -39,7 +39,7 @@ export async function POST(
     );
   }
 
-  const result = await generateAvatarVideo(session.user.id, avatarId, parsed.data.script);
+  const result = await generateAvatarVideo(session.user.id, avatarId, parsed.data.script, parsed.data.avatarLookId);
   if (!result.ok) {
     const status = result.code === "HEYGEN_ERROR" ? 502 : 422;
     return NextResponse.json({ error: result.error, code: result.code }, { status });

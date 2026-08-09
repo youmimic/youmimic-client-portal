@@ -12,29 +12,58 @@ function callbackUrl(): string | undefined {
   return `${appUrl}/api/webhooks/heygen`;
 }
 
-// Avatar Studio v1 — script only, avatar's own default HeyGen voice, no
-// background/aspect-ratio controls. Kicks off one HeyGen video job and
-// records it immediately (status PROCESSING — HeyGen has no separate
+// Avatar Studio v1 — script only, the chosen look's own default HeyGen
+// voice, no background/aspect-ratio controls. Kicks off one HeyGen video job
+// and records it immediately (status PROCESSING — HeyGen has no separate
 // "queued" state); completion is picked up by the webhook receiver, with
 // the status-refresh route as a manual fallback for whenever the webhook
 // endpoint isn't registered against this environment yet.
+//
+// avatarLookId selects which of the avatar's looks to render with — required
+// for avatars imported from HeyGen (which always have at least one look).
+// Avatars linked via the legacy manual admin flow have no looks at all and
+// fall back to generating directly off Avatar.heygenAvatarId.
 export async function generateAvatarVideo(
   userId: string,
   avatarId: string,
   script: string,
+  avatarLookId?: string,
 ): Promise<GenerateVideoResult> {
   const avatar = await prisma.avatar.findFirst({
     where: { id: avatarId, userId },
-    select: { id: true, heygenAvatarId: true, status: true },
+    select: {
+      id: true,
+      heygenAvatarId: true,
+      status: true,
+      looks: { select: { id: true, heygenLookId: true, status: true } },
+    },
   });
 
-  if (!avatar || !avatar.heygenAvatarId || avatar.status !== "ready") {
+  if (!avatar) {
     return { ok: false, code: "AVATAR_NOT_READY", error: "This avatar isn't ready to generate videos from yet." };
+  }
+
+  let heygenLookId: string | null;
+  let resolvedLookId: string | null;
+
+  if (avatar.looks.length > 0) {
+    const look = avatarLookId ? avatar.looks.find((l) => l.id === avatarLookId) : undefined;
+    if (!look || look.status !== "ready") {
+      return { ok: false, code: "AVATAR_NOT_READY", error: "Pick a ready look to generate a video with." };
+    }
+    heygenLookId = look.heygenLookId;
+    resolvedLookId = look.id;
+  } else {
+    if (!avatar.heygenAvatarId || avatar.status !== "ready") {
+      return { ok: false, code: "AVATAR_NOT_READY", error: "This avatar isn't ready to generate videos from yet." };
+    }
+    heygenLookId = avatar.heygenAvatarId;
+    resolvedLookId = null;
   }
 
   let voiceId: string | null;
   try {
-    const look = await getHeyGenAvatarLook(avatar.heygenAvatarId);
+    const look = await getHeyGenAvatarLook(heygenLookId);
     voiceId = look.default_voice_id;
   } catch (err) {
     const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
@@ -47,7 +76,7 @@ export async function generateAvatarVideo(
 
   try {
     const { video_id } = await createHeyGenVideo({
-      avatarId: avatar.heygenAvatarId,
+      avatarId: heygenLookId,
       script,
       voiceId,
       callbackUrl: callbackUrl(),
@@ -57,6 +86,7 @@ export async function generateAvatarVideo(
       data: {
         userId,
         avatarId: avatar.id,
+        avatarLookId: resolvedLookId,
         script,
         status: "PROCESSING" as VideoGenerationStatus,
         heygenVideoId: video_id,
@@ -75,6 +105,7 @@ export async function generateAvatarVideo(
       data: {
         userId,
         avatarId: avatar.id,
+        avatarLookId: resolvedLookId,
         script,
         status: "FAILED" as VideoGenerationStatus,
         errorMessage: message,

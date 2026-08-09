@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { syncAvatarFromHeyGen } from "@/lib/heygen/sync";
+import { syncAvatarFromHeyGen, syncAvatarLookFromHeyGen, rollupAvatarDisplay } from "@/lib/heygen/sync";
 
 export const metadata = {
   title: "Avatars — YouMimic Portal",
@@ -20,7 +20,13 @@ export const metadata = {
 async function fetchAvatars(userId: string) {
   return prisma.avatar.findMany({
     where: { userId },
-    include: { enterprise: { select: { name: true } } },
+    include: {
+      enterprise: { select: { name: true } },
+      looks: {
+        orderBy: { name: "asc" },
+        select: { id: true, heygenLookId: true, name: true, status: true, previewUrl: true, videoUrl: true },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -104,16 +110,23 @@ function AvatarThumbnail({
 }
 
 function AvatarCard({ avatar }: { avatar: AvatarRow }) {
+  const hasLooks = avatar.looks.length > 0;
+  const rollup = hasLooks ? rollupAvatarDisplay(avatar.looks) : null;
+  const displayStatus = rollup?.status ?? avatar.status;
+  const displayPreviewUrl = rollup?.previewUrl ?? avatar.previewUrl;
+  const displayVideoUrl = rollup?.videoUrl ?? avatar.videoUrl;
+  const usable = hasLooks ? displayStatus === "ready" : displayStatus.toLowerCase() === "ready" && !!avatar.heygenAvatarId;
+
   return (
     <Card className="overflow-hidden pt-0">
-      <AvatarThumbnail previewUrl={avatar.previewUrl} name={avatar.name} />
+      <AvatarThumbnail previewUrl={displayPreviewUrl} name={avatar.name} />
 
       <CardHeader className="pb-2 pt-4">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base font-semibold leading-snug">
             {avatar.name}
           </CardTitle>
-          <StatusBadge status={avatar.status} />
+          <StatusBadge status={displayStatus} />
         </div>
       </CardHeader>
 
@@ -124,17 +137,23 @@ function AvatarCard({ avatar }: { avatar: AvatarRow }) {
           </p>
         )}
 
+        {hasLooks && (
+          <p className="text-xs text-muted-foreground">
+            {avatar.looks.length === 1 ? "1 look" : `${avatar.looks.length} looks`}
+          </p>
+        )}
+
         <p className="text-xs text-muted-foreground">
           Created {formatDate(avatar.createdAt)}
         </p>
 
-        {avatar.videoUrl && (
-          <video controls preload="none" poster={avatar.previewUrl ?? undefined} className="w-full rounded-md border">
-            <source src={avatar.videoUrl} type="video/mp4" />
+        {displayVideoUrl && (
+          <video controls preload="none" poster={displayPreviewUrl ?? undefined} className="w-full rounded-md border">
+            <source src={displayVideoUrl} type="video/mp4" />
           </video>
         )}
 
-        {avatar.status.toLowerCase() === "ready" && avatar.heygenAvatarId && (
+        {usable && (
           <Button asChild size="sm" className="w-full">
             <Link href={`/dashboard/avatars/${avatar.id}/studio`}>Use Avatar</Link>
           </Button>
@@ -159,23 +178,40 @@ function AvatarGrid({ avatars }: { avatars: AvatarRow[] }) {
   );
 }
 
-// Best-effort live refresh: for every avatar linked to a real HeyGen avatar,
-// pull current status/preview/video and merge it into the render list. Uses
-// Promise.allSettled so one slow/failing HeyGen call (network issue, avatar
+// Best-effort live refresh: for every avatar with looks, sync each look; for
+// legacy avatars with no looks, sync the avatar itself directly. Uses
+// Promise.allSettled so one slow/failing HeyGen call (network issue, look
 // deleted upstream, etc.) never blocks or breaks the rest of the page — on
 // failure the row simply falls back to whatever was already in the DB.
 async function withLiveHeyGenStatus(avatars: AvatarRow[]): Promise<AvatarRow[]> {
-  const syncable = avatars.filter((a) => a.heygenAvatarId);
-  if (syncable.length === 0) return avatars;
+  const allLooks = avatars.flatMap((a) => a.looks.map((l) => ({ avatarId: a.id, look: l })));
+  const legacySyncable = avatars.filter((a) => a.looks.length === 0 && a.heygenAvatarId);
 
-  const results = await Promise.allSettled(
-    syncable.map((a) => syncAvatarFromHeyGen(a.id, a.heygenAvatarId as string)),
-  );
+  const [lookResults, legacyResults] = await Promise.all([
+    Promise.allSettled(allLooks.map(({ look }) => syncAvatarLookFromHeyGen(look.id, look.heygenLookId))),
+    Promise.allSettled(legacySyncable.map((a) => syncAvatarFromHeyGen(a.id, a.heygenAvatarId as string))),
+  ]);
 
-  const byId = new Map(syncable.map((a, i) => [a.id, results[i]] as const));
+  const lookResultById = new Map(allLooks.map(({ look }, i) => [look.id, lookResults[i]] as const));
+  const legacyResultById = new Map(legacySyncable.map((a, i) => [a.id, legacyResults[i]] as const));
 
   return avatars.map((avatar) => {
-    const result = byId.get(avatar.id);
+    if (avatar.looks.length > 0) {
+      const looks = avatar.looks.map((look) => {
+        const result = lookResultById.get(look.id);
+        if (!result || result.status !== "fulfilled" || !result.value.ok) return look;
+        const { status, previewUrl, videoUrl } = result.value;
+        return {
+          ...look,
+          status: status ?? look.status,
+          previewUrl: previewUrl ?? look.previewUrl,
+          videoUrl: videoUrl ?? look.videoUrl,
+        };
+      });
+      return { ...avatar, looks };
+    }
+
+    const result = legacyResultById.get(avatar.id);
     if (!result || result.status !== "fulfilled" || !result.value.ok) return avatar;
     const { status, previewUrl, videoUrl } = result.value;
     return {

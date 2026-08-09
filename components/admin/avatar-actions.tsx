@@ -68,6 +68,7 @@ type Avatar = {
   heygenAvatarId: string | null;
   enterpriseId: string | null;
   previewUrl: string | null;
+  _count: { looks: number };
 };
 
 type EnterpriseOption = { id: string; name: string };
@@ -191,11 +192,18 @@ export function UserAvatarsCard({
                     <span className={STATUS_CLASS[avatar.status] ?? ""}>
                       {STATUS_LABEL[avatar.status] ?? avatar.status}
                     </span>
-                    {avatar.heygenAvatarId && (
+                    {avatar._count.looks > 0 ? (
                       <>
                         {" · "}
-                        <span className="font-mono truncate">{avatar.heygenAvatarId}</span>
+                        {avatar._count.looks === 1 ? "1 look" : `${avatar._count.looks} looks`} (HeyGen import)
                       </>
+                    ) : (
+                      avatar.heygenAvatarId && (
+                        <>
+                          {" · "}
+                          <span className="font-mono truncate">{avatar.heygenAvatarId}</span>
+                        </>
+                      )
                     )}
                     {avatar.enterpriseId && (
                       <>

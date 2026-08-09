@@ -1,5 +1,58 @@
 # HANDOFF.md
 
+## Session: Avatar identity vs. HeyGen "look" — data model fix — 2026-08-09
+
+User correctly flagged that the HeyGen avatar import had treated "looks" (outfit/pose
+variants of one avatar identity) as separate avatars. Confirmed against the live
+HeyGen account: 11 real avatar identities with 69 looks between them had produced 50
+separate `Avatar` rows in the DB — e.g. one identity with 21 real looks had 16
+duplicate rows, each named after a specific look file rather than the person. Checked
+for financial impact first: zero avatar-storage billing subscriptions existed on any
+of the affected rows, so this was a data-model/display bug, not a billing incident.
+
+Asked the user how multi-look avatars should work going forward; they chose one
+`Avatar` row per real identity with the individual looks selectable when the customer
+clicks into that avatar. Added a new `AvatarLook` model (one row per HeyGen look) plus
+`Avatar.heygenGroupId` (the real identity key) and `GeneratedVideo.avatarLookId`
+(records which look a video was generated with). Migrated the existing 50 rows down to
+9 identities + 50 looks via a dry-run-first script, verified zero orphans afterward.
+Rewrote the HeyGen import to plan/execute at the identity level (new identities import
+in full; already-known identities only get their genuinely new looks appended, never
+duplicated), updated live-status syncing to work per-look with an identity-level
+rollup, and updated video generation to require picking a specific ready look. Avatar
+Studio now shows a look picker (thumbnail grid, disabled for not-yet-ready looks) above
+the script box. The dashboard avatar grid and admin avatar list now show one card/row
+per identity with a look count instead of duplicates. Full detail, including the real
+identity/look counts and the exact migration steps, is in
+`updates/2026-08-09-avatar-identity-vs-look-fix.md` (gitignored).
+
+Verified via `npm run lint`/`typecheck`/`build` (all clean) and a disposable synthetic
+fixture in a real browser: dashboard grid correctly collapses to one card with a look
+count, Avatar Studio's look picker renders correctly (ready looks selectable, not-ready
+looks disabled, first ready look pre-selected), and a real consolidated avatar's admin
+page now shows a look count instead of a raw HeyGen id. Did not click "Generate video"
+against any real avatar or the fixture (HeyGen account still has zero credits from an
+earlier session finding) to avoid unnecessary HeyGen API calls.
+
+Not done: two HeyGen avatar identities still can't be imported at all because their
+HeyGen look names carry no recognizable workspace code — a separate, pre-existing gap,
+unrelated to this fix. No admin UI for manually adding/removing individual looks under
+an avatar — new looks only arrive via the HeyGen bulk-import dialog.
+
+**Follow-up fix, same session:** user caught that the per-look sample video clip had
+stopped rendering anywhere after the refactor above — the data was preserved correctly
+during migration, but the dashboard grid card and Studio look picker never displayed
+it. Fixed: the identity-level rollup now includes `videoUrl`, the grid card always
+shows it when present, and Avatar Studio's look picker now shows a preview player for
+whichever look is currently selected (switching looks swaps the preview clip). Verified
+via the same disposable-fixture approach; lint/typecheck/build all clean.
+
+## Session: Set every enterprise's Platform Access Fee to $0 — 2026-08-09
+
+User asked to set the Platform Access Fee to $0 for every enterprise. Checked current state first before touching anything: of 12 enterprises, 6 already had a `PLATFORM_FEE` row already set to `$0`, and 6 had no row at all (`unitAmountCents` shows as "Not set" in the admin UI until a row exists — a deliberately different state from "$0" per Phase 1's original design). Crucially, **none** had a non-zero fee, so this was purely additive — no real existing negotiated fee was at risk of being overwritten, which is why this was executed directly rather than paused for confirmation first.
+
+Created the 6 missing `PLATFORM_FEE` subscription rows (`unitAmountCents: 0`, `AUD`, `STRIPE`) via a script replicating the real admin `PUT /api/admin/enterprises/[id]/platform-fee` route's exact behavior (same fields, same `set_enterprise_platform_fee` audit-log action), attributed to the real admin account. Verified afterward: all 12 enterprises now show a `PLATFORM_FEE` row, all exactly `$0`, zero non-zero outliers. Spot-checked one previously-"Not set" enterprise in the real admin UI — confirmed it now renders `$0.00` instead of "Not set."
+
 ## Session: Billing page — "Recent Payments" summary + dedicated full history page — 2026-08-09
 
 ### What changed

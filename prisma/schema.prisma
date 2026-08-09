@@ -348,7 +348,18 @@ model Avatar {
   id             String   @id @default(cuid())
   userId         String
   enterpriseId   String?
+  // Legacy single-look identifier — still the only HeyGen link for avatars
+  // created via the manual admin "Link Avatar" flow (no group/looks
+  // involved). For avatars imported in bulk from HeyGen, prefer `looks`;
+  // this is left populated with the first look's id purely for back-compat
+  // display, not as a source of truth once `looks` is non-empty.
   heygenAvatarId String?
+  // HeyGen avatar_group id — the real avatar-identity key. One Avatar row
+  // per group, confirmed against the live HeyGen account: a "look" (what
+  // heygenAvatarId/AvatarLook.heygenLookId identifies) is a specific
+  // outfit/pose variant of the same person, not a distinct avatar. Nullable
+  // because manually-linked avatars have no group at all.
+  heygenGroupId  String?  @unique
   name           String
   status         String   @default("pending")
   previewUrl     String?
@@ -367,10 +378,33 @@ model Avatar {
   enterprise    Enterprise?   @relation(fields: [enterpriseId], references: [id])
   subscriptions Subscription[]
   generatedVideos GeneratedVideo[]
+  looks         AvatarLook[]
 
   @@index([userId])
   @@index([enterpriseId])
   @@map("avatars")
+}
+
+// One row per HeyGen "look" (a specific outfit/pose/angle variant) that
+// belongs to an Avatar identity. Only populated for avatars imported via the
+// group-based HeyGen bulk import — manually-linked avatars keep using
+// Avatar.heygenAvatarId directly and have no rows here.
+model AvatarLook {
+  id             String   @id @default(cuid())
+  avatarId       String
+  heygenLookId   String   @unique
+  name           String
+  status         String   @default("pending")
+  previewUrl     String?
+  videoUrl       String?
+  defaultVoiceId String?
+  createdAt      DateTime @default(now())
+
+  avatar          Avatar           @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  generatedVideos GeneratedVideo[]
+
+  @@index([avatarId])
+  @@map("avatar_looks")
 }
 
 enum VideoGenerationStatus {
@@ -409,11 +443,19 @@ model GeneratedVideo {
   // reprocessed rather than skipped.
   lastWebhookEventId String?
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  avatar Avatar @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  // Which specific look this video was generated with. Nullable — only set
+  // for avatars imported from HeyGen (which have looks); avatars linked via
+  // the legacy single-avatar admin flow generate directly off
+  // Avatar.heygenAvatarId and have no look to record here.
+  avatarLookId String?
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatar     Avatar      @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  avatarLook AvatarLook? @relation(fields: [avatarLookId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([avatarId])
+  @@index([avatarLookId])
   @@map("generated_videos")
 }
 

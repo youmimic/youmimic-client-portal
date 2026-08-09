@@ -3,7 +3,7 @@ import { writeAuditLog, ENTITY_TYPES } from "@/lib/admin/audit";
 
 const HEYGEN_API_BASE = "https://api.heygen.com";
 
-interface HeyGenListedAvatar {
+interface HeyGenListedLook {
   avatar_id: string;
   avatar_name: string;
 }
@@ -14,6 +14,12 @@ interface HeyGenAvatarGroup {
   group_type: string;
 }
 
+interface HeyGenGroupWithLooks {
+  groupId: string;
+  groupName: string;
+  looks: HeyGenListedLook[];
+}
+
 function heygenHeaders(): HeadersInit {
   const apiKey = process.env.HEYGEN_API_KEY;
   if (!apiKey || apiKey === "...") {
@@ -22,15 +28,14 @@ function heygenHeaders(): HeadersInit {
   return { "x-api-key": apiKey };
 }
 
-// Deliberately NOT using GET /v2/avatars (the flat "list every avatar"
-// endpoint) as the source — confirmed against the real account that it's
-// missing real, private avatars entirely (e.g. an enterprise's whole set of
-// looks absent with no error), on top of being HeyGen's own documented
-// legacy endpoint (sunsetting 2026-10-31). The group-based enumeration below
-// is the same data HeyGen's own dashboard is built on and was verified
-// complete: every PRIVATE avatar_group's own avatars endpoint reliably
-// returned every look, including the ones the flat list dropped.
-async function fetchAllHeyGenAvatars(): Promise<HeyGenListedAvatar[]> {
+// A HeyGen "avatar_group" is the real avatar identity (one real person); each
+// entry inside it is a "look" — a specific outfit/pose/angle variant of that
+// same identity, not a distinct avatar. Confirmed against the live account:
+// e.g. one person had 21 looks under a single group. Deliberately NOT using
+// GET /v2/avatars (the flat "list every avatar" endpoint) — confirmed
+// missing real private avatars entirely, on top of being HeyGen's own
+// documented legacy endpoint (sunsetting 2026-10-31).
+async function fetchAllHeyGenGroups(): Promise<HeyGenGroupWithLooks[]> {
   const headers = heygenHeaders();
 
   const groupsRes = await fetch(`${HEYGEN_API_BASE}/v2/avatar_group.list`, { headers });
@@ -40,21 +45,22 @@ async function fetchAllHeyGenAvatars(): Promise<HeyGenListedAvatar[]> {
   const groupsJson = (await groupsRes.json()) as { data?: { avatar_group_list?: HeyGenAvatarGroup[] } };
   const privateGroups = (groupsJson.data?.avatar_group_list ?? []).filter((g) => g.group_type === "PRIVATE");
 
-  const seen = new Set<string>();
-  const avatars: HeyGenListedAvatar[] = [];
+  const result: HeyGenGroupWithLooks[] = [];
 
   for (const group of privateGroups) {
     const res = await fetch(`${HEYGEN_API_BASE}/v2/avatar_group/${group.id}/avatars`, { headers });
     if (!res.ok) continue; // one bad group shouldn't fail the whole import
 
     const json = (await res.json()) as { data?: { avatar_list?: unknown[] } };
+    const seen = new Set<string>();
+    const looks: HeyGenListedLook[] = [];
+
     for (const item of json.data?.avatar_list ?? []) {
       // Some groups (e.g. "Talking Photo" style entries) return a
       // completely different shape (`id`/`name` instead of
-      // `avatar_id`/`avatar_name`, no workspace-code-bearing name at all) —
-      // skip anything that doesn't match the Photo Avatar look shape we
-      // actually match against, rather than guessing at a different field.
-      const candidate = item as Partial<HeyGenListedAvatar>;
+      // `avatar_id`/`avatar_name`) — skip anything that doesn't match the
+      // Photo Avatar look shape we actually match against.
+      const candidate = item as Partial<HeyGenListedLook>;
       if (typeof candidate.avatar_id !== "string" || typeof candidate.avatar_name !== "string") continue;
 
       // The same look has been observed duplicated within a single group's
@@ -62,60 +68,72 @@ async function fetchAllHeyGenAvatars(): Promise<HeyGenListedAvatar[]> {
       if (seen.has(candidate.avatar_id)) continue;
       seen.add(candidate.avatar_id);
 
-      avatars.push({ avatar_id: candidate.avatar_id, avatar_name: candidate.avatar_name });
+      looks.push({ avatar_id: candidate.avatar_id, avatar_name: candidate.avatar_name });
     }
+
+    result.push({ groupId: group.id, groupName: group.name, looks });
   }
 
-  return avatars;
+  return result;
 }
 
 const WORKSPACE_CODE_PATTERN = /YM(\d+)/;
 
-type PlannedCreate = {
-  heygenAvatarId: string;
+type PlannedNewAvatar = {
+  heygenGroupId: string;
   name: string;
   enterpriseId: string;
   enterpriseName: string;
   userId: string;
+  looks: HeyGenListedLook[];
 };
 
-type SkipReason = "no_workspace_code" | "unknown_workspace_code" | "already_linked";
+type PlannedNewLooks = {
+  avatarId: string;
+  avatarName: string;
+  looks: HeyGenListedLook[];
+};
 
-type Skipped = {
-  heygenAvatarId: string;
-  name: string;
+type SkipReason = "no_workspace_code" | "unknown_workspace_code";
+
+type SkippedGroup = {
+  heygenGroupId: string;
+  groupName: string;
   reason: SkipReason;
   workspaceCode?: string;
 };
 
 export interface AvatarImportPlan {
-  totalHeyGenAvatars: number;
-  toCreate: PlannedCreate[];
+  totalHeyGenGroups: number;
+  totalHeyGenLooks: number;
+  toCreate: PlannedNewAvatar[];
+  toAddLooks: PlannedNewLooks[];
   byEnterprise: { enterpriseId: string; enterpriseName: string; count: number }[];
-  skipped: Skipped[];
+  skipped: SkippedGroup[];
   skippedSummary: {
-    alreadyLinked: number;
     noWorkspaceCode: number;
     unknownWorkspaceCode: Record<string, number>;
   };
 }
 
 // Matches by YM### workspace code only — not full heygenWorkspaceId string
-// matching, which real data proved unreliable (avatar names carry a date
+// matching, which real data proved unreliable (look names carry a date
 // prefix, a team member's name instead of the enterprise name, or no
-// enterprise-identifying text at all). Anything that isn't an unambiguous
-// code match is skipped and reported, never guessed.
+// enterprise-identifying text at all). The code is read off any look's name
+// within the group (all looks in a group share the same code in practice) —
+// anything that isn't an unambiguous code match is skipped and reported,
+// never guessed.
 export async function planAvatarImport(): Promise<AvatarImportPlan> {
-  const [enterprises, existingHeygenIds, heygenAvatars] = await Promise.all([
+  const [enterprises, existingAvatars, groups] = await Promise.all([
     prisma.enterprise.findMany({
       where: { heygenWorkspaceId: { not: null } },
       select: { id: true, name: true, ownerUserId: true, heygenWorkspaceId: true },
     }),
     prisma.avatar.findMany({
-      where: { heygenAvatarId: { not: null } },
-      select: { heygenAvatarId: true },
+      where: { heygenGroupId: { not: null } },
+      select: { id: true, name: true, heygenGroupId: true, looks: { select: { heygenLookId: true } } },
     }),
-    fetchAllHeyGenAvatars(),
+    fetchAllHeyGenGroups(),
   ]);
 
   const byCode = new Map<string, (typeof enterprises)[number]>();
@@ -124,21 +142,37 @@ export async function planAvatarImport(): Promise<AvatarImportPlan> {
     if (match) byCode.set(match[1], ent);
   }
 
-  const alreadyLinkedIds = new Set(existingHeygenIds.map((a) => a.heygenAvatarId));
+  const existingByGroupId = new Map(existingAvatars.map((a) => [a.heygenGroupId as string, a]));
 
-  const toCreate: PlannedCreate[] = [];
-  const skipped: Skipped[] = [];
+  const toCreate: PlannedNewAvatar[] = [];
+  const toAddLooks: PlannedNewLooks[] = [];
+  const skipped: SkippedGroup[] = [];
   const unknownWorkspaceCode: Record<string, number> = {};
+  let totalHeyGenLooks = 0;
 
-  for (const avatar of heygenAvatars) {
-    if (alreadyLinkedIds.has(avatar.avatar_id)) {
-      skipped.push({ heygenAvatarId: avatar.avatar_id, name: avatar.avatar_name, reason: "already_linked" });
+  for (const group of groups) {
+    totalHeyGenLooks += group.looks.length;
+    if (group.looks.length === 0) continue;
+
+    const existing = existingByGroupId.get(group.groupId);
+    if (existing) {
+      const knownLookIds = new Set(existing.looks.map((l) => l.heygenLookId));
+      const newLooks = group.looks.filter((l) => !knownLookIds.has(l.avatar_id));
+      if (newLooks.length > 0) {
+        toAddLooks.push({ avatarId: existing.id, avatarName: existing.name, looks: newLooks });
+      }
       continue;
     }
 
-    const codeMatch = avatar.avatar_name.match(WORKSPACE_CODE_PATTERN);
+    // Not yet imported at all — resolve the enterprise from any look's name.
+    let codeMatch: RegExpMatchArray | null = null;
+    for (const look of group.looks) {
+      codeMatch = look.avatar_name.match(WORKSPACE_CODE_PATTERN);
+      if (codeMatch) break;
+    }
+
     if (!codeMatch) {
-      skipped.push({ heygenAvatarId: avatar.avatar_id, name: avatar.avatar_name, reason: "no_workspace_code" });
+      skipped.push({ heygenGroupId: group.groupId, groupName: group.groupName, reason: "no_workspace_code" });
       continue;
     }
 
@@ -146,8 +180,8 @@ export async function planAvatarImport(): Promise<AvatarImportPlan> {
     if (!enterprise) {
       unknownWorkspaceCode[codeMatch[1]] = (unknownWorkspaceCode[codeMatch[1]] ?? 0) + 1;
       skipped.push({
-        heygenAvatarId: avatar.avatar_id,
-        name: avatar.avatar_name,
+        heygenGroupId: group.groupId,
+        groupName: group.groupName,
         reason: "unknown_workspace_code",
         workspaceCode: codeMatch[1],
       });
@@ -155,11 +189,12 @@ export async function planAvatarImport(): Promise<AvatarImportPlan> {
     }
 
     toCreate.push({
-      heygenAvatarId: avatar.avatar_id,
-      name: avatar.avatar_name,
+      heygenGroupId: group.groupId,
+      name: group.groupName,
       enterpriseId: enterprise.id,
       enterpriseName: enterprise.name,
       userId: enterprise.ownerUserId,
+      looks: group.looks,
     });
   }
 
@@ -171,12 +206,13 @@ export async function planAvatarImport(): Promise<AvatarImportPlan> {
   }
 
   return {
-    totalHeyGenAvatars: heygenAvatars.length,
+    totalHeyGenGroups: groups.length,
+    totalHeyGenLooks,
     toCreate,
+    toAddLooks,
     byEnterprise: [...byEnterpriseMap.values()].sort((a, b) => b.count - a.count),
     skipped,
     skippedSummary: {
-      alreadyLinked: skipped.filter((s) => s.reason === "already_linked").length,
       noWorkspaceCode: skipped.filter((s) => s.reason === "no_workspace_code").length,
       unknownWorkspaceCode,
     },
@@ -185,6 +221,7 @@ export async function planAvatarImport(): Promise<AvatarImportPlan> {
 
 export interface AvatarImportResult {
   created: number;
+  looksAdded: number;
   byEnterprise: { enterpriseId: string; enterpriseName: string; count: number }[];
 }
 
@@ -193,6 +230,7 @@ export interface AvatarImportResult {
 // changed (e.g. someone else already imported in the meantime).
 export async function executeAvatarImport(adminUserId: string): Promise<AvatarImportResult> {
   const plan = await planAvatarImport();
+  let looksAdded = 0;
 
   for (const item of plan.toCreate) {
     const avatar = await prisma.avatar.create({
@@ -200,10 +238,18 @@ export async function executeAvatarImport(adminUserId: string): Promise<AvatarIm
         userId: item.userId,
         enterpriseId: item.enterpriseId,
         name: item.name,
-        heygenAvatarId: item.heygenAvatarId,
+        heygenGroupId: item.heygenGroupId,
+        heygenAvatarId: item.looks[0]?.avatar_id ?? null,
+        looks: {
+          create: item.looks.map((look) => ({
+            heygenLookId: look.avatar_id,
+            name: look.avatar_name,
+          })),
+        },
       },
       select: { id: true },
     });
+    looksAdded += item.looks.length;
 
     await writeAuditLog({
       adminUserId,
@@ -211,9 +257,33 @@ export async function executeAvatarImport(adminUserId: string): Promise<AvatarIm
       entityType: ENTITY_TYPES.AVATAR,
       entityId: avatar.id,
       targetUserId: item.userId,
-      metadata: { heygenAvatarId: item.heygenAvatarId, enterpriseId: item.enterpriseId, enterpriseName: item.enterpriseName },
+      metadata: {
+        heygenGroupId: item.heygenGroupId,
+        enterpriseId: item.enterpriseId,
+        enterpriseName: item.enterpriseName,
+        lookCount: item.looks.length,
+      },
     });
   }
 
-  return { created: plan.toCreate.length, byEnterprise: plan.byEnterprise };
+  for (const item of plan.toAddLooks) {
+    await prisma.avatarLook.createMany({
+      data: item.looks.map((look) => ({
+        avatarId: item.avatarId,
+        heygenLookId: look.avatar_id,
+        name: look.avatar_name,
+      })),
+    });
+    looksAdded += item.looks.length;
+
+    await writeAuditLog({
+      adminUserId,
+      action: "bulk_import_avatar_heygen_looks",
+      entityType: ENTITY_TYPES.AVATAR,
+      entityId: item.avatarId,
+      metadata: { addedLookCount: item.looks.length },
+    });
+  }
+
+  return { created: plan.toCreate.length, looksAdded, byEnterprise: plan.byEnterprise };
 }

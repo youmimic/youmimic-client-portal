@@ -69,6 +69,7 @@ export default async function AdminUserDetailPage({
           heygenAvatarId: true,
           enterpriseId: true,
           previewUrl: true,
+          _count: { select: { looks: true } },
         },
       },
       adminLogsAsTarget: {

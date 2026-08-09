@@ -29,6 +29,10 @@ export default async function AvatarStudioPage({
       status: true,
       heygenAvatarId: true,
       previewUrl: true,
+      looks: {
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true },
+      },
       generatedVideos: {
         orderBy: { createdAt: "desc" },
         select: {
@@ -47,9 +51,13 @@ export default async function AvatarStudioPage({
   if (!avatar) notFound();
 
   // Middleware already gates this route on an active subscription — this
-  // check is about the avatar itself, not billing: an avatar with no
-  // heygenAvatarId or not yet "ready" simply has nothing to generate from.
-  const usable = avatar.status === "ready" && !!avatar.heygenAvatarId;
+  // check is about the avatar itself, not billing: with looks (imported from
+  // HeyGen), at least one look must be ready; without looks (legacy manual
+  // link), the avatar itself must be ready.
+  const usable =
+    avatar.looks.length > 0
+      ? avatar.looks.some((l) => l.status === "ready")
+      : avatar.status === "ready" && !!avatar.heygenAvatarId;
 
   return (
     <div className="space-y-6">
@@ -72,6 +80,7 @@ export default async function AvatarStudioPage({
       {usable ? (
         <AvatarStudio
           avatarId={avatar.id}
+          looks={avatar.looks}
           videos={avatar.generatedVideos.map((v) => ({
             ...v,
             createdAt: v.createdAt.toISOString(),

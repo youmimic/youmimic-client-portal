@@ -13,12 +13,13 @@ import {
 } from "@/components/ui/dialog";
 
 type Plan = {
-  totalHeyGenAvatars: number;
+  totalHeyGenGroups: number;
+  totalHeyGenLooks: number;
   toCreate: unknown[];
+  toAddLooks: { avatarId: string; avatarName: string; looks: unknown[] }[];
   byEnterprise: { enterpriseId: string; enterpriseName: string; count: number }[];
   skipped: unknown[];
   skippedSummary: {
-    alreadyLinked: number;
     noWorkspaceCode: number;
     unknownWorkspaceCode: Record<string, number>;
   };
@@ -26,6 +27,7 @@ type Plan = {
 
 type Result = {
   created: number;
+  looksAdded: number;
   byEnterprise: { enterpriseId: string; enterpriseName: string; count: number }[];
 };
 
@@ -114,8 +116,9 @@ export function HeyGenImportDialog() {
           {plan && step !== "loading" && step !== "done" && (
             <div className="space-y-3 text-sm">
               <p>
-                <span className="font-medium">{plan.toCreate.length}</span> of{" "}
-                {plan.totalHeyGenAvatars} HeyGen avatars will be linked:
+                <span className="font-medium">{plan.toCreate.length}</span> new avatar
+                {plan.toCreate.length === 1 ? "" : "s"} will be linked ({plan.totalHeyGenLooks} looks across{" "}
+                {plan.totalHeyGenGroups} HeyGen avatar identities):
               </p>
               {plan.byEnterprise.length > 0 ? (
                 <ul className="space-y-1 pl-4 list-disc">
@@ -126,13 +129,20 @@ export function HeyGenImportDialog() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-muted-foreground">Nothing new to import.</p>
+                <p className="text-muted-foreground">No new avatar identities to import.</p>
+              )}
+
+              {plan.toAddLooks.length > 0 && (
+                <p className="text-muted-foreground">
+                  Plus {plan.toAddLooks.reduce((sum, a) => sum + a.looks.length, 0)} new look
+                  {plan.toAddLooks.reduce((sum, a) => sum + a.looks.length, 0) === 1 ? "" : "s"} to add to{" "}
+                  {plan.toAddLooks.length} already-linked avatar{plan.toAddLooks.length === 1 ? "" : "s"}.
+                </p>
               )}
 
               <div className="rounded-md border p-3 text-xs text-muted-foreground space-y-1">
-                <p>Skipped (not imported):</p>
+                <p>Skipped avatar identities (not imported):</p>
                 <p>
-                  {plan.skippedSummary.alreadyLinked} already linked ·{" "}
                   {plan.skippedSummary.noWorkspaceCode} with no recognizable workspace code
                   {unknownCodes.length > 0 && (
                     <>
@@ -149,7 +159,8 @@ export function HeyGenImportDialog() {
           {step === "done" && result && (
             <div className="space-y-2 text-sm">
               <p className="font-medium text-green-600 dark:text-green-400">
-                Linked {result.created} avatar{result.created === 1 ? "" : "s"}.
+                Linked {result.created} avatar{result.created === 1 ? "" : "s"}
+                {result.looksAdded > 0 && ` (${result.looksAdded} looks total)`}.
               </p>
               <ul className="space-y-1 pl-4 list-disc text-muted-foreground">
                 {result.byEnterprise.map((e) => (
@@ -165,9 +176,11 @@ export function HeyGenImportDialog() {
             <DialogClose render={<Button variant="outline" size="sm" />}>
               {step === "done" ? "Close" : "Cancel"}
             </DialogClose>
-            {step === "previewed" && plan && plan.toCreate.length > 0 && (
+            {step === "previewed" && plan && (plan.toCreate.length > 0 || plan.toAddLooks.length > 0) && (
               <Button size="sm" onClick={handleConfirm}>
-                Link {plan.toCreate.length} Avatar{plan.toCreate.length === 1 ? "" : "s"}
+                {plan.toCreate.length > 0
+                  ? `Link ${plan.toCreate.length} Avatar${plan.toCreate.length === 1 ? "" : "s"}`
+                  : "Add new looks"}
               </Button>
             )}
             {step === "importing" && (
