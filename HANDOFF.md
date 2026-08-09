@@ -1,5 +1,15 @@
 # HANDOFF.md
 
+## Session: Fix — Vercel cron schedule was silently blocking every deployment — 2026-08-09
+
+User reported Vercel's dashboard only showed the very old "feat: added go cardless data" commit as the latest deployment, despite nine newer commits already pushed to `origin/main` (confirmed via `git status -sb` — local `main` and `origin/main` were in sync, so this was never a git/push problem). The most recent entry in Vercel's deployment list was a manual "Redeploy" of that same old build, not a fresh build from a new push — meaning nothing newer had ever gone `Ready`.
+
+Root cause, confirmed by the user pulling up Vercel's own Cron Jobs pricing page: **Hobby-plan Vercel projects only allow cron jobs to run once per day; a more frequent cron expression fails deployment outright** (not just the cron job — the whole deployment). `vercel.json` (added in the Enterprise Avatar Billing Phase 2 session, 2026-08-03) scheduled the retry-failed-provisioning cron hourly (`0 * * * *`), which would fail exactly that validation on a Hobby plan — explaining why every commit since Phase 2 (and the intervening Phase 1 / avatar-section work bundled into the same eventual push) never successfully deployed.
+
+**Fix**: changed `vercel.json`'s schedule to `0 3 * * *` (once daily, 03:00 UTC) — the maximum frequency Hobby allows. The retry-failed-provisioning route's own logic is unaffected; it just now gets invoked once a day instead of hourly, which is what actually clears any failed self-serve avatar-provisioning attempts. If faster retries are wanted later, that requires upgrading the Vercel project off the Hobby plan, not a code change.
+
+Not yet confirmed: whether this was the *only* blocker (a possible secondary GitHub↔Vercel connection issue was also raised while diagnosing, but wasn't checked once the cron cause was confirmed) — worth watching the next deploy to make sure it actually goes `Ready`.
+
 ## Session: Avatar section — admin linking + live HeyGen status sync — 2026-08-09
 
 ### Context
