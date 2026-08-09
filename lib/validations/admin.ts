@@ -268,6 +268,19 @@ export const heygenImportSchema = z.object({
 
 export type HeygenImportInput = z.infer<typeof heygenImportSchema>;
 
+// Import a single avatar identity by HeyGen group id, targeted at a specific
+// user — for identities the automated bulk import can't auto-match (no
+// workspace code in their look names) or that need routing to a specific
+// user an admin already knows. Defaults to a dry run, same as the bulk
+// import above.
+export const linkAvatarGroupSchema = z.object({
+  heygenGroupId: z.string().trim().min(1, "Group ID is required").max(200),
+  enterpriseId: z.string().trim().min(1).optional(),
+  dryRun: z.boolean().default(true),
+});
+
+export type LinkAvatarGroupInput = z.infer<typeof linkAvatarGroupSchema>;
+
 // Mirrors the BillingOwnerType enum in prisma/schema.prisma.
 export const BILLING_OWNER_TYPES = ["USER", "ENTERPRISE"] as const;
 const OWNER_TYPE_FILTER = [...BILLING_OWNER_TYPES, "all"] as const;

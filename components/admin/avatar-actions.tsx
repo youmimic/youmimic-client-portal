@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { LinkAvatarGroupDialog } from "@/components/admin/link-avatar-group-dialog";
 
 type ActionState = { loading: boolean; error: string | null };
 const idle: ActionState = { loading: false, error: null };
@@ -260,9 +261,12 @@ export function UserAvatarsCard({
           ))
         )}
         {canManage && (
-          <Button variant="outline" size="sm" onClick={openAdd}>
-            Link Avatar
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={openAdd}>
+              Link Avatar
+            </Button>
+            <LinkAvatarGroupDialog userId={userId} enterpriseOptions={enterpriseOptions} />
+          </div>
         )}
       </div>
 

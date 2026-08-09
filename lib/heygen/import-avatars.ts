@@ -28,6 +28,39 @@ function heygenHeaders(): HeadersInit {
   return { "x-api-key": apiKey };
 }
 
+// Some groups (e.g. "Talking Photo" style entries) return a completely
+// different shape (`id`/`name` instead of `avatar_id`/`avatar_name`) — skip
+// anything that doesn't match the Photo Avatar look shape we actually match
+// against. The same look has also been observed duplicated within a single
+// group's response — dedupe defensively regardless of cause.
+async function fetchLooksForGroup(groupId: string, headers: HeadersInit): Promise<HeyGenListedLook[]> {
+  const res = await fetch(`${HEYGEN_API_BASE}/v2/avatar_group/${groupId}/avatars`, { headers });
+  if (!res.ok) return [];
+
+  const json = (await res.json()) as { data?: { avatar_list?: unknown[] } };
+  const seen = new Set<string>();
+  const looks: HeyGenListedLook[] = [];
+
+  for (const item of json.data?.avatar_list ?? []) {
+    const candidate = item as Partial<HeyGenListedLook>;
+    if (typeof candidate.avatar_id !== "string" || typeof candidate.avatar_name !== "string") continue;
+    if (seen.has(candidate.avatar_id)) continue;
+    seen.add(candidate.avatar_id);
+    looks.push({ avatar_id: candidate.avatar_id, avatar_name: candidate.avatar_name });
+  }
+
+  return looks;
+}
+
+async function fetchPrivateHeyGenGroups(headers: HeadersInit): Promise<HeyGenAvatarGroup[]> {
+  const groupsRes = await fetch(`${HEYGEN_API_BASE}/v2/avatar_group.list`, { headers });
+  if (!groupsRes.ok) {
+    throw new Error(`HeyGen API returned ${groupsRes.status} listing avatar groups`);
+  }
+  const groupsJson = (await groupsRes.json()) as { data?: { avatar_group_list?: HeyGenAvatarGroup[] } };
+  return (groupsJson.data?.avatar_group_list ?? []).filter((g) => g.group_type === "PRIVATE");
+}
+
 // A HeyGen "avatar_group" is the real avatar identity (one real person); each
 // entry inside it is a "look" — a specific outfit/pose/angle variant of that
 // same identity, not a distinct avatar. Confirmed against the live account:
@@ -37,44 +70,31 @@ function heygenHeaders(): HeadersInit {
 // documented legacy endpoint (sunsetting 2026-10-31).
 async function fetchAllHeyGenGroups(): Promise<HeyGenGroupWithLooks[]> {
   const headers = heygenHeaders();
-
-  const groupsRes = await fetch(`${HEYGEN_API_BASE}/v2/avatar_group.list`, { headers });
-  if (!groupsRes.ok) {
-    throw new Error(`HeyGen API returned ${groupsRes.status} listing avatar groups`);
-  }
-  const groupsJson = (await groupsRes.json()) as { data?: { avatar_group_list?: HeyGenAvatarGroup[] } };
-  const privateGroups = (groupsJson.data?.avatar_group_list ?? []).filter((g) => g.group_type === "PRIVATE");
+  const privateGroups = await fetchPrivateHeyGenGroups(headers);
 
   const result: HeyGenGroupWithLooks[] = [];
-
   for (const group of privateGroups) {
-    const res = await fetch(`${HEYGEN_API_BASE}/v2/avatar_group/${group.id}/avatars`, { headers });
-    if (!res.ok) continue; // one bad group shouldn't fail the whole import
-
-    const json = (await res.json()) as { data?: { avatar_list?: unknown[] } };
-    const seen = new Set<string>();
-    const looks: HeyGenListedLook[] = [];
-
-    for (const item of json.data?.avatar_list ?? []) {
-      // Some groups (e.g. "Talking Photo" style entries) return a
-      // completely different shape (`id`/`name` instead of
-      // `avatar_id`/`avatar_name`) — skip anything that doesn't match the
-      // Photo Avatar look shape we actually match against.
-      const candidate = item as Partial<HeyGenListedLook>;
-      if (typeof candidate.avatar_id !== "string" || typeof candidate.avatar_name !== "string") continue;
-
-      // The same look has been observed duplicated within a single group's
-      // response — dedupe defensively regardless of cause.
-      if (seen.has(candidate.avatar_id)) continue;
-      seen.add(candidate.avatar_id);
-
-      looks.push({ avatar_id: candidate.avatar_id, avatar_name: candidate.avatar_name });
-    }
-
+    const looks = await fetchLooksForGroup(group.id, headers);
     result.push({ groupId: group.id, groupName: group.name, looks });
   }
 
   return result;
+}
+
+// Looks up a single group by id — for the admin "import a specific avatar
+// identity by group id" action, where an admin already has a group id in
+// hand (e.g. copied from HeyGen's own dashboard) rather than relying on
+// workspace-code auto-matching. Only matches PRIVATE groups, same as the
+// bulk import. Returns null rather than throwing if the id isn't found, so
+// the caller can surface a clear "not found" error instead of a generic one.
+async function fetchHeyGenGroupById(groupId: string): Promise<HeyGenGroupWithLooks | null> {
+  const headers = heygenHeaders();
+  const privateGroups = await fetchPrivateHeyGenGroups(headers);
+  const group = privateGroups.find((g) => g.id === groupId);
+  if (!group) return null;
+
+  const looks = await fetchLooksForGroup(group.id, headers);
+  return { groupId: group.id, groupName: group.name, looks };
 }
 
 const WORKSPACE_CODE_PATTERN = /YM(\d+)/;
@@ -286,4 +306,137 @@ export async function executeAvatarImport(adminUserId: string): Promise<AvatarIm
   }
 
   return { created: plan.toCreate.length, looksAdded, byEnterprise: plan.byEnterprise };
+}
+
+// ---------------------------------------------------------------------------
+// Import a single avatar identity by HeyGen group id — for identities that
+// can't go through the automated bulk import (no recognizable workspace
+// code in their look names, e.g. Neil McGregor) or that need to be routed to
+// a specific user/enterprise an admin already knows, rather than
+// auto-matched.
+// ---------------------------------------------------------------------------
+
+export type AvatarGroupLinkStatus = "new" | "add_looks" | "no_new_looks";
+
+export interface AvatarGroupLinkPlan {
+  heygenGroupId: string;
+  groupName: string;
+  totalLooks: number;
+  status: AvatarGroupLinkStatus;
+  existingAvatarId: string | null;
+  existingAvatarName: string | null;
+  looks: HeyGenListedLook[];
+}
+
+export async function planAvatarGroupLink(userId: string, heygenGroupId: string): Promise<AvatarGroupLinkPlan> {
+  const group = await fetchHeyGenGroupById(heygenGroupId);
+  if (!group) {
+    throw new Error(`No PRIVATE HeyGen avatar group found with id "${heygenGroupId}"`);
+  }
+  if (group.looks.length === 0) {
+    throw new Error(`This HeyGen avatar group ("${group.groupName}") has no looks in it`);
+  }
+
+  const existing = await prisma.avatar.findUnique({
+    where: { heygenGroupId },
+    select: { id: true, userId: true, name: true, looks: { select: { heygenLookId: true } } },
+  });
+
+  if (existing && existing.userId !== userId) {
+    throw new Error(
+      `This avatar identity is already linked to a different user (as "${existing.name}") — unlink it there first.`,
+    );
+  }
+
+  if (existing) {
+    const knownLookIds = new Set(existing.looks.map((l) => l.heygenLookId));
+    const newLooks = group.looks.filter((l) => !knownLookIds.has(l.avatar_id));
+    return {
+      heygenGroupId,
+      groupName: group.groupName,
+      totalLooks: group.looks.length,
+      status: newLooks.length > 0 ? "add_looks" : "no_new_looks",
+      existingAvatarId: existing.id,
+      existingAvatarName: existing.name,
+      looks: newLooks,
+    };
+  }
+
+  return {
+    heygenGroupId,
+    groupName: group.groupName,
+    totalLooks: group.looks.length,
+    status: "new",
+    existingAvatarId: null,
+    existingAvatarName: null,
+    looks: group.looks,
+  };
+}
+
+export interface AvatarGroupLinkResult {
+  avatarId: string;
+  created: boolean;
+  looksAdded: number;
+}
+
+// Re-plans immediately before writing, same reasoning as executeAvatarImport
+// — never blindly apply a stale preview.
+export async function executeAvatarGroupLink(
+  adminUserId: string,
+  userId: string,
+  heygenGroupId: string,
+  enterpriseId: string | null,
+): Promise<AvatarGroupLinkResult> {
+  const plan = await planAvatarGroupLink(userId, heygenGroupId);
+
+  if (plan.status === "new") {
+    const avatar = await prisma.avatar.create({
+      data: {
+        userId,
+        enterpriseId,
+        name: plan.groupName,
+        heygenGroupId,
+        heygenAvatarId: plan.looks[0]?.avatar_id ?? null,
+        looks: {
+          create: plan.looks.map((look) => ({ heygenLookId: look.avatar_id, name: look.avatar_name })),
+        },
+      },
+      select: { id: true },
+    });
+
+    await writeAuditLog({
+      adminUserId,
+      action: "link_avatar_group",
+      entityType: ENTITY_TYPES.AVATAR,
+      entityId: avatar.id,
+      targetUserId: userId,
+      metadata: { heygenGroupId, enterpriseId, lookCount: plan.looks.length },
+    });
+
+    return { avatarId: avatar.id, created: true, looksAdded: plan.looks.length };
+  }
+
+  if (plan.status === "add_looks" && plan.existingAvatarId) {
+    await prisma.avatarLook.createMany({
+      data: plan.looks.map((look) => ({
+        avatarId: plan.existingAvatarId as string,
+        heygenLookId: look.avatar_id,
+        name: look.avatar_name,
+      })),
+    });
+
+    await writeAuditLog({
+      adminUserId,
+      action: "add_avatar_looks",
+      entityType: ENTITY_TYPES.AVATAR,
+      entityId: plan.existingAvatarId,
+      targetUserId: userId,
+      metadata: { addedLookCount: plan.looks.length },
+    });
+
+    return { avatarId: plan.existingAvatarId, created: false, looksAdded: plan.looks.length };
+  }
+
+  // no_new_looks — already fully imported, nothing to do.
+  return { avatarId: plan.existingAvatarId as string, created: false, looksAdded: 0 };
 }

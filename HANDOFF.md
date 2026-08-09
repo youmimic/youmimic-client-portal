@@ -58,6 +58,20 @@ pulled from HeyGen. Also flagged (and got confirmation on, no action needed) an
 unrelated finding noticed while verifying — a specific real account carries
 `SUPER_ADMIN`, confirmed intentional.
 
+**Third follow-up, same session:** user asked whether a full avatar identity (all its
+looks) could be imported by HeyGen group ID directly, rather than one look at a time —
+previously not possible; the only paths were a single-look manual link, or the
+automated bulk import (which silently skips any identity whose look names carry no
+recognizable workspace code). Added a new admin action — "Import Avatar Identity" — that
+takes a group ID + target user, previews the real look count, and imports all of them
+as one avatar in a single step. Handles re-runs idempotently (adds only genuinely new
+looks) and blocks if the identity is already linked to a different user. Verified all
+three cases directly against the real API (new import, idempotent re-check, cross-user
+block) after an initial combined UI test had timing flakiness; re-verified cleanly in
+isolation. `npm run lint`/`typecheck`/`build` all clean; disposable fixtures cleaned up
+(catching along the way that fixture cleanup needs to delete `admin_logs` rows before
+the referencing user, since that FK is `RESTRICT` not `CASCADE`).
+
 ## Session: Set every enterprise's Platform Access Fee to $0 — 2026-08-09
 
 User asked to set the Platform Access Fee to $0 for every enterprise. Checked current state first before touching anything: of 12 enterprises, 6 already had a `PLATFORM_FEE` row already set to `$0`, and 6 had no row at all (`unitAmountCents` shows as "Not set" in the admin UI until a row exists — a deliberately different state from "$0" per Phase 1's original design). Crucially, **none** had a non-zero fee, so this was purely additive — no real existing negotiated fee was at risk of being overwritten, which is why this was executed directly rather than paused for confirmation first.
