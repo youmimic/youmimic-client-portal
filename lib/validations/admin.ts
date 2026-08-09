@@ -233,6 +233,33 @@ export const setProvisioningModeSchema = z.object({
 
 export type SetProvisioningModeInput = z.infer<typeof setProvisioningModeSchema>;
 
+// ---------------------------------------------------------------------------
+// Avatar linking (admin) — creates/edits the base Avatar record itself.
+// Avatars remain platform-provisioned: the actual avatar is created and
+// trained directly in HeyGen; this just links the resulting avatar/look ID
+// (and an optional owning enterprise) into the portal so the customer
+// dashboard can display it and sync its live status.
+// ---------------------------------------------------------------------------
+
+export const linkAvatarSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200),
+  heygenAvatarId: z.string().trim().min(1).max(200).optional(),
+  enterpriseId: z.string().trim().min(1).optional(),
+});
+
+export type LinkAvatarInput = z.infer<typeof linkAvatarSchema>;
+
+// All fields independently optional so a caller can update just one.
+// enterpriseId/heygenAvatarId use .nullable() so a caller can explicitly
+// clear a value — omitting the field means "leave as-is".
+export const updateAvatarSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200).optional(),
+  heygenAvatarId: z.string().trim().min(1).max(200).nullable().optional(),
+  enterpriseId: z.string().trim().min(1).nullable().optional(),
+});
+
+export type UpdateAvatarInput = z.infer<typeof updateAvatarSchema>;
+
 // Mirrors the BillingOwnerType enum in prisma/schema.prisma.
 export const BILLING_OWNER_TYPES = ["USER", "ENTERPRISE"] as const;
 const OWNER_TYPE_FILTER = [...BILLING_OWNER_TYPES, "all"] as const;

@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { syncAvatarFromHeyGen } from "@/lib/heygen/sync";
 
 export const metadata = {
   title: "Avatars — YouMimic Portal",
@@ -31,6 +32,10 @@ const STATUS_STYLES: Record<string, string> = {
     "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   training:
     "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  // Set only by a live HeyGen sync — the avatar subject needs to record
+  // consent in HeyGen before training/generation can proceed.
+  pending_consent:
+    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   ready:
     "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   active:
@@ -39,14 +44,19 @@ const STATUS_STYLES: Record<string, string> = {
   error: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  pending_consent: "Awaiting consent",
+};
+
 function StatusBadge({ status }: { status: string }) {
   const classes =
     STATUS_STYLES[status.toLowerCase()] ?? "bg-muted text-muted-foreground";
+  const label = STATUS_LABELS[status.toLowerCase()] ?? status;
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${classes}`}
     >
-      {status}
+      {label}
     </span>
   );
 }
@@ -155,11 +165,40 @@ function AvatarGrid({ avatars }: { avatars: AvatarRow[] }) {
   );
 }
 
+// Best-effort live refresh: for every avatar linked to a real HeyGen avatar,
+// pull current status/preview/video and merge it into the render list. Uses
+// Promise.allSettled so one slow/failing HeyGen call (network issue, avatar
+// deleted upstream, etc.) never blocks or breaks the rest of the page — on
+// failure the row simply falls back to whatever was already in the DB.
+async function withLiveHeyGenStatus(avatars: AvatarRow[]): Promise<AvatarRow[]> {
+  const syncable = avatars.filter((a) => a.heygenAvatarId);
+  if (syncable.length === 0) return avatars;
+
+  const results = await Promise.allSettled(
+    syncable.map((a) => syncAvatarFromHeyGen(a.id, a.heygenAvatarId as string)),
+  );
+
+  const byId = new Map(syncable.map((a, i) => [a.id, results[i]] as const));
+
+  return avatars.map((avatar) => {
+    const result = byId.get(avatar.id);
+    if (!result || result.status !== "fulfilled" || !result.value.ok) return avatar;
+    const { status, previewUrl, videoUrl } = result.value;
+    return {
+      ...avatar,
+      status: status ?? avatar.status,
+      previewUrl: previewUrl ?? avatar.previewUrl,
+      videoUrl: videoUrl ?? avatar.videoUrl,
+    };
+  });
+}
+
 export default async function AvatarsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const avatars = await fetchAvatars(session.user.id);
+  const dbAvatars = await fetchAvatars(session.user.id);
+  const avatars = await withLiveHeyGenStatus(dbAvatars);
 
   return (
     <div className="space-y-6">

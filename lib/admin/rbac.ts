@@ -129,3 +129,11 @@ export function canManageEnterpriseContacts(role: AdminRoleValue): boolean {
 export function canManageProvisioningMode(role: AdminRoleValue): boolean {
   return hasMinRole(role, "ADMIN");
 }
+
+// Linking/editing/removing Avatar records (name, owning enterprise, HeyGen
+// avatar id) — same ADMIN-minimum tier as every other admin write surface.
+// Distinct from the Phase 1 avatar *billing* permissions above: this gates
+// the base Avatar record itself, not its Subscription/pricing rows.
+export function canManageAvatars(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}

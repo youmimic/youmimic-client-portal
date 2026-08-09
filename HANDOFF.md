@@ -1,5 +1,56 @@
 # HANDOFF.md
 
+## Session: Avatar section — admin linking + live HeyGen status sync — 2026-08-09
+
+### Context
+
+User set a real `HEYGEN_API_KEY` in `.env` and asked to start building "the avatar section" of the customer dashboard, which had been deliberately left out until now. Before writing code: researched HeyGen's actual API (no prior integration existed anywhere in the codebase beyond the unused env var), found the `Avatar` table is **completely empty** with **no code path anywhere** that creates a row, and confirmed with the user via `AskUserQuestion` on two forks: (1) scope — live status sync of already-provisioned avatars vs. a full self-serve photo-upload/training flow — chose live sync; (2) given the empty table, whether to also add a minimal admin action to link avatars — chose yes.
+
+### What was inspected
+
+- HeyGen's real API, via `WebSearch`/`WebFetch` plus live calls against the account's actual (test) key: `GET /v3/avatars/looks/{look_id}` (`x-api-key` header) returns `preview_image_url`, `preview_video_url`, and `status` (`processing` / `pending_consent` / `failed` / `completed`, present for private avatars). Confirmed against a real avatar in the account (1,330 real avatars exist, naming convention `YM###_<workspace>_<person>_L0N` matching the `Enterprise.heygenWorkspaceId` convention from the 2026-07-20 HeyGen import session — these are genuinely the existing client avatars).
+- `prisma/schema.prisma` — `Avatar` already has every field this needs (`heygenAvatarId`, `status`, `previewUrl`, `videoUrl`) from the June 2026-06-13 session; **zero schema changes required**.
+- Confirmed via direct DB query: 0 rows in `avatars` today, and `grep`-confirmed no `prisma.avatar.create` call exists anywhere in the app — the only avatars that ever existed came from a one-off, uncommitted HeyGen import script.
+- `components/admin/enterprise-billing.tsx` (`EnterpriseContactsCard`) and `components/admin/user-actions.tsx` — reused these exact Add/Edit/Remove dialog and RBAC/audit conventions rather than inventing new patterns.
+
+### What changed
+
+- **`lib/admin/rbac.ts`**: `canManageAvatars` (ADMIN minimum, matches every other admin write-surface permission).
+- **`lib/admin/audit.ts`**: `ENTITY_TYPES.AVATAR = "avatar"`.
+- **`lib/validations/admin.ts`**: `linkAvatarSchema` (name required, `heygenAvatarId`/`enterpriseId` optional), `updateAvatarSchema` (all fields independently optional, nullable for explicit clearing).
+- **`app/api/admin/users/[id]/avatars/route.ts`** (new) — `POST`, creates an `Avatar` row for that user. If `enterpriseId` is provided, verifies the target user actually owns or is a member of that enterprise first (`422` otherwise) — prevents linking an avatar to an unrelated enterprise via a typo.
+- **`app/api/admin/users/[id]/avatars/[avatarId]/route.ts`** (new) — `PATCH`/`DELETE`, both scoped by `findFirst({where:{id, userId}})` first. `DELETE` is blocked (`409`) if the avatar still has an active `AVATAR_STORAGE` billing subscription (Phase 1/2 avatar billing) — the FK is `ON DELETE SET NULL`, so deleting wouldn't fail outright, it would just silently orphan a real billing row with nothing to show for it.
+- **`components/admin/avatar-actions.tsx`** (new) — `UserAvatarsCard`: list + Add/Edit/Remove dialogs, same shape as `EnterpriseContactsCard`. Status label/color map includes `pending_consent` (amber, "Awaiting consent") alongside the existing pending/processing/ready/failed vocabulary.
+- **`app/(admin)/admin/users/[id]/page.tsx`**: added `avatars` and `enterpriseMembers` to the user select, new "Avatars" card wired to `UserAvatarsCard`, enterprise dropdown options built from owned **and** member enterprises (dedup'd). Reuses the existing `adminLogsAsTarget` audit table on this page automatically — new avatar audit entries use `targetUserId`, no extra wiring needed.
+- **`lib/heygen.ts`** (new) — thin client, `getHeyGenAvatarLook(lookId)`. 8s timeout via `AbortController` since it's called from a page-render path. Typed `HeyGenApiError`.
+- **`lib/heygen/sync.ts`** (new) — `syncAvatarFromHeyGen(avatarId, heygenAvatarId)`: fetches live details, write-through updates the `Avatar` row (`previewUrl`, `videoUrl`, mapped `status`), never throws — a HeyGen failure degrades to "keep showing last-known DB values", not a broken page. `completed → ready` (reuses the existing status vocabulary); `pending_consent` kept distinct rather than collapsed into generic "pending" since it's actionable; `null` status leaves the existing DB value untouched rather than guessing.
+- **`app/(dashboard)/dashboard/avatars/page.tsx`**: after the existing DB fetch, runs a best-effort parallel live sync (`Promise.allSettled`) for every avatar with a `heygenAvatarId` and merges fresh values into what's rendered — one slow/failed HeyGen call never blocks or breaks the rest of the page. Added `pending_consent` to `STATUS_STYLES` plus a label map (DB stores lowercase status strings; display label is separate from the CSS `capitalize` treatment).
+
+### Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean, both new admin routes registered
+```
+
+Full Playwright pass against the **real HeyGen API** (test-mode Stripe key is separate; this is the actual HeyGen account, read-only calls only) with disposable DB fixtures (synthetic admin/owner/two enterprises, zero real customer data, all deleted afterward — zero orphaned rows including `admin_logs` confirmed):
+
+- Admin links an avatar with a real `heygenAvatarId` (`b429c9d5a9bd49a98d73bbd75d7940d5`, a real avatar already in the account) and an associated enterprise — succeeds, both show on the admin page.
+- Linking to an enterprise the target user has no relationship to → `422`.
+- Unauthenticated link-avatar call → `401`.
+- Customer dashboard load triggers the live sync: real HeyGen `status: "completed"` correctly renders as "Ready", a real preview image renders (not the placeholder icon), a real "Watch preview video" link appears — all absent before the sync ran.
+- Confirmed the write-through actually persisted (`status='ready'`, real HTTPS preview/video URLs) directly in the database, not just in the rendered page.
+- A second avatar with a garbage `heygenAvatarId` doesn't break the page — it and the real avatar both render correctly (graceful per-avatar degradation confirmed).
+- Edit (rename) and Remove both work; Remove is correctly blocked (`409`) while an `AVATAR_STORAGE` subscription still points at the avatar, and succeeds once that subscription is gone.
+
+### Not done / next
+
+- No admin bulk-import for the ~1,330 existing real HeyGen avatars — this session only builds the linking mechanism, one avatar at a time. If backfilling the existing client base is wanted, that's its own milestone (likely scripted, given the volume).
+- No webhook receiver — sync is pull-only, triggered by dashboard page loads. `HEYGEN_WEBHOOK_SECRET` is present in `.env` but still empty/unconfigured; a push-based sync would need it wired up.
+- No self-serve avatar creation (photo upload + HeyGen training pipeline) — explicitly out of scope per this session's decision; would need new schema, file uploads, and likely the webhook receiver above for async training status.
+- Admin "Link Avatar" has no way to browse/search the ~1,330 real HeyGen avatars by name when picking an ID — currently requires knowing/copy-pasting the exact `avatar_id` from the HeyGen dashboard. A searchable picker calling `GET /v2/avatars` would remove that friction.
+
 ## Session: Enterprise Avatar Billing — Phase 2 (automated Stripe writes for self-serve enterprises) — 2026-08-03
 
 ### Context

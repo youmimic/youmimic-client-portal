@@ -3,8 +3,11 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
+import type { AdminRole } from "@/app/generated/prisma/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserActions, EditUserDialog } from "@/components/admin/user-actions";
+import { UserAvatarsCard } from "@/components/admin/avatar-actions";
+import { canManageAvatars } from "@/lib/admin/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +57,19 @@ export default async function AdminUserDetailPage({
           createdAt: true,
         },
       },
+      enterpriseMembers: {
+        select: { enterprise: { select: { id: true, name: true } } },
+      },
+      avatars: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          heygenAvatarId: true,
+          enterpriseId: true,
+        },
+      },
       adminLogsAsTarget: {
         orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         take: 20,
@@ -71,6 +87,16 @@ export default async function AdminUserDetailPage({
   if (!user) notFound();
 
   const isSelf = session.user.id === user.id;
+  const canManageAvatarsPerm = canManageAvatars(session.user.adminRole as AdminRole | null);
+
+  const enterpriseOptions = Array.from(
+    new Map(
+      [
+        ...user.enterprises.map((e) => [e.id, { id: e.id, name: e.name }] as const),
+        ...user.enterpriseMembers.map((m) => [m.enterprise.id, { id: m.enterprise.id, name: m.enterprise.name }] as const),
+      ],
+    ).values(),
+  );
 
   return (
     <div className="space-y-6">
@@ -319,6 +345,21 @@ export default async function AdminUserDetailPage({
           </CardContent>
         </Card>
       )}
+
+      {/* Avatars */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Avatars</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <UserAvatarsCard
+            userId={user.id}
+            avatars={user.avatars}
+            enterpriseOptions={enterpriseOptions}
+            canManage={canManageAvatarsPerm}
+          />
+        </CardContent>
+      </Card>
 
       {/* Audit log */}
       <Card>
