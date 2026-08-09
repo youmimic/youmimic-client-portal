@@ -1,5 +1,74 @@
 # HANDOFF.md
 
+## Session: Billing page — "Recent Payments" summary + dedicated full history page — 2026-08-09
+
+### What changed
+
+The customer `/dashboard/billing` page's "Payment history" table (previously up to 20 rows inline) is now a **"Recent Payments"** summary showing just the 2 most recent, with a **"View payment history"** link to a new dedicated page, `/dashboard/billing/payments`, showing the full list (capped at 200 — no pagination UI yet, revisit if that stops being enough).
+
+- **`lib/payments.ts`** (new) — `fetchPaymentsForUser(userId, limit)`, the same ownership-scoped query (personal payments + enterprise-owner payments, never a non-owner member's) used by both pages now, extracted so the scoping logic can't drift between the summary and the full view.
+- **`components/dashboard/payment-history-table.tsx`** (new) — the payment table markup itself, extracted out of the billing page so both pages render identically rather than maintaining two copies.
+- **`app/(dashboard)/dashboard/billing/page.tsx`** — swapped its inline payment query and table for the two extractions above; heading changed to "Recent Payments"; added the "View payment history" link. Removed a couple of imports/helpers that were only used by the now-extracted table.
+- **`app/(dashboard)/dashboard/billing/payments/page.tsx`** (new) — the full history page: breadcrumb back to Billing, same table component, no row cap beyond the 200 safety limit.
+
+### Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm run build     → clean, /dashboard/billing/payments registered
+```
+
+Visually verified with a disposable test account (5 payments, deleted afterward): summary page shows exactly 2 rows under "Recent Payments" with the link present; clicking through to `/dashboard/billing/payments` shows all 5. Screenshots taken for both.
+
+### Not done / next
+
+- No pagination on the full history page — a flat 200-row cap. Fine for realistic per-customer volumes today; would need real pagination if that changes.
+
+## Session: Real payment-history backfill from live Stripe — 2026-08-09
+
+### Context
+
+User pasted a Stripe subscriptions CSV export (8 customers) and asked to add real payment history for whichever of them already have portal accounts. Cross-referenced each customer email against the database first — 5 of 8 have real accounts with matching `Subscription` rows already in place (from the earlier July 20 reconciliation session); the other 3 don't exist in the portal at all and were correctly left alone, matching that same session's precedent of not inventing accounts for canceled subscriptions with no existing presence.
+
+### A real, hard blocker found before writing anything
+
+The app's `STRIPE_SECRET_KEY` is test-mode only — confirmed directly, the very first live customer lookup was rejected with "a similar object exists in live mode, but a test mode key was used." None of these real customers' data is reachable through the app's normal Stripe credentials at all. The pasted CSV also turned out to be subscription-level only (plan, quantity, status) — no actual invoice/payment records to import even without the credential problem.
+
+Asked the user how to proceed; they chose to provide a live-mode secret key. Given the stakes (real financial data, real customer accounts), asked them to add it under a distinct variable name (`STRIPE_LIVE_SECRET_KEY_TEMP`) rather than paste it into the conversation or overwrite the app's real `STRIPE_SECRET_KEY` — the latter would have flipped the *entire* running app to live Stripe for checkout, billing portal, and every other Stripe-touching route, not just this one read-only task.
+
+**The user did overwrite the main key by mistake.** Caught it immediately (a live-mode `sk_live_...` prefix where the app's usual test key belongs), restored the original test key from memory (already known from an earlier, unrelated masking-bug incident this session — no need to ask the user to relocate it), moved the live key to the separate temp variable as originally intended, and restarted the already-running dev server to guarantee it couldn't still be holding the live key in process memory. Removed the temp variable entirely once the read-only work was done.
+
+### What was found and added
+
+Pulled real invoice history via the live Stripe API (read-only `invoices.list` calls only — no writes to live Stripe at any point) for the 5 confirmed accounts. 39 real invoices found; one account's Stripe subscriptions were both canceled and had never been backfilled into a `Subscription` row at all despite the account existing — confirmed with the user before backfilling those 2 rows too, rather than assuming either way.
+
+Dry-run first (computed and printed the full insert plan, zero writes), reviewed against the source data, then executed for real:
+
+- **39 new `Payment` rows created** (37 `paid`, 2 correctly recorded as `unpaid` — genuinely open/outstanding invoices found on two of the accounts, not errors), each with its real historical date (not the backfill date) and matched to the correct existing `Subscription` row via `stripeSubscriptionId`.
+- **2 new `Subscription` rows** (`CANCELED`, with real period/cancellation dates from the source data) for the one account whose canceled subscriptions had no prior row.
+
+### Verification
+
+- Dry run matched the final real run exactly — same 39-row plan, same per-status breakdown.
+- Zero duplicate `stripeInvoiceId` values after insert (checked directly).
+- Per-account payment counts and total amounts cross-checked against the dry-run output and the raw Stripe data — exact match for all 5 accounts.
+- Visually confirmed in the real admin UI (disposable read-only admin login, deleted afterward) — a real subscription's "Recent Payments" table renders the correct row count and real invoice data.
+- Noted two pre-existing `Payment` groups unrelated to this work (the account owner's own personal subscription, and an unrelated pre-existing test enterprise) — confirmed these predate this session and weren't touched.
+
+Real customer names, emails, and exact per-account figures are in the gitignored `updates/` entry, not here.
+
+### Not done / next
+
+- The 3 CSV customers with no portal account (all canceled subscriptions) were intentionally left out, consistent with the July 20 reconciliation's same decision.
+- Two of the accounts now have a genuinely outstanding/unpaid invoice on record — flagged, not acted on. Worth a follow-up decision on whether their `Subscription.status` should reflect that (one currently shows `ACTIVE` despite the open invoice).
+
+### Addendum, same day — enterprise identity corrected
+
+User gave the final answer on a standing open question from earlier in the session: one enterprise's real company identity had been recorded incorrectly (named after its owner's own name rather than the actual company). Confirmed exact scope first (rename only — no new members, since no contact info exists for the other people mentioned alongside this correction) before touching anything.
+
+Renamed the enterprise via a script replicating the real admin rename route's exact behavior (same field, same audit-log action/entity type), attributed to the real account owner's own admin account. Verified immediately after: owner, membership, all subscriptions, and status all confirmed unchanged — a pure rename, nothing else touched. Real name is in the gitignored `updates/` entry.
+
 ## Session: Avatar Studio v1 — script-to-video generation via HeyGen — 2026-08-09
 
 ### Context

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertTriangle, Building2, Users } from "lucide-react";
 import { auth } from "@/auth";
@@ -17,12 +18,14 @@ import {
   type BillingAction,
 } from "@/components/dashboard/billing-actions";
 import { BillingSupportEmail } from "@/components/dashboard/billing-support-email";
-import {
-  PlanBadge,
-  StatusBadge,
-  PaymentStatusBadge,
-} from "@/components/billing/status-badges";
+import { PlanBadge, StatusBadge } from "@/components/billing/status-badges";
 import { AvatarBillingBreakdown } from "@/components/dashboard/avatar-billing";
+import { PaymentHistoryTable } from "@/components/dashboard/payment-history-table";
+import { fetchPaymentsForUser } from "@/lib/payments";
+
+// Shown as a summary on the main billing page — the full list lives at
+// /dashboard/billing/payments.
+const RECENT_PAYMENTS_PREVIEW_COUNT = 2;
 
 export const metadata = {
   title: "Billing — YouMimic Portal",
@@ -105,37 +108,9 @@ async function fetchBillingData(userId: string) {
         },
         orderBy: { enterprise: { createdAt: "asc" } },
       }),
-      // Payment history: personal + enterprise-owner subscription payments.
-      // OR[0] — personal plan payments (subscription.userId = userId).
-      // OR[1] — enterprise plan payments where this user is the enterprise owner.
-      // Non-owner enterprise members are excluded because ownerUserId never
-      // matches a member's userId. Receipt links resolve via
-      // /api/stripe/invoice-redirect/[invoiceId], which re-validates ownership.
-      prisma.payment.findMany({
-        where: {
-          OR: [
-            { subscription: { userId } },
-            { subscription: { enterprise: { ownerUserId: userId } } },
-          ],
-        },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        select: {
-          id: true,
-          amount: true,
-          currency: true,
-          status: true,
-          createdAt: true,
-          stripeInvoiceId: true,
-          subscription: {
-            select: {
-              enterprise: {
-                select: { name: true },
-              },
-            },
-          },
-        },
-      }),
+      // Preview only — the full list lives at /dashboard/billing/payments,
+      // both backed by the same fetchPaymentsForUser() ownership scoping.
+      fetchPaymentsForUser(userId, RECENT_PAYMENTS_PREVIEW_COUNT),
     ]);
 
   // Platform Access Fee (Phase 1 avatar billing) — one row per enterprise,
@@ -240,14 +215,6 @@ function formatDate(date: Date): string {
     month: "long",
     day: "numeric",
   }).format(new Date(date));
-}
-
-function formatAmount(amount: number, currency: string): string {
-  return new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-    minimumFractionDigits: 2,
-  }).format(amount / 100);
 }
 
 // ---------------------------------------------------------------------------
@@ -507,104 +474,6 @@ function MembershipNoticeCard({
 }
 
 // ---------------------------------------------------------------------------
-// Payment history
-// ---------------------------------------------------------------------------
-
-type PaymentRecord = NonNullable<
-  Awaited<ReturnType<typeof fetchBillingData>>["recentPayments"]
->[number];
-
-function PaymentHistorySection({ payments }: { payments: PaymentRecord[] }) {
-  if (payments.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            No payment history yet.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Date
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Plan
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Amount
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
-                  Invoice
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {payments.map((payment) => {
-                const scope =
-                  payment.subscription?.enterprise?.name ?? "Personal";
-                return (
-                  <tr key={payment.id}>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {formatDate(payment.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {payment.subscription?.enterprise ? (
-                        <span className="flex items-center gap-1.5">
-                          <Building2
-                            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                            aria-hidden="true"
-                          />
-                          {scope}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">Personal</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-medium tabular-nums">
-                      {formatAmount(payment.amount, payment.currency)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <PaymentStatusBadge status={payment.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      {payment.stripeInvoiceId ? (
-                        <a
-                          href={`/api/stripe/invoice-redirect/${payment.stripeInvoiceId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary underline-offset-4 hover:underline"
-                        >
-                          View
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -692,12 +561,20 @@ export default async function BillingPage({
         </section>
       )}
 
-      {/* Payment history */}
+      {/* Recent payments */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Payment history
-        </h2>
-        <PaymentHistorySection payments={recentPayments} />
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Recent Payments
+          </h2>
+          <Link
+            href="/dashboard/billing/payments"
+            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            View payment history
+          </Link>
+        </div>
+        <PaymentHistoryTable payments={recentPayments} />
       </section>
     </div>
   );
