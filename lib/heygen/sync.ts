@@ -96,12 +96,13 @@ export async function syncAvatarFromHeyGen(
   }
 }
 
+// Only the fields the rollup itself reads — callers (dashboard grid, admin
+// panel) commonly select more (id, name, …) for their own rendering, and a
+// fuller object satisfies this structurally without extra mapping.
 export type RolledUpLook = {
-  id: string;
-  name: string;
   status: string;
   previewUrl: string | null;
-  videoUrl: string | null;
+  videoUrl?: string | null;
 };
 
 // Identity-level display status/preview/video derived from its looks: "ready"
@@ -114,6 +115,6 @@ export function rollupAvatarDisplay(
 ): { status: string; previewUrl: string | null; videoUrl: string | null } {
   if (looks.length === 0) return { status: "pending", previewUrl: null, videoUrl: null };
   const ready = looks.find((l) => l.status === "ready");
-  if (ready) return { status: "ready", previewUrl: ready.previewUrl, videoUrl: ready.videoUrl };
-  return { status: looks[0].status, previewUrl: looks[0].previewUrl, videoUrl: looks[0].videoUrl };
+  if (ready) return { status: "ready", previewUrl: ready.previewUrl, videoUrl: ready.videoUrl ?? null };
+  return { status: looks[0].status, previewUrl: looks[0].previewUrl, videoUrl: looks[0].videoUrl ?? null };
 }

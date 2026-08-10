@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserActions, EditUserDialog } from "@/components/admin/user-actions";
 import { UserAvatarsCard } from "@/components/admin/avatar-actions";
 import { canManageAvatars } from "@/lib/admin/rbac";
+import { rollupAvatarDisplay } from "@/lib/heygen/sync";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,7 @@ export default async function AdminUserDetailPage({
           heygenAvatarId: true,
           enterpriseId: true,
           previewUrl: true,
-          _count: { select: { looks: true } },
+          looks: { select: { status: true, previewUrl: true } },
         },
       },
       adminLogsAsTarget: {
@@ -99,6 +100,19 @@ export default async function AdminUserDetailPage({
       ],
     ).values(),
   );
+
+  // Avatar.status/previewUrl are only ever kept current for legacy avatars
+  // linked via the manual single-look flow — avatars imported from HeyGen
+  // (which have `looks`) need their identity-level status/preview rolled up
+  // from the individual looks instead, same as the customer-facing
+  // dashboard grid already does.
+  const displayAvatars = user.avatars.map((avatar) => {
+    if (avatar.looks.length === 0) {
+      return { ...avatar, lookCount: 0 };
+    }
+    const rollup = rollupAvatarDisplay(avatar.looks);
+    return { ...avatar, status: rollup.status, previewUrl: rollup.previewUrl, lookCount: avatar.looks.length };
+  });
 
   return (
     <div className="space-y-6">
@@ -356,7 +370,7 @@ export default async function AdminUserDetailPage({
         <CardContent>
           <UserAvatarsCard
             userId={user.id}
-            avatars={user.avatars}
+            avatars={displayAvatars}
             enterpriseOptions={enterpriseOptions}
             canManage={canManageAvatarsPerm}
           />

@@ -72,6 +72,19 @@ isolation. `npm run lint`/`typecheck`/`build` all clean; disposable fixtures cle
 (catching along the way that fixture cleanup needs to delete `admin_logs` rows before
 the referencing user, since that FK is `RESTRICT` not `CASCADE`).
 
+**Fourth follow-up, same session:** after using the new group-import feature for real,
+user reported the admin panel still showed a multi-look avatar as "pending" (even after
+clicking "Sync now") while the real customer's own dashboard correctly showed it ready.
+Root cause: the admin panel was reading the avatar identity's own top-level `status`
+field directly, which is only ever kept current for the legacy single-look path — once
+an avatar has `looks`, that field is never written to again, only the individual looks
+are. The customer-facing dashboard grid already rolled this up correctly from the
+original identity/look refactor; the admin panel never got the same treatment. Fixed by
+computing the same rollup server-side in the admin user page before handing avatars to
+the client component. Verified against the real customer-visible discrepancy the user
+reported — confirmed fixed via a disposable admin login. Lint/typecheck/build all
+clean.
+
 ## Session: Set every enterprise's Platform Access Fee to $0 — 2026-08-09
 
 User asked to set the Platform Access Fee to $0 for every enterprise. Checked current state first before touching anything: of 12 enterprises, 6 already had a `PLATFORM_FEE` row already set to `$0`, and 6 had no row at all (`unitAmountCents` shows as "Not set" in the admin UI until a row exists — a deliberately different state from "$0" per Phase 1's original design). Crucially, **none** had a non-zero fee, so this was purely additive — no real existing negotiated fee was at risk of being overwritten, which is why this was executed directly rather than paused for confirmation first.
