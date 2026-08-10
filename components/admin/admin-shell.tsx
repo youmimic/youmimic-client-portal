@@ -23,8 +23,8 @@ import { QuickLinksSidebar, type QuickLinkItem } from "@/components/admin/quick-
 
 const navItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/admin/enterprises", label: "Clients", icon: Building2, exact: false },
   { href: "/admin/users", label: "Users", icon: Users, exact: false },
-  { href: "/admin/enterprises", label: "Enterprises", icon: Building2, exact: false },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays, exact: false },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard, exact: false },
 ];

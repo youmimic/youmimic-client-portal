@@ -16,6 +16,8 @@ type EnterpriseRow = {
   planType: string | null;
   subscriptionStatus: string | null;
   membersCount: number;
+  avatarsCount: number;
+  looksCount: number;
   createdAt: string;
 };
 
@@ -134,7 +136,7 @@ export default function AdminEnterprisesPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Enterprises</h1>
+          <h1 className="text-2xl font-semibold">Clients</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {data ? `${data.totalItems.toLocaleString()} total` : "Loading…"}
           </p>
@@ -211,6 +213,12 @@ export default function AdminEnterprisesPage() {
                   <th className="px-6 py-3 font-medium text-muted-foreground hidden sm:table-cell">
                     Members
                   </th>
+                  <th className="px-6 py-3 font-medium text-muted-foreground hidden lg:table-cell">
+                    Avatars
+                  </th>
+                  <th className="px-6 py-3 font-medium text-muted-foreground hidden lg:table-cell">
+                    Looks
+                  </th>
                   <th className="px-6 py-3 font-medium text-muted-foreground hidden md:table-cell">
                     Created
                   </th>
@@ -223,7 +231,7 @@ export default function AdminEnterprisesPage() {
                 {isInitialLoad ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={9}
                       className="px-6 py-10 text-center text-muted-foreground"
                     >
                       Loading…
@@ -232,7 +240,7 @@ export default function AdminEnterprisesPage() {
                 ) : data?.items.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={9}
                       className="px-6 py-10 text-center text-muted-foreground"
                     >
                       No enterprises found.
@@ -271,6 +279,12 @@ export default function AdminEnterprisesPage() {
                       </td>
                       <td className="px-6 py-3 hidden sm:table-cell text-muted-foreground">
                         {enterprise.membersCount}
+                      </td>
+                      <td className="px-6 py-3 hidden lg:table-cell text-muted-foreground">
+                        {enterprise.avatarsCount}
+                      </td>
+                      <td className="px-6 py-3 hidden lg:table-cell text-muted-foreground">
+                        {enterprise.looksCount}
                       </td>
                       <td className="px-6 py-3 hidden md:table-cell text-muted-foreground">
                         {new Date(enterprise.createdAt).toLocaleDateString()}

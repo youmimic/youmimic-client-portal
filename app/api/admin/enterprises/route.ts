@@ -30,6 +30,12 @@ const ENTERPRISE_LIST_SELECT = {
   _count: {
     select: { members: true },
   },
+  // Looks has no direct relation to Enterprise (only Avatar -> AvatarLook),
+  // so this pulls each avatar's own look count and the route sums them —
+  // avoids a raw SQL join for what's a small, paginated (20/page) list.
+  avatars: {
+    select: { _count: { select: { looks: true } } },
+  },
 } satisfies Prisma.EnterpriseSelect;
 
 export async function GET(req: Request) {
@@ -122,6 +128,8 @@ export async function GET(req: Request) {
       planType: subscription?.planType ?? null,
       subscriptionStatus: subscription?.status ?? null,
       membersCount: enterprise._count.members,
+      avatarsCount: enterprise.avatars.length,
+      looksCount: enterprise.avatars.reduce((sum, a) => sum + a._count.looks, 0),
       createdAt: enterprise.createdAt.toISOString(),
     };
   });

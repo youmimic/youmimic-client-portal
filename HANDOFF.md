@@ -1,5 +1,25 @@
 # HANDOFF.md
 
+## Session: Admin panel — "Clients" rename, sidebar reorder, Avatars/Looks columns — 2026-08-10
+
+Three changes to the admin panel, confirmed scope before touching anything: renamed
+"Enterprises" to "Clients" (sidebar label + page heading only — left the URL, detail
+page, and other internal mentions untouched, per explicit confirmation), reordered
+the sidebar nav so Clients sits 2nd and Users 3rd, and added "Avatars" and "Looks"
+count columns to both the Clients and Users list tables.
+
+Neither avatars nor looks has a direct relation to Enterprise/User for the looks
+count specifically, so both admin list API routes now pull each row's avatars along
+with each avatar's own look count, and sum them server-side — avoids a raw SQL join
+for what's a small, paginated admin list.
+
+Verified against real data via a disposable admin login: sidebar order and both page
+headings confirmed correct, and cross-checked several real enterprises'/users' avatar
+and look counts directly against independently-computed database values — all
+matched exactly. (One verification pass initially grabbed the wrong row via
+on-page text matching, since multiple users share a name — caught and re-verified
+against the raw API response instead.) `npm run lint`/`typecheck`/`build` all clean.
+
 ## Session: Hydration mismatch fixes — 2026-08-10
 
 User reported the recurring React hydration warning. Investigated rather than

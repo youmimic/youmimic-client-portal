@@ -21,6 +21,8 @@ type UserRow = {
   adminRole: string | null;
   isSuspended: boolean;
   createdAt: string;
+  avatarsCount: number;
+  looksCount: number;
   enterpriseMembers?: Membership[];
 };
 
@@ -152,7 +154,7 @@ export default function AdminUsersPage() {
 
   const isInitialLoad = data === null && !error;
   const showCompanyColumn = userType === "enterprise";
-  const columnCount = showCompanyColumn ? 6 : 5;
+  const columnCount = showCompanyColumn ? 8 : 7;
 
   return (
     <div className="space-y-6">
@@ -262,6 +264,12 @@ export default function AdminUsersPage() {
                         <th className="px-6 py-3 font-medium text-muted-foreground">
                           Status
                         </th>
+                        <th className="px-6 py-3 font-medium text-muted-foreground hidden lg:table-cell">
+                          Avatars
+                        </th>
+                        <th className="px-6 py-3 font-medium text-muted-foreground hidden lg:table-cell">
+                          Looks
+                        </th>
                         <th className="px-6 py-3 font-medium text-muted-foreground hidden md:table-cell">
                           Joined
                         </th>
@@ -343,6 +351,12 @@ export default function AdminUsersPage() {
                                   Active
                                 </span>
                               )}
+                            </td>
+                            <td className="px-6 py-3 hidden lg:table-cell text-muted-foreground">
+                              {user.avatarsCount}
+                            </td>
+                            <td className="px-6 py-3 hidden lg:table-cell text-muted-foreground">
+                              {user.looksCount}
                             </td>
                             <td className="px-6 py-3 hidden md:table-cell text-muted-foreground">
                               {new Date(user.createdAt).toLocaleDateString()}

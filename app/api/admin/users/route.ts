@@ -19,6 +19,12 @@ const USER_LIST_SELECT = {
   isSuspended: true,
   suspendedAt: true,
   sessionVersion: true,
+  // Looks has no direct relation to User (only Avatar -> AvatarLook), so
+  // this pulls each avatar's own look count and the route sums them below —
+  // avoids a raw SQL join for what's a small, paginated (20/page) list.
+  avatars: {
+    select: { _count: { select: { looks: true } } },
+  },
 } satisfies Prisma.UserSelect;
 
 // Only pulled in for the Enterprise User tab — a user can belong to more
@@ -123,8 +129,19 @@ export async function GET(req: Request) {
     }),
   ]);
 
+  const items = users.map((user) => {
+    const { avatars, ...rest } = user as typeof user & {
+      avatars: { _count: { looks: number } }[];
+    };
+    return {
+      ...rest,
+      avatarsCount: avatars.length,
+      looksCount: avatars.reduce((sum, a) => sum + a._count.looks, 0),
+    };
+  });
+
   return NextResponse.json({
-    users,
+    users: items,
     pagination: {
       page,
       pageSize,
