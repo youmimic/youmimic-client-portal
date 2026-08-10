@@ -2,7 +2,17 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, ShieldAlert, ShieldCheck, Users } from "lucide-react";
+import { Activity, Building2, DollarSign, ShieldAlert, ShieldCheck, Users, UserCircle2 } from "lucide-react";
+import { fetchMrr } from "@/lib/stripe/mrr";
+
+function formatMrr(result: Awaited<ReturnType<typeof fetchMrr>>): string {
+  if (!result.ok) return "Unavailable";
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: result.currency.toUpperCase(),
+    maximumFractionDigits: 0,
+  }).format(result.amountCents / 100);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +34,15 @@ export default async function AdminOverviewPage() {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const [totalUsers, suspendedUsers, adminUsers, recentActionsCount, recentLogs] =
+  const [totalUsers, suspendedUsers, adminUsers, recentActionsCount, enterpriseCount, avatarCount, mrr, recentLogs] =
     await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { isSuspended: true } }),
       prisma.user.count({ where: { adminRole: { not: null } } }),
       prisma.adminLog.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+      prisma.enterprise.count(),
+      prisma.avatar.count(),
+      fetchMrr(),
       prisma.adminLog.findMany({
         orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         take: 10,
@@ -68,6 +81,24 @@ export default async function AdminOverviewPage() {
       value: recentActionsCount.toLocaleString(),
       icon: Activity,
       colorClass: "text-green-500",
+    },
+    {
+      label: "Clients",
+      value: enterpriseCount.toLocaleString(),
+      icon: Building2,
+      colorClass: "text-indigo-500",
+    },
+    {
+      label: "Avatars Under Management",
+      value: avatarCount.toLocaleString(),
+      icon: UserCircle2,
+      colorClass: "text-teal-500",
+    },
+    {
+      label: "MRR",
+      value: formatMrr(mrr),
+      icon: DollarSign,
+      colorClass: "text-emerald-500",
     },
   ];
 

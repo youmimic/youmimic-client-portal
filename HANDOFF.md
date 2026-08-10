@@ -1,5 +1,37 @@
 # HANDOFF.md
 
+## Session: Admin overview — Clients / Avatars / MRR cards — 2026-08-10
+
+Added 3 KPI cards to the admin overview page: total enterprise count ("Clients"),
+total avatar count ("Avatars Under Management"), and MRR pulled live from the Stripe
+API (not the local database mirror, which doesn't record billing interval precisely
+enough to normalize non-monthly plans).
+
+New `lib/stripe/mrr.ts` sums every currently-`active` Stripe subscription's line
+items, normalized to a monthly figure regardless of the actual billing interval
+(monthly, quarterly, annual, etc.), grouped by currency. Trialing/past-due/canceled
+subscriptions are excluded, matching the standard MRR definition. Never throws — a
+failed or slow Stripe call renders as "Unavailable" on the card instead of breaking
+the whole page.
+
+Verified live via a disposable admin login: the rendered Clients/Avatars figures
+matched direct database counts exactly, and the MRR figure matched a raw Stripe API
+call summing the account's real active subscriptions exactly. Also verified the
+failure path separately (an invalid API key correctly throws and is caught,
+correctly rendering "Unavailable"). `npm run lint`/`typecheck`/`build` all clean.
+
+**Follow-up, same day:** user asked for real live revenue to show up. Rather than
+touching `STRIPE_SECRET_KEY` itself — which drives real checkout/webhooks/customer
+portal, and which got accidentally overwritten with a live key in an earlier session —
+added a completely separate, dedicated credential just for this one read-only call.
+User created a **restricted** Stripe key (Subscriptions: Read only, nothing else) in
+live mode; written directly to `.env` as a new `STRIPE_MRR_LIVE_KEY` variable, never
+echoed in the conversation, verified afterward via a safe prefix-only check that
+`STRIPE_SECRET_KEY` itself was untouched. `lib/stripe/mrr.ts` now builds its own
+client from this key — nothing else in the app references it. Verified live: the
+overview page now shows real live MRR instead of the earlier test-mode figure.
+Lint/typecheck/build all clean.
+
 ## Session: Admin sidebar "Quick Links" — 2026-08-10
 
 Added a "Quick Links" section to the admin sidebar: bookmarks to HeyGen, Brevo,
