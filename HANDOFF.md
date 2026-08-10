@@ -1,5 +1,38 @@
 # HANDOFF.md
 
+## Session: Hydration mismatch fixes — 2026-08-10
+
+User reported the recurring React hydration warning. Investigated rather than
+guessing, and found three separate real causes (not just one):
+
+1. **Browser extension** — confirmed via earlier dev-server logs that the actual
+   mismatched attribute was `cz-shortcut-listen="true"` on `<body>`, the signature of
+   the ColorZilla extension injecting it before React hydrates. `<html>` already had
+   `suppressHydrationWarning` (needed for the theme provider); added it to `<body>`
+   too.
+2. **Unlocalized date formatting** — one real spot (`components/admin/enterprise-
+   actions.tsx`) where a Client Component formats a date from server-provided props
+   without an explicit locale, which can genuinely differ between server and browser.
+   Swept every other date-formatting call in the codebase first to confirm this was
+   the only one actually at risk (the rest are either in Server Components, which
+   never re-run on the client, or in Client Components that only ever show a loading
+   state during the SSR/hydration pass). Fixed with an explicit-locale helper matching
+   the convention already used elsewhere in the app.
+3. **`@dnd-kit`'s auto-generated id** — found only while verifying fix #2, not by
+   inspection: a genuinely new warning showed up on the enterprise detail page,
+   traced to the Quick Links sidebar's drag-and-drop context. The admin sidebar
+   renders a desktop and mobile copy simultaneously (pre-existing pattern), so two
+   `@dnd-kit` `DndContext` instances exist at once; `@dnd-kit` auto-generates an
+   internal id from a counter that isn't SSR-safe, so the two instances could get
+   different ids between server and client. Fixed by passing `@dnd-kit`'s own
+   documented `id` prop with a stable, distinct value per sidebar copy.
+
+Verified all three together (not each in isolation) across 7 real admin pages via a
+disposable admin login, with a genuine simulated browser-extension attribute present
+throughout (an early verification attempt using the wrong injection technique gave a
+false pass — redone properly and confirmed): zero hydration warnings. Lint/typecheck/
+build all clean.
+
 ## Session: Admin overview — Clients / Avatars / MRR cards — 2026-08-10
 
 Added 3 KPI cards to the admin overview page: total enterprise count ("Clients"),

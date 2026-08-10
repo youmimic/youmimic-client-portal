@@ -34,9 +34,10 @@ type SidebarContentProps = {
   adminRole?: string | null;
   quickLinks: QuickLinkItem[];
   onMobileClose: () => void;
+  variant: "desktop" | "mobile";
 };
 
-function SidebarContent({ userName, adminRole, quickLinks, onMobileClose }: SidebarContentProps) {
+function SidebarContent({ userName, adminRole, quickLinks, onMobileClose, variant }: SidebarContentProps) {
   const pathname = usePathname();
   const initial = (userName || "A").charAt(0).toUpperCase();
 
@@ -82,7 +83,7 @@ function SidebarContent({ userName, adminRole, quickLinks, onMobileClose }: Side
 
         <div className="my-4 border-t border-sidebar-border" />
 
-        <QuickLinksSidebar initialLinks={quickLinks} onNavigate={onMobileClose} />
+        <QuickLinksSidebar initialLinks={quickLinks} onNavigate={onMobileClose} dndContextId={`quick-links-${variant}`} />
       </nav>
 
       <div className="border-t border-sidebar-border p-4 space-y-3">
@@ -140,6 +141,7 @@ export function AdminShell({ user, quickLinks, children }: AdminShellProps) {
           adminRole={user.adminRole}
           quickLinks={quickLinks}
           onMobileClose={() => {}}
+          variant="desktop"
         />
       </aside>
 
@@ -173,6 +175,7 @@ export function AdminShell({ user, quickLinks, children }: AdminShellProps) {
           adminRole={user.adminRole}
           quickLinks={quickLinks}
           onMobileClose={() => setMobileOpen(false)}
+          variant="mobile"
         />
       </aside>
 

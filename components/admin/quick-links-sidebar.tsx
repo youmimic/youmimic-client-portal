@@ -113,9 +113,19 @@ function SortableLink({
 export function QuickLinksSidebar({
   initialLinks,
   onNavigate,
+  dndContextId,
 }: {
   initialLinks: QuickLinkItem[];
   onNavigate?: () => void;
+  // AdminShell renders this component twice (a desktop and a mobile sidebar
+  // copy, one hidden via CSS depending on viewport — both exist in the DOM
+  // at once). @dnd-kit's DndContext auto-generates an id for its
+  // aria-describedby live region from a module-level counter, not React's
+  // SSR-safe useId(); with two instances, that counter's value can differ
+  // between the server's render pass and the client's, producing a real
+  // hydration mismatch. Passing an explicit, stable id per copy makes it
+  // deterministic instead.
+  dndContextId: string;
 }) {
   const router = useRouter();
   const [links, setLinks] = useState(initialLinks);
@@ -200,7 +210,7 @@ export function QuickLinksSidebar({
       {links.length === 0 ? (
         <p className="px-3 py-1 text-xs text-sidebar-foreground/40">No links yet.</p>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext id={dndContextId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={links.map((l) => l.id)} strategy={verticalListSortingStrategy}>
             <ul className="space-y-0.5" role="list">
               {links.map((link) => (

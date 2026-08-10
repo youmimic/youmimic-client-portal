@@ -23,6 +23,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// invites is server-fetched data passed straight in as a prop, so this runs
+// identically during SSR and the initial client hydration pass — an
+// explicit locale keeps that output identical regardless of the server's or
+// browser's default locale (a bare toLocaleDateString() can differ between
+// them and trip a hydration mismatch).
+function formatDate(date: string): string {
+  return new Date(date).toLocaleDateString("en-AU", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 type OwnerInfo = { id: string; email: string; name: string | null };
 
 type EligibleMember = { userId: string; email: string; name: string | null };
@@ -633,7 +646,7 @@ export function EnterpriseInvitesTable({
                   </span>
                 </td>
                 <td className="py-2 text-right text-muted-foreground whitespace-nowrap">
-                  {new Date(invite.createdAt).toLocaleDateString()}
+                  {formatDate(invite.createdAt)}
                 </td>
                 {canManage && (
                   <td className="py-2 pl-4 text-right whitespace-nowrap">
