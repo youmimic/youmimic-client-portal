@@ -19,6 +19,7 @@ import { SiteLogo } from "@/components/branding/site-logo";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import SignOutButton from "@/components/auth/sign-out-button";
+import { QuickLinksSidebar, type QuickLinkItem } from "@/components/admin/quick-links-sidebar";
 
 const navItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -31,10 +32,11 @@ const navItems = [
 type SidebarContentProps = {
   userName?: string | null;
   adminRole?: string | null;
+  quickLinks: QuickLinkItem[];
   onMobileClose: () => void;
 };
 
-function SidebarContent({ userName, adminRole, onMobileClose }: SidebarContentProps) {
+function SidebarContent({ userName, adminRole, quickLinks, onMobileClose }: SidebarContentProps) {
   const pathname = usePathname();
   const initial = (userName || "A").charAt(0).toUpperCase();
 
@@ -77,6 +79,10 @@ function SidebarContent({ userName, adminRole, onMobileClose }: SidebarContentPr
             );
           })}
         </ul>
+
+        <div className="my-4 border-t border-sidebar-border" />
+
+        <QuickLinksSidebar initialLinks={quickLinks} onNavigate={onMobileClose} />
       </nav>
 
       <div className="border-t border-sidebar-border p-4 space-y-3">
@@ -118,10 +124,11 @@ type AdminShellProps = {
     email?: string | null;
     adminRole?: string | null;
   };
+  quickLinks: QuickLinkItem[];
   children: React.ReactNode;
 };
 
-export function AdminShell({ user, children }: AdminShellProps) {
+export function AdminShell({ user, quickLinks, children }: AdminShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -131,6 +138,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
         <SidebarContent
           userName={user.name}
           adminRole={user.adminRole}
+          quickLinks={quickLinks}
           onMobileClose={() => {}}
         />
       </aside>
@@ -163,6 +171,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
         <SidebarContent
           userName={user.name}
           adminRole={user.adminRole}
+          quickLinks={quickLinks}
           onMobileClose={() => setMobileOpen(false)}
         />
       </aside>

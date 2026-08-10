@@ -1,5 +1,42 @@
 # HANDOFF.md
 
+## Session: Admin sidebar "Quick Links" — 2026-08-10
+
+Added a "Quick Links" section to the admin sidebar: bookmarks to HeyGen, Brevo,
+Stripe, and GoCardless by default, with the ability to add custom links and reorder
+everything via drag-and-drop. Confirmed scope first: shared list (same for every
+admin, not per-account), any admin role can manage it, default links point to each
+service's standard dashboard login page.
+
+New `QuickLink` model + migration, RBAC helper (`canManageQuickLinks`, matching the
+"any admin" scope), and three admin API routes (list/create, update/delete, reorder).
+Reordering rewrites the whole list's order in one request per drop, matching how
+drag-and-drop naturally produces a full new ordering rather than a single swap.
+Introduced `@dnd-kit` as a new dependency — no drag-and-drop library existed anywhere
+in the app before this. Seeded the 4 default links directly against the database via
+a one-off script (checked the table was empty first, so re-running it can't create
+duplicates).
+
+Verified live via a disposable admin login (deleted afterward): all 4 default links
+render correctly and open in a new tab, adding/removing a custom link both persist
+correctly, and drag-and-drop reordering was verified with real simulated mouse events
+(dnd-kit's pointer sensor doesn't respond to a synthetic HTML5 drag) — confirmed the
+resulting order persists to the database correctly, then restored the original order.
+`npm run lint`/`typecheck`/`build` all clean.
+
+Not done: no edit-in-place for an existing link (only add/remove), and no confirmation
+prompt before removing a link (treated as low-stakes, easily re-added).
+
+**Follow-up, same day:** a real, non-hypothetical incident — while testing the
+feature for real, one of the 4 default links got deleted with a single click (not a
+test fixture; confirmed via the audit log, real admin account, real timestamp).
+Restored it and added actual protection: default links now carry an `isDefault` flag,
+enforced server-side (a direct API call attempting to delete one is rejected, not just
+hidden in the UI), and render a lock icon instead of a remove button — no click target
+exists for them at all. Custom/added links are unaffected — same single-click remove
+as before. Verified the protection holds even when bypassing the UI entirely via a
+direct API call. Lint/typecheck/build all clean.
+
 ## Session: Avatar identity vs. HeyGen "look" — data model fix — 2026-08-09
 
 User correctly flagged that the HeyGen avatar import had treated "looks" (outfit/pose

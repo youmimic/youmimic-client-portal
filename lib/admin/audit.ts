@@ -21,6 +21,7 @@ export const ENTITY_TYPES = {
   // value today — registered now so the detail page's audit log query is
   // already correct once a write action exists.
   SUBSCRIPTION: "subscription",
+  QUICK_LINK: "quick_link",
 } as const;
 
 interface AuditLogInput {

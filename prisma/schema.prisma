@@ -659,3 +659,25 @@ model AdminLog {
   @@index([targetUserId])
   @@map("admin_logs")
 }
+
+// Admin sidebar "Quick Links" — a single shared, admin-managed bookmark list
+// (not per-user), reorderable via drag-and-drop. `order` is a plain
+// ascending sort key rewritten in full on every reorder rather than a
+// linked-list/fractional scheme — the list is small (a handful of links),
+// so an O(n) rewrite per reorder is simpler and cheap.
+model QuickLink {
+  id        String   @id @default(cuid())
+  label     String
+  url       String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  // The 4 seeded links (HeyGen, Brevo, Stripe, GoCardless) — protected from
+  // deletion (enforced server-side in the DELETE route, not just hidden in
+  // the UI) so a stray click can't wipe out the baseline set. Links added
+  // afterward default to false and stay freely removable.
+  isDefault Boolean  @default(false)
+
+  @@index([order])
+  @@map("quick_links")
+}

@@ -137,3 +137,10 @@ export function canManageProvisioningMode(role: AdminRoleValue): boolean {
 export function canManageAvatars(role: AdminRoleValue): boolean {
   return hasMinRole(role, "ADMIN");
 }
+
+// Sidebar Quick Links — a shared bookmark list, not a sensitive resource, so
+// BILLING_ADMIN minimum (i.e. any admin who can reach the admin area at all)
+// rather than the usual ADMIN-minimum tier most write actions use here.
+export function canManageQuickLinks(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "BILLING_ADMIN");
+}

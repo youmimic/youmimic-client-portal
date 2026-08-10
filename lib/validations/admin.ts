@@ -407,3 +407,46 @@ export const bookingStatusActionSchema = z.object({
 });
 
 export type BookingStatusActionInput = z.infer<typeof bookingStatusActionSchema>;
+
+// ---------------------------------------------------------------------------
+// Admin sidebar Quick Links
+// ---------------------------------------------------------------------------
+
+// Restricted to http/https explicitly (not just z.string().url()) — this URL
+// gets rendered straight into an href, and an unrestricted scheme would let
+// someone store a javascript: URL.
+const quickLinkUrlSchema = z
+  .string()
+  .trim()
+  .max(500)
+  .refine(
+    (value) => {
+      try {
+        const parsed = new URL(value);
+        return parsed.protocol === "http:" || parsed.protocol === "https:";
+      } catch {
+        return false;
+      }
+    },
+    { message: "Must be a valid http:// or https:// URL" },
+  );
+
+export const createQuickLinkSchema = z.object({
+  label: z.string().trim().min(1, "Label is required").max(60, "Label must be 60 characters or less"),
+  url: quickLinkUrlSchema,
+});
+
+export type CreateQuickLinkInput = z.infer<typeof createQuickLinkSchema>;
+
+export const updateQuickLinkSchema = z.object({
+  label: z.string().trim().min(1, "Label is required").max(60).optional(),
+  url: quickLinkUrlSchema.optional(),
+});
+
+export type UpdateQuickLinkInput = z.infer<typeof updateQuickLinkSchema>;
+
+export const reorderQuickLinksSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1),
+});
+
+export type ReorderQuickLinksInput = z.infer<typeof reorderQuickLinksSchema>;
