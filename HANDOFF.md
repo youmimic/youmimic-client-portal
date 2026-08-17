@@ -1,5 +1,52 @@
 # HANDOFF.md
 
+## Session: Rate limiting on /reset-password and /verify-email — 2026-08-17
+
+Last open item from the rate-limiting work: `/reset-password` and
+`/verify-email` were flagged as unprotected follow-ups when login/register/
+forgot-password/contact were rate-limited earlier today. Both take a token
+in the request (`crypto.randomUUID()`, so practically infeasible to guess)
+but rate limiting is still worthwhile defense-in-depth against scripted
+hammering of either endpoint.
+
+Same IP-based pattern as the other four endpoints, using the existing
+`lib/rate-limit.ts`:
+- **`app/api/reset-password/route.ts`** — `reset-password:ip:*`, 10/15min,
+  429 + `Retry-After`, checked before body parsing (same position as the
+  other four).
+- **`app/api/verify-email/route.ts`** — `verify-email:ip:*`, 10/15min, same
+  pattern. This route is a `GET` reached by clicking an email link (not an
+  AJAX call), but on rate-limit it still returns a plain JSON error body
+  rather than a redirect — matches this route's own existing convention
+  for its other failure cases (`{ error: "Missing token" }`, `{ error:
+  "Invalid or expired token" }`), so stayed consistent rather than
+  introducing a different response shape just for this one path.
+
+## Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged, unrelated)
+npm run typecheck → clean
+npm test           → 30/30 passing, unchanged
+npx next build     → clean (ran long this time — background-completed
+                      successfully, exit code 0, nothing wrong)
+```
+
+Functional test against the real dev server: 11 rapid requests to each
+endpoint (bogus token/body — exercises the rate-limit check without
+touching real password-reset/verification data) — both let the first 10
+through and 429'd on the 11th, with `Retry-After` present. Confirmed
+per-IP isolation on both. Cleaned up the resulting `rate_limit_buckets`
+test rows afterward.
+
+## Not done / next
+
+- Rate limiting now covers all six public/auth-adjacent endpoints
+  identified in the original audit. Still open: console.* → pino cleanup,
+  broader test coverage, CSP nonce-based script-src,
+  `(dashboard)`/`(admin)`-specific error/not-found boundaries, the other 17
+  non-critical `npm audit` findings.
+
 ## Session: Production CI fix — prisma-migrate-prod.yml missing DIRECT_URL — 2026-08-17
 
 User reported a GitHub Actions failure: "Apply Prisma Migrations

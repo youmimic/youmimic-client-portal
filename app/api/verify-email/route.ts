@@ -1,8 +1,26 @@
 // app/api/verify-email/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function GET(req: Request) {
+  const ip = getClientIp(req);
+  const rateLimit = await checkRateLimit({
+    key: `verify-email:ip:${ip}`,
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+  });
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many attempts. Please try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+      },
+    );
+  }
+
   const { searchParams } = new URL(req.url);
   const token = searchParams.get("token");
 
