@@ -1,0 +1,72 @@
+name: CI
+
+# Gate on every PR targeting main: lint, typecheck, and a production build must
+# all pass before merge. This does NOT touch a real database — `prisma migrate
+# deploy` is deliberately skipped here (that's handled by prisma-migrate-prod.yml
+# after merge, and again as a build-time fallback on Vercel). All env values
+# below are inert placeholders, only present so modules that read
+# process.env at import time (lib/prisma.ts, lib/stripe.ts, auth.ts, etc.)
+# don't throw during the build — none of them are real credentials.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: lint, typecheck, build
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+      STRIPE_SECRET_KEY: sk_test_dummy
+      STRIPE_MRR_LIVE_KEY: sk_test_dummy
+      STRIPE_WEBHOOK_SECRET: whsec_dummy
+      STRIPE_CREATOR_PRICE_ID: price_dummy
+      STRIPE_ENTERPRISE_PRICE_ID: price_dummy
+      STRIPE_AVATAR_CAPTURE_PRICE_ID: price_dummy
+      STRIPE_AVATAR_STORAGE_PRICE_ID: price_dummy
+      NEXTAUTH_SECRET: ci-dummy-secret-value-not-real
+      AUTH_SECRET: ci-dummy-secret-value-not-real
+      NEXTAUTH_URL: http://localhost:3000
+      RESEND_API_KEY: re_dummy
+      HEYGEN_API_KEY: dummy
+      HEYGEN_WEBHOOK_SECRET: dummy
+      BASE_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      DASHBOARD_PATH: /dashboard
+      CONTACT_EMAIL: ci@example.com
+      NEXT_PUBLIC_ACCOUNTS_EMAIL: ci@example.com
+      NEXT_PUBLIC_ENTERPRISE_EMAIL: ci@example.com
+      NEXT_PUBLIC_SALES_EMAIL: ci@example.com
+      EMAIL_FROM: ci@example.com
+      LOG_LEVEL: info
+      CRON_SECRET: dummy
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # Deliberately `next build` directly, not `npm run build` — the latter
+      # also runs `prisma migrate deploy`, which needs a real database
+      # connection that CI doesn't have. Migrations are verified separately
+      # by check-prisma-migration.yml and applied by prisma-migrate-prod.yml.
+      - name: Build
+        run: npx next build

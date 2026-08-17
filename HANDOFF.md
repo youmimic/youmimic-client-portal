@@ -1,5 +1,63 @@
 # HANDOFF.md
 
+## Session: CI gate — lint/typecheck/build on every PR — 2026-08-17
+
+User asked for a production-readiness audit. Findings (test coverage, rate
+limiting, security headers, robots/sitemap, stray Sentry example page, etc.)
+are in `updates/2026-08-17-production-readiness-audit.md`; user chose to
+tackle the CI gate first since two existing workflows
+(`check-prisma-migration.yml`, `prisma-migrate-prod.yml`) only check Prisma
+migrations — nothing blocked a PR with a broken build, a type error, or a
+lint error from merging into `main`. `npm run build`'s own script
+(`prisma generate && prisma migrate deploy && next build`) isn't run in CI
+either, and even if it were, `prisma migrate deploy` would require write
+access to a real database from every PR, which is undesirable.
+
+Added **`.github/workflows/ci.yml`**: runs on every PR targeting `main`,
+executing `npm run lint`, `npm run typecheck`, `prisma generate`, then
+`next build` directly (not `npm run build`, to skip `prisma migrate deploy`
+— migrations stay gated by the existing two workflows).
+
+`lib/prisma.ts` and `lib/stripe.ts` both throw at module-import time if
+`DATABASE_URL`/`STRIPE_SECRET_KEY` are unset, and Next's build "collecting
+page data" step imports every route module — confirmed locally that this
+means `next build` fails without those vars set, real DB or not. Rather than
+guess which of the 24 vars in `.env` are load-bearing at build time, ran
+`prisma generate` and `next build` locally with a full set of inert
+placeholder values (no real credentials, DB connection string points at
+`localhost` and is never actually connected to since all DB-backed pages are
+`export const dynamic = "force-dynamic"`) to confirm the exact set that
+makes the build succeed before writing the workflow. All 24 are baked into
+`ci.yml` as plain (non-secret) `env:` values.
+
+## Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged, unrelated)
+npm run typecheck → clean
+npx prisma generate && npx next build → clean, all 55 API routes + all pages
+                                          compiled (verified locally with
+                                          placeholder env vars before adding
+                                          the workflow, so the first real CI
+                                          run isn't a guess)
+```
+
+`.next` and `app/generated` are both gitignored, so the local test build left
+no stray tracked changes.
+
+## Not done / next
+
+- CI does not run against a real (ephemeral) Postgres service container, so a
+  build-time-only bug that depends on actual query shapes (vs. just module
+  imports succeeding) wouldn't be caught here — only `prisma migrate deploy`
+  against production catches true schema drift, per the existing two
+  workflows.
+- Remaining production-readiness gaps from the audit (no test coverage, no
+  rate limiting on auth/public endpoints, no security headers in
+  `next.config.ts`, no `robots.ts`/`sitemap.ts`, stray `/sentry-example-page`,
+  ~13 files using `console.*` instead of the pino logger) are still open —
+  see `updates/2026-08-17-production-readiness-audit.md`.
+
 ## Session: Admin panel — "Clients" rename, sidebar reorder, Avatars/Looks columns — 2026-08-10
 
 Three changes to the admin panel, confirmed scope before touching anything: renamed
