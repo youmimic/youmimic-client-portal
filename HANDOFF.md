@@ -1,5 +1,106 @@
 # HANDOFF.md
 
+## Session: Production CI fix — prisma-migrate-prod.yml missing DIRECT_URL — 2026-08-17
+
+User reported a GitHub Actions failure: "Apply Prisma Migrations
+(Production)" failed during `npm ci` with `PrismaConfigEnvError: Cannot
+resolve environment variable: DIRECT_URL`. Pre-existing bug in
+`.github/workflows/prisma-migrate-prod.yml`, unrelated to any change made
+today — it just never triggered until the rate-limiting session's new
+migration (`20260817015811_add_rate_limit_buckets`) became the first
+`prisma/migrations/**` push to `main` in a while.
+
+**Root cause:** `package.json`'s `"postinstall": "prisma generate"` runs
+automatically during `npm ci`. `prisma.config.ts` requires `DIRECT_URL` to
+be resolvable just to *load the config*, before any migration logic runs.
+The workflow's "Install dependencies" step (`npm ci`) had no `env:` block
+— only the three later, separate steps did — so the implicit postinstall
+`prisma generate` failed before ever reaching them.
+
+**Fix:** moved `DIRECT_URL: ${{ secrets.DIRECT_URL }}` to job-level `env:`
+so every step gets it uniformly, and removed the now-redundant per-step
+duplicates on "Generate Prisma client" and "Apply migrations".
+
+**Verification — reproduced the actual failure locally, not just reasoned
+about it:** temporarily moved the real `.env` aside (so `dotenv/config` in
+`prisma.config.ts` couldn't silently supply `DIRECT_URL` the way it does
+in normal local dev) and ran `npm ci` with `DIRECT_URL` unset — got the
+identical `PrismaConfigEnvError`. Re-ran with `DIRECT_URL` set → succeeded
+cleanly. Restored `.env` immediately after (confirmed identical file size/
+timestamp). This is exactly what the job-level `env:` fix now guarantees
+for every step including `npm ci`.
+
+**Flagged to user, not verified (no Vercel access this session):** the
+Vercel build's own `prisma migrate deploy` fallback (see
+`docs/migrations.md`) doesn't scope env vars per-step the way GitHub
+Actions does, so if `DIRECT_URL`/`DATABASE_URL` are set in Vercel's
+Production environment variables, that fallback likely applied the
+`rate_limit_buckets` migration successfully despite this GHA failure —
+worth the user confirming via the latest Vercel deployment log.
+
+## Session: next-auth/@auth/core critical CVE fix — 2026-08-17
+
+Follow-up from the `npm audit` finding in the test-coverage session earlier
+today: `next-auth`/`@auth/core`/`@auth/prisma-adapter` had 3 critical
+advisories. Investigated each one against this app's actual configuration
+before upgrading anything, rather than upgrading blind:
+
+- **GHSA-x445-f3h2-j279** (OAuth state/nonce/PKCE cookies not bound to the
+  provider that created them) — not exploitable here. `auth.ts`'s
+  `providers:` array has only `Credentials`, no OAuth provider configured.
+- **GHSA-xmf8-cvqr-rfgj** (`getToken()` throws on malformed Bearer headers)
+  — not exploitable here. Grepped the repo: `getToken()` is never called
+  directly anywhere, only the `auth()` helper.
+- **GHSA-7rqj-j65f-68wh** (email normalizer homoglyph bypass) — low
+  relevance: this app does its own email normalization
+  (`lib/validations/auth.ts`) for login/register, and has no OAuth-based
+  account linking (Auth.js's own normalizer is mainly relevant there).
+- **GHSA-8fpg-xm3f-6cx3** (config errors can make `auth()` fail open —
+  return a truthy-but-broken session object instead of null) — the one
+  that actually mattered. `proxy.ts` already assumes fail-closed
+  (`if (isProtected && !session)` → redirect to login), so the fix only
+  strictly improves correctness here, no behavior this app relied on.
+
+**Fix:** `next-auth` `^5.0.0-beta.31` → `^5.0.0-beta.32`,
+`@auth/prisma-adapter` `^2.11.2` → `^2.11.3` — both single-version bumps
+that just pull in patched `@auth/core@0.41.3` (confirmed via `npm view
+next-auth@5.0.0-beta.32 dependencies` before upgrading, not assumed). Still
+on the v5 beta line — v5 hasn't gone stable yet as of this date (`npm view
+next-auth dist-tags` shows `latest: 4.24.15`, `beta: 5.0.0-beta.32`), so
+this was a patch-level fix, not a major-version migration.
+
+## Verification
+
+```
+npm install        → 4 packages changed; npm audit: 20 vulnerabilities
+                      (3 critical) → 17 (0 critical) — all 3 next-auth-
+                      related criticals gone, nothing else changed
+npm run lint        → 0 errors, 2 pre-existing warnings (unchanged)
+npm run typecheck   → clean
+npm test            → 30/30 passing, unchanged
+npx next build      → clean
+```
+
+Since this touches the exact login/session machinery the CVE fix changes,
+didn't stop at automated checks — ran a real end-to-end check against the
+dev server: invalid-credentials login still returns the identical
+`error=CredentialsSignin&code=invalid_credentials` redirect as
+pre-upgrade; an unauthenticated request to `/dashboard` still 307-redirects
+to `/login` (confirms the "fail closed" behavior this app already relied
+on); the homepage (which calls `auth()` via `MarketingHeader`) still
+renders normally. Dev server log showed no new errors or warnings.
+Cleaned up the resulting `rate_limit_buckets` test rows afterward.
+
+## Not done / next
+
+- The other 17 `npm audit` findings (moderate/high, in `next`, `postcss`,
+  `sharp`, `@sentry/nextjs`'s toolchain, etc.) were not investigated —
+  out of scope for this session, which was specifically the critical
+  next-auth findings.
+- Still open: `/reset-password`/`/verify-email` rate limiting, console.* →
+  pino cleanup, CSP nonce-based script-src, `(dashboard)`/`(admin)`-specific
+  error/not-found boundaries, broader test coverage.
+
 ## Session: Test coverage, milestone 1 — Vitest + rate-limit/auth/webhook — 2026-08-17
 
 Last open item from the 2026-08-17 production-readiness audit: zero
