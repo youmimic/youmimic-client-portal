@@ -1,8 +1,59 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
+// The contact page embeds a Calendly inline widget (assets.calendly.com script,
+// calendly.com iframe + XHR) — see app/(marketing)/contact/page.tsx. That's the
+// only third-party origin the app talks to client-side; Sentry is tunneled
+// through the same-origin /monitoring rewrite below, so it needs no CSP entry.
+//
+// img-src/media-src allow any https: host rather than a fixed list because
+// avatar thumbnails and generated videos are served directly from HeyGen's CDN
+// with URLs that aren't a stable, enumerable set of hostnames.
+//
+// script-src/style-src keep 'unsafe-inline' because Next.js App Router injects
+// inline hydration/RSC payload scripts and Tailwind/Radix inject inline styles;
+// a stricter nonce-based CSP would need per-request nonce plumbing through
+// middleware and the root layout, which is out of scope for this pass.
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://assets.calendly.com",
+  "style-src 'self' 'unsafe-inline' https://assets.calendly.com",
+  "img-src 'self' data: https:",
+  "media-src 'self' https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://calendly.com https://*.calendly.com",
+  "frame-src https://calendly.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
+          },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {

@@ -1,5 +1,85 @@
 # HANDOFF.md
 
+## Session: Security headers, Sentry scaffolding removal, robots/sitemap — 2026-08-17
+
+Second item from the 2026-08-17 production-readiness audit
+(`updates/2026-08-17-production-readiness-audit.md`): security headers +
+cleanup.
+
+**`next.config.ts`** — added a `headers()` function applying to every route:
+`Content-Security-Policy`, `Strict-Transport-Security`, `X-Frame-Options: DENY`,
+`X-Content-Type-Options: nosniff`, `Referrer-Policy:
+strict-origin-when-cross-origin`, and `Permissions-Policy` disabling
+camera/microphone/geolocation (confirmed via grep that nothing in the app uses
+`getUserMedia`/`mediaDevices` — avatar video generation is server-side via
+HeyGen, not in-browser capture).
+
+The CSP was built from what the app actually does, not a generic template:
+- Checked `@stripe/stripe-js` is a dependency but never imported anywhere in
+  `app/` — checkout is a server-side Stripe Checkout redirect, so no
+  Stripe Elements/iframe origins needed in the policy.
+- `next/font/google` (Montserrat) self-hosts font files at build time, so no
+  `fonts.googleapis.com`/`fonts.gstatic.com` needed either.
+- Sentry already tunnels through the same-origin `/monitoring` rewrite
+  (existing `tunnelRoute` config), so no `*.sentry.io` needed in `connect-src`.
+- The contact page (`app/(marketing)/contact/page.tsx`) embeds a Calendly
+  inline widget — `assets.calendly.com` (script), `calendly.com`
+  (frame/connect) are explicitly allowed; this is the one place the CSP
+  could realistically break something.
+- `img-src`/`media-src` allow any `https:` host rather than a fixed list,
+  because avatar thumbnails and generated videos are served directly from
+  HeyGen's CDN under URLs that aren't a small, stable set of hostnames.
+- `script-src`/`style-src` keep `'unsafe-inline'` — Next.js App Router injects
+  inline hydration/RSC scripts and Tailwind/Radix inject inline styles.
+  Removing this would need per-request CSP nonce plumbing through middleware
+  and the root layout; noted as a follow-up, not done here.
+
+**Removed** `app/sentry-example-page/` and `app/api/sentry-example-api/` —
+Sentry's own scaffolding, unauthenticated and publicly reachable, meant to be
+deleted after initial setup.
+
+**Added `app/robots.ts` and `app/sitemap.ts`** (Next.js special files,
+replacing the static-file convention). `robots.ts` disallows `/dashboard`,
+`/admin`, `/api`, and the token-bearing routes `/reset-password`, `/invite`,
+`/verify-email`. `sitemap.ts` lists the four public marketing pages (`/`,
+`/pricing`, `/solutions`, `/contact`). Both read `BASE_URL`, matching the
+existing convention in `emails/config.ts`. `proxy.ts`'s middleware matcher
+already excluded `sitemap.xml`/`robots.txt` from routing — this was
+anticipated but never finished until now.
+
+## Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged, unrelated)
+npm run typecheck → clean (after clearing a stale .next/ type-validator cache
+                     that still referenced the deleted Sentry example routes)
+npx next build    → clean; /robots.txt and /sitemap.xml both appear as
+                     prerendered static routes; all other routes unaffected
+```
+
+Ran a real `next start` on a scratch port and curled it:
+- `/` returns all six new headers with the expected values.
+- `/robots.txt` and `/sitemap.xml` render correct content.
+- `/`, `/pricing`, `/solutions`, `/contact`, `/login`, `/signup` all still
+  return 200 under the new CSP.
+- The Calendly widget markup (script tag + `calendly-inline-widget` div)
+  still renders correctly in `/contact`'s HTML.
+
+**Not verified**: actual browser-side CSP enforcement — this session has no
+browser automation available, so whether the Calendly iframe/script
+successfully loads under the CSP (vs. being silently blocked by the browser)
+was reasoned from the policy's allowed origins, not observed directly.
+**Recommend manually loading `/contact` in a real browser with devtools open
+after this deploys**, checking the console for CSP violation reports.
+
+## Not done / next
+
+- CSP nonce-based strict script-src (would remove the `'unsafe-inline'` need)
+  — requires middleware + root layout changes, out of scope for this pass.
+- Remaining audit items: no test coverage, no rate limiting on auth/public
+  endpoints, no route-level `error.tsx`/`not-found.tsx`, ~13 files using
+  `console.*` instead of the pino logger.
+
 ## Session: CI gate — lint/typecheck/build on every PR — 2026-08-17
 
 User asked for a production-readiness audit. Findings (test coverage, rate
