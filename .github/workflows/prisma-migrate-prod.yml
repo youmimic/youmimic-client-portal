@@ -24,6 +24,16 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
 
+    # Job-level so it's available to EVERY step, including the implicit
+    # `prisma generate` that `npm ci` triggers via package.json's
+    # "postinstall" script. That implicit run loads prisma.config.ts, which
+    # calls env("DIRECT_URL") just to resolve the config — it used to only
+    # be set on the later explicit steps, so `npm ci`'s postinstall failed
+    # before ever reaching them ("Cannot resolve environment variable:
+    # DIRECT_URL"). See the 2026-08-17 CI-failure fix in HANDOFF.md.
+    env:
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -40,8 +50,6 @@ jobs:
       # Fail immediately with a clear message if the secret is absent.
       # An empty secret causes a confusing Prisma error deep in the run.
       - name: Verify DIRECT_URL secret is configured
-        env:
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
           if [ -z "${DIRECT_URL}" ]; then
             echo ""
@@ -67,14 +75,10 @@ jobs:
       # prisma generate reads schema.prisma and produces the TypeScript client.
       # It does not connect to the database.
       - name: Generate Prisma client
-        env:
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: npx prisma generate
 
       # Apply all pending migrations. Safe to re-run: already-applied
       # migrations are skipped. Uses DIRECT_URL (non-pooled) as required
       # by the Prisma CLI (prisma.config.ts datasource.url = env("DIRECT_URL")).
       - name: Apply migrations
-        env:
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: npx prisma migrate deploy
