@@ -681,3 +681,17 @@ model QuickLink {
   @@index([order])
   @@map("quick_links")
 }
+
+// Fixed-window rate limiting, backed by Postgres rather than Redis since
+// there's no existing cache/KV infra in this app. `key` encodes both the
+// route and the dimension being limited, e.g. "login:ip:1.2.3.4" or
+// "login:email:user@example.com" — see lib/rate-limit.ts. One row per key;
+// `windowStart` resets (and `count` restarts at 1) once the caller-supplied
+// window duration has elapsed since it was last set.
+model RateLimitBucket {
+  key         String   @id
+  count       Int      @default(0)
+  windowStart DateTime @default(now())
+
+  @@map("rate_limit_buckets")
+}

@@ -7,6 +7,7 @@ import prisma from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations/auth";
 import { userHasActiveSubscription } from "@/lib/subscription";
 import { getSuspendedEnterpriseName } from "@/lib/enterprise-status";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 class InvalidLoginError extends CredentialsSignin {
   code = "invalid_credentials";
@@ -22,6 +23,10 @@ class AccountSuspendedError extends CredentialsSignin {
 
 class EnterpriseSuspendedError extends CredentialsSignin {
   code = "enterprise_suspended";
+}
+
+class RateLimitedError extends CredentialsSignin {
+  code = "rate_limited";
 }
 
 type UserWithRoles = Prisma.UserGetPayload<{
@@ -45,7 +50,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = loginSchema.safeParse(credentials);
 
         if (!parsed.success) {
@@ -53,6 +58,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const { email, password } = parsed.data;
+
+        // Two dimensions: per-IP catches a single attacker spraying many
+        // emails; per-email catches a distributed/rotating-IP attack
+        // targeting one account. Checked before the DB lookup/bcrypt compare
+        // below so a brute-force run doesn't pay for either once limited.
+        const ip = getClientIp(request);
+        const [ipLimit, emailLimit] = await Promise.all([
+          checkRateLimit({
+            key: `login:ip:${ip}`,
+            limit: 20,
+            windowMs: 15 * 60 * 1000,
+          }),
+          checkRateLimit({
+            key: `login:email:${email}`,
+            limit: 8,
+            windowMs: 15 * 60 * 1000,
+          }),
+        ]);
+
+        if (!ipLimit.allowed || !emailLimit.allowed) {
+          throw new RateLimitedError();
+        }
 
         const user: UserWithRoles | null = await prisma.user.findUnique({
           where: { email },

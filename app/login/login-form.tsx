@@ -85,6 +85,11 @@ export default function LoginForm() {
         return;
       }
 
+      if (code.includes("rate_limited")) {
+        setFormError("Too many login attempts. Please wait a few minutes and try again.");
+        return;
+      }
+
       setFormError("Invalid email or password.");
       return;
     }

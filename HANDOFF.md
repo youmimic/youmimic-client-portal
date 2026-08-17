@@ -1,5 +1,90 @@
 # HANDOFF.md
 
+## Session: Rate limiting on auth/public endpoints — 2026-08-17
+
+Third item from the 2026-08-17 production-readiness audit
+(`updates/2026-08-17-production-readiness-audit.md`). Login, register,
+forgot-password, and contact had no protection against brute-force/spam.
+
+**Backend decision:** this app has no Redis/KV infra, and it deploys to
+Vercel (multiple ephemeral serverless instances — confirmed via `vercel.json`
+cron config), so an in-memory counter would only weakly throttle abuse (each
+cold start / different instance resets it). Asked the user Postgres-backed
+vs. Redis (Upstash) vs. in-memory; user was interested in Upstash but unsure
+about committing to the cost. Went with **Postgres-backed** — reuses the DB
+already paid for, works correctly across all serverless instances, zero new
+infra/spend, and the interface in `lib/rate-limit.ts` is narrow enough to
+swap to Redis later without touching call sites, if traffic ever grows
+enough to matter.
+
+**Schema** — added `RateLimitBucket` (`prisma/schema.prisma`): one row per
+`key` (e.g. `login:ip:1.2.3.4`, `login:email:user@example.com`), fixed-window
+counter (`count`, `windowStart`). Migration:
+`prisma/migrations/20260817015811_add_rate_limit_buckets/` — purely additive
+`CREATE TABLE`, reviewed per `docs/migrations.md` step 4. Generated via
+`npx prisma migrate dev --name add_rate_limit_buckets`, which — per that same
+doc — applies against the dev database in `.env`'s `DIRECT_URL`, not
+production.
+
+**`lib/rate-limit.ts`** (new) — `checkRateLimit({ key, limit, windowMs })`
+and `getClientIp(req)` (reads `x-forwarded-for`, first entry). Documented
+tradeoff: fixed windows allow up to ~2x the limit across a window boundary,
+accepted as fine for blunting scripted abuse rather than precise adversarial
+accounting.
+
+**Wired in:**
+- `auth.ts` — `authorize()` now takes the `request` param NextAuth v5's
+  Credentials provider passes, and checks two keys before the DB
+  lookup/bcrypt compare: `login:ip:*` (20/15min, catches one attacker
+  spraying many emails) and `login:email:*` (8/15min, catches a
+  rotating-IP attack on one account). New `RateLimitedError` (code
+  `rate_limited`); `app/login/login-form.tsx` shows "Too many login
+  attempts..." for it, same pattern as the existing suspended/unverified
+  error codes.
+- `app/api/register/route.ts` — `register:ip:*`, 5/15min, 429 +
+  `Retry-After`.
+- `app/api/forgot-password/route.ts` — `forgot-password:ip:*`, 5/15min. On
+  429 still returns the same `GENERIC_RESPONSE` body as every other path in
+  this route (only the status/header differ) — a distinct rate-limit body
+  would leak information the file's existing anti-enumeration comment is
+  explicitly guarding against.
+- `app/api/contact/route.ts` — `contact:ip:*`, 5/hour (lower frequency,
+  legitimate use is infrequent), 429 + `Retry-After`.
+
+## Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged, unrelated)
+npm run typecheck → clean (after `npx prisma generate` picked up the new
+                     RateLimitBucket model/client types)
+npx next build    → clean, all routes compiled
+```
+
+Functional test against the real dev DB (`npm run dev`, real `.env`): sent 6
+rapid requests (deliberately-invalid bodies, so no real contact-notification
+emails were sent — the rate-limit check runs before body parsing) to each of
+`/api/contact`, `/api/register`, `/api/forgot-password` with a fixed
+`X-Forwarded-For` — all three let the first 5 through and 429'd on the 6th,
+with a `Retry-After` header present. Confirmed per-IP isolation: a request
+from a different `X-Forwarded-For` on the same endpoint was unaffected.
+Cleaned up the test rows from `rate_limit_buckets` afterward via
+`prisma db execute --stdin`. Did not do an end-to-end browser test of the
+login rate limit specifically (would need a real CSRF-carrying NextAuth
+form submission, not a bare curl) — reasoned correct from the code path,
+which is identical in shape to the three verified endpoints.
+
+## Not done / next
+
+- `/reset-password` and `/verify-email` (token-consumption endpoints) are
+  not rate-limited — lower priority since they require possessing a
+  token first, but still guessable/brute-forceable in principle.
+- Remaining audit items: test coverage, route-level `error.tsx`/
+  `not-found.tsx`, ~13 files using `console.*` instead of the pino logger.
+- If traffic ever grows enough that the DB round-trip on every
+  login/register/forgot-password/contact request matters, or fixed-window
+  precision becomes a real problem, `lib/rate-limit.ts`'s interface can be
+  swapped to Redis (Upstash) without changing any call site.
+
 ## Session: Security headers, Sentry scaffolding removal, robots/sitemap — 2026-08-17
 
 Second item from the 2026-08-17 production-readiness audit
