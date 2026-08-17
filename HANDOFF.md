@@ -1,5 +1,107 @@
 # HANDOFF.md
 
+## Session: Test coverage, milestone 1 — Vitest + rate-limit/auth/webhook — 2026-08-17
+
+Last open item from the 2026-08-17 production-readiness audit: zero
+automated tests anywhere in the repo. Given the size of the app, a full
+suite isn't realistic in one pass — scoped this milestone to the framework
+setup plus the three highest-risk, least-obvious-when-broken paths: the
+rate limiter added earlier today, the login gate, and Stripe webhook
+handling. Broader coverage (route handlers generally, React components,
+`lib/heygen/*`, the rest of the webhook handler's DB-writing branches) is
+explicitly follow-up, not attempted here.
+
+**Framework: Vitest.** No framework existed to "reuse" per the project's own
+conventions, so picked current best-practice default for a Next.js/TS
+stack — ESM-native, fast, good TS support. `vitest.config.mts` (`.mts` not
+`.ts` — avoids a CJS/ESM loader warning since `package.json` has no
+`"type": "module"`) aliases `@/*` to match `tsconfig.json`. `npm test` /
+`npm run test:watch` added to `package.json`. Installed `vitest` +
+`@vitest/coverage-v8` as dev dependencies — `npm audit` flagged several
+vulnerabilities after install, but traced every one via `npm ls` to confirm
+none originate from vitest's own dependency tree; they're all pre-existing
+transitive deps (`@hono/node-server`, `shadcn`, `eslint`, `@tailwindcss/postcss`,
+`@sentry/nextjs`, `prisma`). Notably, `next-auth`/`@auth/core` have **critical**
+CVEs in that pre-existing list — flagged to the user as a new finding, not
+fixed here (a major-version bump is a separate, larger effort).
+
+**`lib/rate-limit.test.ts`** (7 tests) — mocks `@/lib/prisma` (real
+`lib/prisma.ts` throws at import time without `DATABASE_URL`, so it must
+never actually load in a test). Covers: new-key creation, under-limit
+increment, at-limit denial (no DB write), expired-window reset even when
+the old count was over the limit, and `getClientIp`'s parsing/fallback.
+
+**`lib/auth/authenticate-user.ts`** (new) — extracted the Credentials
+`authorize()` callback's entire body out of `auth.ts` into a standalone,
+testable function, same pattern as the existing
+`lib/auth/register-user.ts` for registration. `auth.ts` is now a thin
+wrapper: `authorize: (credentials, request) => authenticateUser(credentials, request)`.
+No behavior change — verified via a real end-to-end request against the dev
+server (below), not just unit tests, since this touches the live login
+path. `lib/auth/authenticate-user.test.ts` (9 tests) covers every branch:
+malformed credentials, IP rate limit, email rate limit, unknown email,
+unverified email, suspended account, suspended enterprise, wrong password,
+and a full valid login (asserting the exact returned shape and role
+mapping). Had to `vi.mock("next-auth", ...)` with a minimal stub
+`CredentialsSignin` base class — the real package transitively imports
+`next/server`, which Next.js resolves specially in its own bundler but
+plain Vitest/Node cannot.
+
+**Stripe webhook** (`app/api/stripe/webhook/route.ts`) — exported the
+previously-private pure mapping helpers (`toStatus`, `toPlanType`,
+`customerId`, `invoiceSubscriptionId`) for direct testing; no behavior
+change, `export` keyword only. `route.test.ts` (14 tests): the
+signature-verification gate (missing secret → 500, placeholder secret →
+500, bad signature → 400, verified-but-unrecognized event type → 200 with
+no DB calls) plus each pure helper's known-value and fallback/edge-case
+behavior (e.g. `toStatus` falling back to `INCOMPLETE` for a future Stripe
+status this app doesn't know about yet, `invoiceSubscriptionId` handling
+both string and expanded-object subscription references). Did **not**
+write tests for the four DB-writing handler functions
+(`handleCheckoutCompleted`, `handleSubscriptionUpsert`, `handleInvoicePaid`,
+`handleInvoiceFailed`) — that needs substantial Prisma mocking per handler
+and was out of scope for this milestone; flagged below.
+
+**CI** — added a "Unit tests" step to `.github/workflows/ci.yml`, between
+`prisma generate` and the build step (tests need the generated enum
+exports; build is slower, so tests fail fast first). Confirmed by running
+the exact lint → typecheck → prisma generate → test → build sequence
+locally with the same placeholder env vars CI uses.
+
+## Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged, unrelated)
+npm run typecheck → clean
+npm test           → 3 files, 30 tests, all passing
+npx next build     → clean (confirmed no *.test.ts files leaked into the
+                      route manifest — Next only picks up exact route.ts/
+                      page.tsx filenames)
+```
+
+Additionally ran a real end-to-end check of the `auth.ts` refactor against
+the dev database (not just unit tests, since this is the live login path):
+started `npm run dev`, fetched a real CSRF token from `/api/auth/csrf`, and
+POSTed to `/api/auth/callback/credentials` with a nonexistent email —
+got back `302 → /login?error=CredentialsSignin&code=invalid_credentials`,
+identical to pre-refactor behavior, confirming the new
+`authorize → authenticateUser` wiring works through NextAuth's real
+machinery, not just in mocked unit tests. Dev server log showed only the
+expected `[auth][error] CredentialsSignin` line, no unexpected exception.
+Cleaned up the resulting `rate_limit_buckets` test rows afterward.
+
+## Not done / next
+
+- **New finding, not fixed:** `npm audit` shows critical CVEs in
+  `next-auth`/`@auth/core` (pre-existing, unrelated to this session's
+  changes) — worth a dedicated look; likely needs a major-version bump,
+  out of scope here.
+- Broader test coverage: the Stripe webhook's four DB-writing handlers,
+  other API routes, React components, `lib/heygen/*`.
+- Still open from earlier sessions: `/reset-password`/`/verify-email` rate
+  limiting, console.* → pino cleanup, CSP nonce-based script-src,
+  `(dashboard)`/`(admin)`-specific error/not-found boundaries.
+
 ## Session: CSP fix — allow eval() in dev only — 2026-08-17
 
 User reported a console error right after the security-headers session:

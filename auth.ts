@@ -1,43 +1,10 @@
 // auth.ts
-import NextAuth, { CredentialsSignin } from "next-auth";
+import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import type { Prisma } from "@/app/generated/prisma/client";
 import prisma from "@/lib/prisma";
-import { loginSchema } from "@/lib/validations/auth";
 import { userHasActiveSubscription } from "@/lib/subscription";
 import { getSuspendedEnterpriseName } from "@/lib/enterprise-status";
-import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-
-class InvalidLoginError extends CredentialsSignin {
-  code = "invalid_credentials";
-}
-
-class EmailNotVerifiedError extends CredentialsSignin {
-  code = "email_not_verified";
-}
-
-class AccountSuspendedError extends CredentialsSignin {
-  code = "account_suspended";
-}
-
-class EnterpriseSuspendedError extends CredentialsSignin {
-  code = "enterprise_suspended";
-}
-
-class RateLimitedError extends CredentialsSignin {
-  code = "rate_limited";
-}
-
-type UserWithRoles = Prisma.UserGetPayload<{
-  include: {
-    userRoles: {
-      include: {
-        role: true;
-      };
-    };
-  };
-}>;
+import { authenticateUser } from "@/lib/auth/authenticate-user";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
@@ -50,88 +17,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials, request) {
-        const parsed = loginSchema.safeParse(credentials);
-
-        if (!parsed.success) {
-          throw new InvalidLoginError();
-        }
-
-        const { email, password } = parsed.data;
-
-        // Two dimensions: per-IP catches a single attacker spraying many
-        // emails; per-email catches a distributed/rotating-IP attack
-        // targeting one account. Checked before the DB lookup/bcrypt compare
-        // below so a brute-force run doesn't pay for either once limited.
-        const ip = getClientIp(request);
-        const [ipLimit, emailLimit] = await Promise.all([
-          checkRateLimit({
-            key: `login:ip:${ip}`,
-            limit: 20,
-            windowMs: 15 * 60 * 1000,
-          }),
-          checkRateLimit({
-            key: `login:email:${email}`,
-            limit: 8,
-            windowMs: 15 * 60 * 1000,
-          }),
-        ]);
-
-        if (!ipLimit.allowed || !emailLimit.allowed) {
-          throw new RateLimitedError();
-        }
-
-        const user: UserWithRoles | null = await prisma.user.findUnique({
-          where: { email },
-          include: {
-            userRoles: {
-              include: {
-                role: true,
-              },
-            },
-          },
-        });
-
-        if (!user) {
-          throw new InvalidLoginError();
-        }
-
-        if (!user.emailVerified) {
-          throw new EmailNotVerifiedError();
-        }
-
-        if (user.isSuspended) {
-          throw new AccountSuspendedError();
-        }
-
-        const suspendedEnterpriseName = await getSuspendedEnterpriseName(user.id);
-        if (suspendedEnterpriseName) {
-          throw new EnterpriseSuspendedError();
-        }
-
-        const passwordMatches = await bcrypt.compare(
-          password,
-          user.passwordHash,
-        );
-
-        if (!passwordMatches) {
-          throw new InvalidLoginError();
-        }
-
-        const roles = user.userRoles.map((userRole) => userRole.role.name);
-
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          isEmailVerified: user.emailVerified,
-          roles,
-          adminRole: user.adminRole,
-          isSuspended: user.isSuspended,
-          isEnterpriseSuspended: false,
-          sessionVersion: user.sessionVersion,
-        };
-      },
+      authorize: (credentials, request) =>
+        authenticateUser(credentials, request),
     }),
   ],
   callbacks: {

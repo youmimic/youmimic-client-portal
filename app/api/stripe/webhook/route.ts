@@ -21,17 +21,21 @@ const STRIPE_STATUS_MAP: Record<string, SubscriptionStatus> = {
   paused: SubscriptionStatus.PAUSED,
 };
 
-function toStatus(stripeStatus: string): SubscriptionStatus {
+// Exported for direct unit testing (app/api/stripe/webhook/route.test.ts) —
+// these encode real business rules (status mapping, plan-type fallback)
+// that silently break in a way that's hard to notice if Stripe's API shape
+// or a test-mode metadata field ever changes.
+export function toStatus(stripeStatus: string): SubscriptionStatus {
   return STRIPE_STATUS_MAP[stripeStatus] ?? SubscriptionStatus.INCOMPLETE;
 }
 
-function toPlanType(raw: string | undefined): PlanType {
+export function toPlanType(raw: string | undefined): PlanType {
   if (raw === PlanType.CREATOR) return PlanType.CREATOR;
   if (raw === PlanType.ENTERPRISE) return PlanType.ENTERPRISE;
   return PlanType.CREATOR;
 }
 
-function customerId(
+export function customerId(
   val: string | Stripe.Customer | Stripe.DeletedCustomer | null | undefined,
 ): string | null {
   if (!val) return null;
@@ -44,7 +48,7 @@ function customerId(
 // every handler below resolves the specific stripeSubscriptionId first and
 // only falls back to stripeCustomerId for the still-unlinked placeholder row
 // created at checkout time (see app/api/stripe/checkout-session/route.ts).
-function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+export function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const details = invoice.parent?.subscription_details?.subscription;
   if (!details) return null;
   return typeof details === "string" ? details : details.id;
