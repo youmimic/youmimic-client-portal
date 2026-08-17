@@ -1,5 +1,114 @@
 # HANDOFF.md
 
+## Session: CSP fix — allow eval() in dev only — 2026-08-17
+
+User reported a console error right after the security-headers session:
+`eval() is not supported in this environment... make sure unsafe-eval is
+included`. Cause: React's dev mode (Fast Refresh, reconstructing component
+stack traces for debugging) calls `eval()`, but the CSP's `script-src`
+from the earlier session only allowed `'unsafe-inline'`, not
+`'unsafe-eval'` — and the CSP applies in `next dev` too, not just
+production.
+
+**`next.config.ts`** — `script-src` now conditionally appends
+`'unsafe-eval'` when `process.env.NODE_ENV !== "production"`. React never
+calls `eval()` in production, so the production policy is unchanged and
+stays tighter than dev.
+
+## Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged, unrelated)
+npm run typecheck → clean
+```
+
+Confirmed directly via header inspection rather than assuming the
+conditional worked:
+- `npm run dev` → curled `/`, `Content-Security-Policy` header's
+  `script-src` includes `'unsafe-eval'`.
+- `NODE_ENV=production npx next build` + `next start` on a scratch port →
+  curled `/`, `script-src` does **not** include `'unsafe-eval'` — confirmed
+  the production policy is unaffected by this fix.
+
+## Session: Branded 404 / error pages — 2026-08-17
+
+Next item from the 2026-08-17 production-readiness audit: only
+`app/global-error.tsx` existed (the last-resort boundary for errors in the
+root layout itself, using Next's plain default UI), so any 404 or in-page
+runtime error showed Next's unbranded default page.
+
+**`app/not-found.tsx`** (new, Server Component) — catches any URL that
+doesn't match a route anywhere in the app. Renders the real
+`MarketingHeader`/`MarketingFooter` (session-aware — shows "Dashboard" vs
+"Sign in"), a `SearchX` icon (lucide-react, already a dependency — no new
+image assets since `public/` has no illustration assets and generating
+raster art isn't something I can do), "Page not found" copy, and
+"Go home"/"Contact us" buttons.
+
+**`app/error.tsx`** (new, Client Component — required by Next.js) — catches
+runtime errors anywhere below the root layout without a more specific
+boundary. Can't reuse the real `MarketingHeader` here: it's an async Server
+Component that calls `auth()`, and async Server Components can't be
+imported into a `"use client"` file. Built a simplified static header
+instead (`SiteLogo` + `ThemeToggle`, both already client components, no
+session check) — reasonable for an error state where a full nav isn't the
+priority. `MarketingFooter` has no server-only calls so it was safe to reuse
+directly. Reports to Sentry via `Sentry.captureException` in a `useEffect`,
+matching `global-error.tsx`'s existing pattern. Shows a `ServerCrash` icon,
+"Something went wrong" copy, and "Try again" (`reset()`) / "Go home"
+buttons.
+
+**Scope note:** both are root-level, using marketing chrome as the
+universal default shell. `(dashboard)` and `(admin)` route groups don't have
+their own error/not-found boundaries yet — a user mid-session hitting an
+error there would still fall through to these root ones (marketing
+header/footer, not `DashboardShell`/`AdminShell`). Flagged as a possible
+follow-up, not done here — the audit's ask was "the error page" generally,
+and this closes the actual gap (no branded fallback existed at all).
+
+## Verification
+
+```
+npm run lint      → 0 errors, 2 pre-existing warnings (unchanged, unrelated)
+npm run typecheck → clean
+npx next build    → clean; /_not-found compiles as a dynamic route (expected
+                     — MarketingHeader reads the session server-side, so it
+                     can't be statically prerendered)
+```
+
+Functional test against a real dev server:
+- `/this-page-does-not-exist-xyz` → 404, page text confirmed via curl
+  ("Page not found", "404", "Go home", "Contact us" all present) — safe to
+  verify this way since `not-found.tsx` is a Server Component, so its
+  content is present in the plain HTML response.
+- Temporarily added a scratch route that throws
+  (`app/(marketing)/error-test-scratch/page.tsx`, deleted after) → 500,
+  dev server log confirmed the error was caught cleanly (not an unhandled
+  crash), and the RSC payload in the response confirmed `app/error.tsx` is
+  the registered boundary component for that route.
+  **First attempt at this used a folder named `__error-test`** — Next.js
+  treats any leading-underscore folder as a private, non-routable folder by
+  convention, so that route silently 404'd before ever reaching the test
+  page. Renamed to `error-test-scratch` (no leading underscore) and it
+  worked correctly.
+- **Not fully verified:** `error.tsx`'s actual rendered visual output —
+  it's a Client Component, so its content only exists in the page after
+  client-side hydration/JS execution, not in curl's plain HTML response.
+  Confirmed structurally (correct 500 status, `app/error.tsx` module
+  referenced as the active boundary in the RSC stream, clean server-side
+  error handling) but not visually — no browser automation available this
+  session. Recommend a quick manual check in a real browser.
+
+## Not done / next
+
+- `(dashboard)`/`(admin)` route-group-specific error/not-found boundaries
+  (would show `DashboardShell`/`AdminShell` chrome instead of marketing
+  chrome for errors during an authenticated session) — noted above, not
+  done.
+- Remaining audit items: test coverage, `/reset-password` and
+  `/verify-email` rate limiting, console.* → pino cleanup, CSP nonce-based
+  script-src.
+
 ## Session: Rate limiting on auth/public endpoints — 2026-08-17
 
 Third item from the 2026-08-17 production-readiness audit

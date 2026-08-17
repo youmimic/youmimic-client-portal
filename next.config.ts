@@ -14,9 +14,16 @@ import type { NextConfig } from "next";
 // inline hydration/RSC payload scripts and Tailwind/Radix inject inline styles;
 // a stricter nonce-based CSP would need per-request nonce plumbing through
 // middleware and the root layout, which is out of scope for this pass.
+//
+// 'unsafe-eval' is added to script-src ONLY outside production — React's dev
+// mode uses eval() for Fast Refresh / reconstructing component stack traces
+// (see https://react.dev, this is dev-only instrumentation). Production
+// React never calls eval(), so prod keeps the tighter policy.
+const isDev = process.env.NODE_ENV !== "production";
+
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://assets.calendly.com",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://assets.calendly.com`,
   "style-src 'self' 'unsafe-inline' https://assets.calendly.com",
   "img-src 'self' data: https:",
   "media-src 'self' https:",
