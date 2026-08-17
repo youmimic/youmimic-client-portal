@@ -1,5 +1,97 @@
 # HANDOFF.md
 
+## Session: Remaining npm audit findings — 13 → 0 — 2026-08-17
+
+Final round of the `npm audit` triage started earlier today. 13 findings
+left (all in transitive tooling deps): `@hono/node-server`/`hono`,
+`@opentelemetry/core`/`resources`/`sdk-trace-base`, `ip-address`,
+`js-yaml`, `fast-uri`, `brace-expansion`, `body-parser`, `valibot`,
+`@prisma/dev`/`prisma`.
+
+**Notable finding: `@hono/node-server` was an unused, orphaned production
+dependency.** It's listed in `package.json`'s `dependencies` (not
+`devDependencies`), but a broad grep across every `.ts`/`.tsx`/`.js`/`.mjs`
+file in the repo (instrumentation.ts, proxy.ts, everything) found zero
+actual imports. The only place it appeared was in Sentry's own
+`__SENTRY_SERVER_MODULES__` metadata (Sentry echoes the full dependency
+list for its own tracking — not evidence of real usage) and, unsurprisingly,
+`package.json`/`package-lock.json` themselves. It's genuinely only needed
+transitively — `@prisma/dev` (Prisma's dev tooling) and
+`@modelcontextprotocol/sdk` (pulled in by `shadcn`'s CLI) both declare
+their own dependency on it. **Removed it from `dependencies`** rather than
+just patching a package the app doesn't use; kept (and bumped) the
+`overrides` entry, since that genuinely does something — deduplicating the
+version those two tools' transitive copies resolve to.
+
+**`@opentelemetry/core` was the one production-relevant finding in this
+batch** (the rest are all build-time/dev-CLI-only tooling — eslint,
+Sentry's build plugins, Prisma's dev server, shadcn's CLI — never execute
+in the deployed app). It comes from `@sentry/nextjs`'s Node SDK, which
+*does* instrument every server request in production. The CVE (unbounded
+memory allocation parsing the W3C `baggage` HTTP header) is attacker-
+reachable via a crafted request header. Fixed by bumping `@sentry/nextjs`
+`^10.56.0` → `^10.70.0` (checked the changelog first: no breaking changes
+documented for `@sentry/nextjs` in that range, only deprecations and
+Next.js-specific bug fixes) — `@sentry/node@10.70.0` depends on
+`@opentelemetry/sdk-trace-base: ^2.9.0`, well past the vulnerable `<2.8.0`
+boundary.
+
+**Everything else stayed within each package's existing major version** —
+checked patched-version availability per package before adding overrides,
+specifically to avoid forcing an incompatible major bump onto tooling that
+expects an older API:
+- `hono` `4.12.25` → `^4.12.34`, `ip-address` → `^10.5.0`, `js-yaml`
+  `4.2.0` → `^4.3.1`, `fast-uri` → `^3.1.5`, `body-parser` → `^2.3.0`,
+  `valibot` `1.2.0` → `^1.4.2` — all via new `overrides` entries.
+- `brace-expansion` was trickier: two different major lines (1.x and 5.x)
+  are used by different consumers in the tree (eslint's own `minimatch`
+  wants 1.x; newer `minimatch`/`ts-morph`/Sentry's bundler plugin want
+  5.x). Rather than hand-roll a single override that could force an
+  incompatible version onto one of them, ran plain `npm audit fix`
+  (no `--force`) and let npm's own dependency resolution handle the
+  multi-major-consumer case correctly — it did, safely.
+
+## Verification
+
+```
+npm install + npm audit fix → npm audit: 13 vulnerabilities → 0
+npm run lint       → 0 errors, 2 pre-existing warnings (unchanged) —
+                      confirms the brace-expansion/eslint-tooling fix
+                      didn't break linting itself
+npm run typecheck   → clean
+npm test             → 30/30 passing, unchanged
+npx next build       → clean, all routes + middleware compiled
+```
+
+This round touched Sentry's SDK (which instruments every request) and
+removed a dependency, so went beyond automated checks again: real dev
+server, confirmed all 6 security headers still present, `/dashboard` still
+307-redirects unauthenticated requests, `/robots.txt`/`/sitemap.xml` still
+200, Tailwind CSS still compiles, and a full CSRF-carrying login attempt
+still returns the identical response as every prior verification round
+today. Dev server log showed no new errors from the Sentry bump. Cleaned
+up test `rate_limit_buckets` rows afterward.
+
+**Not acted on:** `npm audit fix` triggered an `allow-scripts` warning
+listing 4 packages (`@prisma/engines`, `@sentry/cli`, `prisma`,
+`unrs-resolver`) as "not yet covered by allowScripts" — but checking
+`package.json`, all 4 are already present in the `allowScripts` block at
+the exact same versions. Likely npm just wants the lockfile-change
+re-confirmed. Didn't run the suggested `npm approve-scripts
+--allow-scripts-pending` — that grants install-script execution trust,
+which is a separate decision from "did this fix the CVEs," not something
+to rubber-stamp without the user's say-so.
+
+## Not done / next
+
+- All `npm audit` findings from today's triage (critical next-auth CVEs,
+  high-severity next/postcss/sharp, and now these final 13) are resolved.
+- Still open: console.* → pino cleanup, broader test coverage (Stripe
+  webhook DB handlers, other routes/components), CSP nonce-based
+  script-src, `(dashboard)`/`(admin)`-specific error/not-found boundaries.
+- The `allow-scripts` re-confirmation flagged above — up to the user
+  whether to review and approve.
+
 ## Session: next/postcss/sharp high-severity CVE fix — 2026-08-17
 
 Continuation of the `npm audit` triage started with the next-auth critical
