@@ -1,5 +1,209 @@
 # HANDOFF.md
 
+## Session: Popup button copy + dev-mode MaxListenersExceededWarning — 2026-08-17
+
+Two small follow-ups to the legal-document popup session above.
+
+**Button copy:** changed the disabled-state label in
+`components/legal/pdf-scroll-accept-dialog.tsx` from "Scroll to the end to
+accept" to "Read till the end to accept", per user request. Left the
+`DialogDescription` line ("Scroll to the end of the document to enable
+Accept.") as-is since it wasn't what was asked about.
+
+**`MaxListenersExceededWarning` on the console** — user reported: `(node:
+29592) MaxListenersExceededWarning: ... 11 close listeners added to
+[ServerResponse]`. Investigated rather than guessing:
+- Confirmed no app code anywhere touches `res.on('close', ...)` directly
+  (grepped the whole repo) — ruled out this being something in this app's
+  own routes/middleware.
+- Confirmed via `@sentry/nextjs`'s own upstream issue tracker
+  (getsentry/sentry-javascript#3247, open since 2021) that Sentry's
+  OpenTelemetry-based HTTP instrumentation attaching per-request/reload
+  `close` listeners is a long-standing, widely-reported SDK behavior —
+  not something introduced by today's Sentry version bump or any other
+  change this session.
+- Tested (and ruled out) a simpler "one listener leaked per request"
+  theory: fired 40 concurrent requests at the dev server, no warning
+  triggered — consistent with the leak being tied to dev-mode
+  recompilation/hot-reload cycles (which this session went through *a
+  lot* of) rather than raw request volume.
+- **The PID in the user's warning (29592) does not belong to any dev
+  server this session started or stopped** — confirmed via `tasklist`,
+  it no longer exists, and it was never among the PIDs tracked/killed
+  during any of today's many verification cycles. It's almost certainly
+  the user's own separately-running `npm run dev` in their own terminal/
+  IDE, outside this session's process visibility.
+
+**Fix:** `instrumentation.ts` now sets `EventEmitter.defaultMaxListeners =
+20` once at server startup. This raises the warning threshold rather than
+eliminating Sentry's underlying listener accumulation (which isn't fixable
+from application code — it's inside the SDK) — the standard, low-risk
+mitigation for this known upstream behavior. Documented in the file why:
+production doesn't hot-reload the way dev does, so this is expected to be
+dev-mode-only noise with no production impact.
+
+**Important caveat, told to the user:** since the warning was coming from
+the user's own already-running dev server process (not one this session
+controls), **this fix only takes effect after they restart their own
+`npm run dev`** — `instrumentation.ts`'s `register()` hook only runs once
+at server boot.
+
+## Verification
+
+```
+npm run lint      → 0 errors, same 3 warnings as before (unrelated)
+npm run typecheck → clean
+```
+
+Did not attempt to force-reproduce the exact warning via repeated file
+edits — reasoned that risking edits to real files for an uncertain
+reproduction, against a diagnosis already independently confirmed via
+Sentry's own public issue tracker, had a worse risk/value tradeoff than
+just applying the standard fix and being upfront about what was and
+wasn't directly reproduced.
+
+## Session: Scroll-to-accept legal document popup (signup + invite-join) — 2026-08-17
+
+User added updated Terms of Business and Privacy Policy PDFs to `public/`
+and asked for two things: (1) point the site at the new documents, and
+(2) replace the existing "opens the PDF in a new tab + tick a checkbox"
+pattern with an in-app popup that shows the document and only enables an
+Accept button once the user has scrolled to the end.
+
+Before writing code, inspected the existing flow (both `app/signup/
+signup-form.tsx` and `app/invite/[token]/join/join-form.tsx` had identical
+duplicated code: a link to `/2026-05-07 Amended TOB.pdf` /
+`/2026-05-07 YouMimic Privacy Policy.pdf` opened in a new tab, plus a
+separate checkbox; `lib/validations/auth.ts`'s `registerSchema` requires
+four independent booleans — `acceptTerms`, `termsLinkClicked`,
+`acceptPrivacyPolicy`, `privacyPolicyLinkClicked` — all `true`). Confirmed
+scope with the user via `AskUserQuestion` before implementing, since this
+touches legal-consent UX: (1) apply to both signup and invite-join forms,
+not just signup, (2) the checkbox goes away entirely — the popup's Accept
+button is the sole acceptance action, its label becomes "✓ accepted" with
+a "view again" link, (3) render the actual PDF pages in-app (new
+dependency) rather than approximate the "scrolled to the end" requirement,
+since a plain embedded PDF viewer doesn't expose scroll position to the
+page.
+
+**New dependency: `react-pdf@^10.5.0`** (wraps `pdfjs-dist`). Confirmed
+React 19 support in its peer deps before installing.
+
+**New files:**
+- `components/legal/pdf-scroll-accept-dialog.tsx` — the popup. Renders
+  every page of the PDF stacked in a single scrollable container (not
+  paginated) via `<Document>`/`<Page>`, tracks scroll position, and
+  enables Accept once (a) every page has finished rendering and (b) the
+  container is scrolled within 24px of the bottom. Also handles the edge
+  case of a document short enough to need no scrolling at all (checks
+  `scrollHeight` against `clientHeight` once all pages are rendered).
+  State resets each time the dialog reopens — implemented by conditionally
+  mounting the whole PDF body only while `open` (so a fresh instance
+  mounts with fresh initial state), not by resetting state in a
+  `useEffect`; the React Compiler's `react-hooks/set-state-in-effect` lint
+  rule correctly flagged the first attempt at this as an anti-pattern.
+- `components/legal/legal-acceptance-field.tsx` — the form-row wrapper:
+  shows "Review and accept the {label}" before acceptance, "{label}
+  accepted — view again" after. Shared by both forms.
+
+**Modified:**
+- `app/signup/signup-form.tsx`, `app/invite/[token]/join/join-form.tsx` —
+  replaced the checkbox + new-tab-link blocks with `<LegalAcceptanceField>`.
+  On Accept, both the `acceptTerms`/`acceptPrivacyPolicy` boolean AND its
+  paired `*LinkClicked` boolean are set `true` together — kept
+  `lib/validations/auth.ts`'s schema untouched (still 4 fields) to
+  minimize footprint; the two fields are just always set in lockstep now
+  instead of independently.
+- `public/YM Terms of Business.pdf` → renamed to `public/terms-of-business.pdf`;
+  `public/YouMimic Privacy Policy Final (2026-08-18).pdf` → renamed to
+  `public/privacy-policy.pdf` (clean URL-safe slugs, avoids space/paren
+  encoding edge cases). The old dated PDFs
+  (`2026-05-07 Amended TOB.pdf`, `2026-05-07 YouMimic Privacy Policy.pdf`)
+  were left in place, just no longer referenced anywhere — grepped the
+  whole app first and confirmed the two signup/join forms were the only
+  places any legal document was ever linked from (no footer/settings/
+  dedicated legal page).
+
+**CSP consideration:** `react-pdf`'s default setup fetches its worker
+script from a CDN, which the CSP added earlier today (`script-src 'self'
+...`) would block. Configured the worker via Next's native
+`new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url)` bundling
+pattern instead of copying the file into `public/` by hand — this keeps
+the worker in sync with whatever `pdfjs-dist` version is actually
+installed (a hand-copied file would silently go stale on a future
+`react-pdf` upgrade and fail pdf.js's own worker/library version check).
+Confirmed via the compiled output that it resolves to a same-origin
+`/_next/static/media/pdf.worker.*.mjs` path — no CSP changes needed.
+
+**Real SSR bug caught by functional testing, not by lint/typecheck/build:**
+`pdfjs-dist` references `DOMMatrix` (browser-only) at module scope. `npx
+next build` succeeded regardless — most routes are dynamically rendered,
+so the build doesn't actually execute this code path — but the very first
+real request to `/signup` crashed with `ReferenceError: DOMMatrix is not
+defined`, confirmed via the dev server log. Fixed by loading
+`PdfScrollAcceptDialog` through `next/dynamic` with `ssr: false` in
+`legal-acceptance-field.tsx`, deferring the entire `react-pdf` module
+(including its worker-config side effect) to client-only execution.
+Re-verified after the fix: the signup page's expected text now renders
+correctly and no new `DOMMatrix` errors appear in the log for fresh
+requests.
+
+**Unrelated finding, not fixed:** `npm install react-pdf` surfaced one
+more `npm audit` finding — `deepmerge-ts@7.1.5` (pulled in by
+`@prisma/config`, unrelated to react-pdf itself) was genuinely in the
+vulnerable `<8.0.0` range. Fixed via an `overrides` bump to `^8.0.2`,
+same pattern as today's earlier audit-fixing sessions. `npm audit` is
+back to 0 vulnerabilities.
+
+**Also noticed, not fixed (pre-existing, unrelated to this session):**
+`/invite/[token]` and `/invite/[token]/join` both return 500 for an
+invalid/nonexistent token under a production build — confirmed this
+happens on the *parent* `/invite/[token]` page too, which nothing in this
+session touched, so it predates this work. Not investigated further —
+flagging for a future session.
+
+## Verification
+
+```
+npm run lint      → 0 errors (3 warnings: 2 pre-existing, 1 new instance
+                     of the same pre-existing "form.watch() isn't
+                     compiler-memoizable" warning category — now also
+                     triggered in join-form.tsx, harmless)
+npm run typecheck → clean
+npm test           → 30/30 passing, unchanged
+npx next build     → clean
+```
+
+Functional verification went well beyond the automated checks, given a
+real SSR crash was only caught this way:
+- Dev server: `/signup` renders the expected "Review and accept the Terms
+  and Conditions" / "...Privacy Policy" text (confirms no crash), both new
+  PDFs serve correctly (200, `application/pdf`), the pdf.js worker resolves
+  to a same-origin `/_next/static/...` path and is itself servable (200,
+  correct content-type).
+- **Real production build** (`next start`, not just `next build`): same
+  checks repeated and passed — `/signup` renders correctly, PDFs serve
+  correctly. This is what caught the DOMMatrix crash in the first place
+  (the plain `next build` compile step did not).
+- `/invite/[token]/join` (the other form using the same shared component)
+  was checked for crash-free loading with a fake token, but **not clicked
+  through end-to-end** — doing so needs a real `Invite` DB row, which
+  needs a real `Enterprise` and `Role` to satisfy foreign keys. Judged
+  that creating throwaway rows with FK entanglements in the dev database
+  wasn't worth it for a component that's structurally identical to the
+  one already fully verified on `/signup` — same shared
+  `LegalAcceptanceField`, same dynamic-import fix, same PDF files.
+
+## Not done / next
+
+- The 500-on-invalid-invite-token bug noted above — pre-existing, not
+  investigated.
+- `join-form.tsx`'s exact end-to-end click-through (scroll → Accept →
+  submit) wasn't done with a real invite token, per the tradeoff above.
+- Everything else from today's earlier sessions remains as previously
+  documented (console.* → pino cleanup, broader test coverage, CSP
+  nonce-based script-src, dashboard/admin-specific error boundaries).
+
 ## Session: Remaining npm audit findings — 13 → 0 — 2026-08-17
 
 Final round of the `npm audit` triage started earlier today. 13 findings

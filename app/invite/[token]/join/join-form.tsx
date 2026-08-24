@@ -19,7 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { LegalAcceptanceField } from "@/components/legal/legal-acceptance-field";
 
 const joinFormSchema = confirmPasswordSchema.superRefine((data, ctx) => {
   if (data.password !== data.confirmPassword) {
@@ -82,24 +82,35 @@ export default function JoinForm({
     mode: "onBlur",
   });
 
-  function handleTermsClick() {
+  const acceptTerms = form.watch("acceptTerms");
+  const acceptPrivacyPolicy = form.watch("acceptPrivacyPolicy");
+
+  function handleAcceptTerms() {
+    form.setValue("acceptTerms", true, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
     form.setValue("termsLinkClicked", true, {
       shouldValidate: true,
       shouldDirty: true,
       shouldTouch: true,
     });
-
-    void form.trigger(["termsLinkClicked", "acceptTerms"]);
+    void form.trigger(["acceptTerms", "termsLinkClicked"]);
   }
 
-  function handlePrivacyPolicyClick() {
+  function handleAcceptPrivacyPolicy() {
+    form.setValue("acceptPrivacyPolicy", true, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
     form.setValue("privacyPolicyLinkClicked", true, {
       shouldValidate: true,
       shouldDirty: true,
       shouldTouch: true,
     });
-
-    void form.trigger(["privacyPolicyLinkClicked", "acceptPrivacyPolicy"]);
+    void form.trigger(["acceptPrivacyPolicy", "privacyPolicyLinkClicked"]);
   }
 
   async function onSubmit(values: JoinFormInput) {
@@ -245,135 +256,26 @@ export default function JoinForm({
             )}
           />
 
-          <input type="hidden" {...form.register("termsLinkClicked")} />
-          <input type="hidden" {...form.register("privacyPolicyLinkClicked")} />
-
-          <FormField
-            control={form.control}
-            name="acceptTerms"
-            render={({ field }) => (
-              <FormItem
-                className="rounded-md border p-4"
-                data-invalid={
-                  !!form.formState.errors.acceptTerms ||
-                  !!form.formState.errors.termsLinkClicked
-                }
-              >
-                <div className="flex items-start space-x-3">
-                  <FormControl>
-                    <Checkbox
-                      id="acceptTerms"
-                      checked={field.value ?? false}
-                      onCheckedChange={async (checked) => {
-                        field.onChange(checked === true);
-                        await form.trigger(["acceptTerms", "termsLinkClicked"]);
-                      }}
-                      aria-invalid={
-                        !!form.formState.errors.acceptTerms ||
-                        !!form.formState.errors.termsLinkClicked
-                      }
-                    />
-                  </FormControl>
-
-                  <div className="space-y-1 leading-none">
-                    <FormLabel
-                      htmlFor="acceptTerms"
-                      className="cursor-pointer text-sm font-medium"
-                    >
-                      I agree to the{" "}
-                      <a
-                        href="/2026-05-07 Amended TOB.pdf"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={handleTermsClick}
-                        className="underline underline-offset-4 hover:text-primary"
-                      >
-                        Terms and Conditions
-                      </a>
-                    </FormLabel>
-
-                    <p className="text-sm text-muted-foreground">
-                      You must open and review the Terms and Conditions before
-                      continuing.
-                    </p>
-                  </div>
-                </div>
-
-                <FormMessage className="mt-2" />
-
-                {!form.formState.errors.acceptTerms &&
-                  form.formState.errors.termsLinkClicked?.message && (
-                    <p className="mt-2 text-sm font-medium text-destructive">
-                      {form.formState.errors.termsLinkClicked.message}
-                    </p>
-                  )}
-              </FormItem>
-            )}
+          <LegalAcceptanceField
+            label="Terms and Conditions"
+            fileUrl="/terms-of-business.pdf"
+            accepted={acceptTerms ?? false}
+            onAccept={handleAcceptTerms}
+            error={
+              form.formState.errors.acceptTerms?.message ??
+              form.formState.errors.termsLinkClicked?.message
+            }
           />
 
-          <FormField
-            control={form.control}
-            name="acceptPrivacyPolicy"
-            render={({ field }) => (
-              <FormItem
-                className="rounded-md border p-4"
-                data-invalid={
-                  !!form.formState.errors.acceptPrivacyPolicy ||
-                  !!form.formState.errors.privacyPolicyLinkClicked
-                }
-              >
-                <div className="flex items-start space-x-3">
-                  <FormControl>
-                    <Checkbox
-                      id="acceptPrivacyPolicy"
-                      checked={field.value ?? false}
-                      onCheckedChange={async (checked) => {
-                        field.onChange(checked === true);
-                        await form.trigger([
-                          "acceptPrivacyPolicy",
-                          "privacyPolicyLinkClicked",
-                        ]);
-                      }}
-                      aria-invalid={
-                        !!form.formState.errors.acceptPrivacyPolicy ||
-                        !!form.formState.errors.privacyPolicyLinkClicked
-                      }
-                    />
-                  </FormControl>
-
-                  <div className="space-y-1 leading-none">
-                    <FormLabel
-                      htmlFor="acceptPrivacyPolicy"
-                      className="cursor-pointer text-sm font-medium"
-                    >
-                      I agree to the{" "}
-                      <a
-                        href="/2026-05-07 YouMimic Privacy Policy.pdf"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={handlePrivacyPolicyClick}
-                        className="underline underline-offset-4 hover:text-primary"
-                      >
-                        Privacy Policy
-                      </a>
-                    </FormLabel>
-
-                    <p className="text-sm text-muted-foreground">
-                      You must open the Privacy Policy before continuing.
-                    </p>
-                  </div>
-                </div>
-
-                <FormMessage className="mt-2" />
-
-                {!form.formState.errors.acceptPrivacyPolicy &&
-                  form.formState.errors.privacyPolicyLinkClicked?.message && (
-                    <p className="mt-2 text-sm font-medium text-destructive">
-                      {form.formState.errors.privacyPolicyLinkClicked.message}
-                    </p>
-                  )}
-              </FormItem>
-            )}
+          <LegalAcceptanceField
+            label="Privacy Policy"
+            fileUrl="/privacy-policy.pdf"
+            accepted={acceptPrivacyPolicy ?? false}
+            onAccept={handleAcceptPrivacyPolicy}
+            error={
+              form.formState.errors.acceptPrivacyPolicy?.message ??
+              form.formState.errors.privacyPolicyLinkClicked?.message
+            }
           />
 
           <Button
