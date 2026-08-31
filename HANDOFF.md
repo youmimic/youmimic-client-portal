@@ -1,5 +1,67 @@
 # HANDOFF.md
 
+## Session: Fix — HeyGen "engine" request shape — 2026-08-31
+
+User hit a real error clicking Generate right after the engine-picker
+session above: `Input should be a valid dictionary or object to extract
+fields from`. That's a Pydantic-style validation error surfacing straight
+from HeyGen's API — confirmed by reproducing the exact request our new
+code sends against the real API rather than guessing.
+
+**Root cause:** the previous session's assumption (from an LLM-summarized
+docs fetch) that `engine` is a flat string field was wrong. HeyGen expects
+it as a discriminated object: `{"engine": {"type": "avatar_iii"}}`, not
+`{"engine": "avatar_iii"}`.
+
+**Important — an unintended side effect while diagnosing this:** the
+second live probe (`{"engine": {"type": "avatar_iii"}}`, otherwise a
+fully valid body reusing the user's real Tom Kenyon avatar) unexpectedly
+*succeeded* rather than failing validation as intended, creating a real
+HeyGen video generation job (video_id `0fee583eba3b3dec4fc04c3b38a3e93e`,
+script "test"). Told the user immediately, before finishing the fix —
+they may want to check/delete it from their HeyGen dashboard; this app
+has no delete-video capability to do it from here. All *subsequent*
+verification in this session used a deliberately-fake `avatar_id` instead,
+so the request fails validation for an unrelated, safe reason
+(`avatar_not_found`) before ever reaching real generation — same
+safe-probing discipline the original `createHeyGenVideo` code comment
+already established, which this session's first probe should have
+followed from the start.
+
+**Fix:** `lib/heygen.ts`'s `createHeyGenVideo` now sends
+`engine: { type: params.engine }` instead of `engine: params.engine`. No
+other files needed changes — the public function signature (a plain
+`HeyGenEngine` string) is unchanged, this was purely how that value gets
+serialized into the request body.
+
+## Verification
+
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 44/44 passing, unaffected
+npx next build     → clean
+```
+
+Verified the fix directly against the real API — same technique as
+diagnosing the bug, but this time safely: sent a request with the
+corrected `engine` shape and a deliberately fake `avatar_id`. Got back
+`avatar_not_found` (the expected error for a fake id) instead of the
+original engine-shape error, confirming `engine` now passes HeyGen's
+validation and the request correctly proceeds to checking the avatar —
+without generating anything.
+
+## Not done / next
+
+- The accidentally-created test video on the user's HeyGen account
+  (`0fee583eba3b3dec4fc04c3b38a3e93e`) is still there — flagged to the
+  user, not cleaned up (no delete capability in this app).
+- Still haven't done an authenticated browser click-through of the actual
+  engine picker + full generate flow — this fix was verified against the
+  raw HeyGen API directly, which is a strong signal the underlying request
+  now works, but the full UI path (picker → API route → this function)
+  wasn't re-walked end-to-end in a browser.
+
 ## Session: Engine picker + real duration/cost tracking for generated videos — 2026-08-31
 
 Follow-on from the earlier "how much HeyGen credit has been used" question

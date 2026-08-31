@@ -117,7 +117,12 @@ export async function createHeyGenVideo(params: {
       avatar_id: params.avatarId,
       script: params.script,
       voice_id: params.voiceId,
-      engine: params.engine,
+      // HeyGen expects "engine" as a discriminated object, not a plain
+      // string — confirmed against the real API: a bare string produces
+      // "Input should be a valid dictionary or object to extract fields
+      // from", and an empty object confirms "type" as the discriminator
+      // field ("Unable to extract tag using discriminator 'type'").
+      engine: { type: params.engine },
       ...(params.callbackUrl ? { callback_url: params.callbackUrl } : {}),
     }),
   });
