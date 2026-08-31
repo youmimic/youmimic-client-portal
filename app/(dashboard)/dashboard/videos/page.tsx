@@ -23,13 +23,24 @@ export default async function VideosPage() {
       id: true,
       script: true,
       status: true,
+      engine: true,
       videoUrl: true,
       thumbnailUrl: true,
       errorMessage: true,
       createdAt: true,
+      durationSeconds: true,
+      estimatedCostCents: true,
       avatar: { select: { id: true, name: true } },
     },
   });
+
+  // Sum of every completed video's own stored estimate — not recomputed
+  // live, so this total stays consistent with what each row shows even if
+  // lib/heygen/pricing.ts's rates are updated later (see that file).
+  const totalEstimatedCostCents = videos.reduce(
+    (sum, v) => sum + (v.estimatedCostCents ?? 0),
+    0,
+  );
 
   return (
     <div className="space-y-6">
@@ -37,6 +48,16 @@ export default async function VideosPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Videos</h1>
         <p className="text-muted-foreground">
           Every video generated across all of your avatars, newest first.
+          {totalEstimatedCostCents > 0 && (
+            <>
+              {" "}
+              Estimated HeyGen usage so far:{" "}
+              <span className="font-medium text-foreground">
+                ${(totalEstimatedCostCents / 100).toFixed(2)}
+              </span>
+              .
+            </>
+          )}
         </p>
       </div>
 

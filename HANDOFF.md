@@ -1,5 +1,121 @@
 # HANDOFF.md
 
+## Session: Engine picker + real duration/cost tracking for generated videos — 2026-08-31
+
+Follow-on from the earlier "how much HeyGen credit has been used" question
+today. That investigation established two real facts via the live API
+(not assumed): HeyGen's video-status endpoint returns `duration` but never
+a cost/credit figure, and the actual per-second rate varies ~4x by engine
+(Avatar III $0.0167/s vs IV/V $0.0667/s) — and this app's own code never
+told HeyGen which engine to use, so it was silently defaulting to Avatar
+IV every time (confirmed via HeyGen's own docs). User asked to let users
+choose the engine before generating, then separately asked to add
+duration/cost fields to the schema — this session does both together,
+since they're the same underlying change (can't compute cost without
+knowing which engine was actually used per video).
+
+**Schema** — two additive migrations:
+- `VideoEngine` enum (`AVATAR_III`/`AVATAR_IV`/`AVATAR_V`) +
+  `GeneratedVideo.engine`, `@default(AVATAR_IV)`. That default is a real
+  historical fact for backfilling existing rows (every generation before
+  this field existed used HeyGen's own default, confirmed Avatar IV), not
+  a placeholder — the *application's* default going forward is Avatar III
+  instead, set at the validation/UI layer.
+- `GeneratedVideo.durationSeconds` (`Float?`) and `.estimatedCostCents`
+  (`Int?`, matching `Payment.amount`'s existing cents convention) — both
+  populated only once a video actually completes, since duration isn't
+  known before then. Stored rather than computed on read, so a row's
+  estimate stays stable even if `lib/heygen/pricing.ts`'s rates are
+  updated later.
+
+**New `lib/heygen/pricing.ts`** — the per-engine $/sec rate table (sourced
+from HeyGen's public pricing docs, dated in a comment since HeyGen doesn't
+expose these via the API and can change them without notice) and
+`estimatedCostCents(engine, durationSeconds)`. Unit tested
+(`pricing.test.ts`, 7 tests) including the exact real duration value
+(4.91102s) pulled from a live API response during today's earlier
+investigation.
+
+**`lib/heygen.ts`** — `createHeyGenVideo` now requires and sends an
+`engine` param (previously omitted entirely, which is *why* HeyGen was
+defaulting to Avatar IV). `HeyGenVideoStatus` now captures `duration`.
+
+**Two completion paths both updated to populate duration/cost** — this
+matters because completion is primarily webhook-driven, with the manual
+refresh route as a fallback for whenever the webhook isn't registered;
+missing either one would mean some videos silently never get a cost
+estimate depending on which path happened to complete them:
+- `app/api/webhooks/heygen/route.ts` (primary path)
+- `lib/heygen/generate-video.ts`'s `refreshGeneratedVideoStatus` (fallback)
+
+**`lib/heygen/generate-video.ts`'s `generateAvatarVideo`** — new `engine`
+parameter (defaults to `"avatar_iii"`), passed to `createHeyGenVideo` and
+recorded on the `GeneratedVideo` row on both the success *and* failure
+path (a failed attempt still records which engine was requested).
+
+**`lib/validations/video.ts`** — `generateVideoSchema` gains
+`engine: z.enum(VIDEO_ENGINES).default("avatar_iii")`.
+
+**New `components/dashboard/engine-picker.tsx`** — a 3-option picker
+(matching the existing `LookPicker` button-grid pattern in
+`avatar-studio.tsx`) showing each engine's name and a cost/quality
+tradeoff description, including the actual $/sec rate so the choice is an
+informed one, not just a label. Wired into `AvatarStudio`'s generate form,
+defaulting to Avatar III.
+
+**`components/dashboard/generated-video-row.tsx`** — now shows engine +
+duration + estimated cost inline on every video row once available
+(`"Avatar III · 4.9s · ~$0.08"`), not just script/status/date as before.
+
+**`app/(dashboard)/dashboard/videos/page.tsx`** — now also shows a running
+total ("Estimated HeyGen usage so far: $X.XX") summed from every video's
+own stored estimate — the more direct answer to the original "how much
+has been used" question, on top of the per-video breakdown.
+
+Both page queries (`studio/page.tsx` and `videos/page.tsx`) updated to
+select the three new fields.
+
+## Verification
+
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 44/44 passing (37 pre-existing + 7 new for
+                      lib/heygen/pricing.ts)
+npx next build     → clean, all affected routes compiled
+```
+
+Beyond automated checks: **did not touch the one real COMPLETED video row
+in the database** to test the new completion-path logic — it's already
+marked COMPLETED, so calling refresh against it would hit the existing
+early-return and never exercise the new code. Instead verified the full
+write/read cycle safely: created a throwaway `GeneratedVideo` row (reusing
+a real user/avatar id to satisfy foreign keys, avoiding a bigger synthetic
+data setup), updated it exactly the way the real completion paths do
+(status → COMPLETED, `durationSeconds`, `estimatedCostCents`), read it
+back with the *exact* select shape both real pages use, confirmed it
+matched, then deleted it. Separately confirmed via a real dev server that
+both `/dashboard/videos` and the avatar studio page still resolve
+correctly (redirect to login for an unauthenticated request, not a crash)
+despite the query/type changes.
+
+## Not done / next
+
+- No authenticated browser click-through — no browser automation available
+  this session. The engine picker's actual appearance/interaction wasn't
+  visually confirmed, only that the component compiles and the page
+  renders without error server-side.
+- The one real COMPLETED video in the database still has `durationSeconds`/
+  `estimatedCostCents` as `null` (it completed before this session) —
+  cosmetic only, doesn't affect new generations, but means the very first
+  real usage of the "Videos" page's total won't include that video unless
+  it's manually backfilled or someone re-triggers its refresh path
+  somehow (its current status already short-circuits that).
+- `lib/heygen/pricing.ts`'s rates are a manually-maintained, point-in-time
+  reference (HeyGen doesn't expose them via API) — if HeyGen changes
+  pricing, only this file needs updating, but nothing will catch drift
+  automatically.
+
 ## Session: Consolidated "Videos" dashboard page — 2026-08-31
 
 User said generated videos were hard to find in the client portal.

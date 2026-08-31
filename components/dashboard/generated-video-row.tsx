@@ -12,10 +12,17 @@ export type GeneratedVideoData = {
   id: string;
   script: string;
   status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  engine: "AVATAR_III" | "AVATAR_IV" | "AVATAR_V";
   videoUrl: string | null;
   thumbnailUrl: string | null;
   errorMessage: string | null;
   createdAt: string;
+  // Both null until the video actually completes — HeyGen's status API
+  // returns duration but no cost/credit figure of its own; cost is derived
+  // from duration x this row's engine rate, computed once and stored (see
+  // lib/heygen/pricing.ts), not recalculated on every render.
+  durationSeconds: number | null;
+  estimatedCostCents: number | null;
 };
 
 const STATUS_LABEL: Record<GeneratedVideoData["status"], string> = {
@@ -32,6 +39,12 @@ const STATUS_CLASS: Record<GeneratedVideoData["status"], string> = {
   FAILED: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
 };
 
+const ENGINE_LABEL: Record<GeneratedVideoData["engine"], string> = {
+  AVATAR_III: "Avatar III",
+  AVATAR_IV: "Avatar IV",
+  AVATAR_V: "Avatar V",
+};
+
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("en-AU", {
     year: "numeric",
@@ -40,6 +53,10 @@ function formatDate(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));
+}
+
+function formatCost(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
 }
 
 // Shared by the avatar Studio page (one avatar's own video history) and the
@@ -96,7 +113,13 @@ export function GeneratedVideoRow({
         </span>
       </div>
 
-      <p className="text-xs text-muted-foreground">{formatDate(video.createdAt)}</p>
+      <p className="text-xs text-muted-foreground">
+        {formatDate(video.createdAt)}
+        {" · "}
+        {ENGINE_LABEL[video.engine]}
+        {video.durationSeconds != null && ` · ${video.durationSeconds.toFixed(1)}s`}
+        {video.estimatedCostCents != null && ` · ~${formatCost(video.estimatedCostCents)}`}
+      </p>
 
       {video.status === "COMPLETED" && video.videoUrl && (
         <video controls className="w-full max-w-md rounded-md border" poster={video.thumbnailUrl ?? undefined}>

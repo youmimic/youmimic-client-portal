@@ -415,6 +415,22 @@ enum VideoGenerationStatus {
   FAILED
 }
 
+// Matches HeyGen's "engine" field on POST /v3/videos (avatar_iii/iv/v).
+// Every GeneratedVideo row now records which one was actually requested —
+// needed to eventually compute an accurate per-video cost, since HeyGen's
+// per-second rate varies ~4x by engine and isn't returned by their video-
+// status API. Default AVATAR_IV here backfills existing rows accurately:
+// every generation before this field existed was created without an
+// explicit engine param, and HeyGen's own default (per their docs) is
+// Avatar IV — this is a real historical fact, not a placeholder. The
+// application's own default going forward is Avatar III instead (cheaper),
+// set at the UI/validation layer, not here.
+enum VideoEngine {
+  AVATAR_III
+  AVATAR_IV
+  AVATAR_V
+}
+
 // Avatar Studio (v1, script-only): one row per HeyGen video generation job.
 // Created synchronously when the job is accepted by HeyGen (status
 // PROCESSING, heygenVideoId set from the create response — HeyGen has no
@@ -428,12 +444,24 @@ model GeneratedVideo {
   avatarId        String
   script          String
   status          VideoGenerationStatus  @default(PROCESSING)
+  engine          VideoEngine            @default(AVATAR_IV)
   heygenVideoId   String?                @unique
   videoUrl        String?
   thumbnailUrl    String?
   errorMessage    String?
   createdAt       DateTime               @default(now())
   completedAt     DateTime?
+
+  // Both populated only once HeyGen reports the video COMPLETED (from its
+  // `duration` field, which the video-status API does return, unlike any
+  // credit/cost figure — see lib/heygen/pricing.ts). estimatedCostCents is
+  // derived (durationSeconds x that engine's $/sec rate), stored rather
+  // than computed on every read since the per-engine rate is a point-in-
+  // time reference that could change — the estimate as of generation time
+  // should stay stable even if lib/heygen/pricing.ts's rates are updated
+  // later. Stored in cents matching Payment.amount's existing convention.
+  durationSeconds    Float?
+  estimatedCostCents Int?
 
   // Last Heygen-Event-Id whose processing actually completed successfully —
   // HeyGen's docs name this the *primary* replay/redelivery defense (the

@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getHeyGenVideoStatus, HeyGenApiError } from "@/lib/heygen";
+import { estimatedCostCents } from "@/lib/heygen/pricing";
 import type { VideoGenerationStatus } from "@/app/generated/prisma/enums";
 
 // HeyGen signs the raw request body with HMAC-SHA256 using the endpoint's
@@ -86,7 +87,7 @@ export async function POST(req: Request) {
 
   const local = await prisma.generatedVideo.findUnique({
     where: { heygenVideoId: videoId },
-    select: { id: true, lastWebhookEventId: true },
+    select: { id: true, lastWebhookEventId: true, engine: true },
   });
   if (!local) {
     return NextResponse.json({ received: true });
@@ -110,6 +111,12 @@ export async function POST(req: Request) {
     const remote = await getHeyGenVideoStatus(videoId);
     const mapped = mapRemoteStatus(remote.status);
 
+    // duration/cost only meaningful once actually completed — HeyGen's
+    // status response has no cost field at all, so cost is always derived
+    // from duration x this row's own engine rate (see lib/heygen/pricing.ts).
+    const isCompleted = mapped === "COMPLETED";
+    const durationSeconds = isCompleted ? (remote.duration ?? undefined) : undefined;
+
     await prisma.generatedVideo.update({
       where: { id: local.id },
       data: {
@@ -119,6 +126,11 @@ export async function POST(req: Request) {
         errorMessage: mapped === "FAILED" ? (remote.error?.message ?? "Video generation failed") : undefined,
         completedAt: mapped === "COMPLETED" || mapped === "FAILED" ? new Date() : undefined,
         lastWebhookEventId: eventId ?? undefined,
+        durationSeconds,
+        estimatedCostCents:
+          durationSeconds !== undefined
+            ? estimatedCostCents(local.engine, durationSeconds)
+            : undefined,
       },
     });
   } catch (err) {

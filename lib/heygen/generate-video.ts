@@ -1,6 +1,22 @@
 import prisma from "@/lib/prisma";
-import { getHeyGenAvatarLook, getHeyGenVideoStatus, createHeyGenVideo, HeyGenApiError } from "@/lib/heygen";
-import type { VideoGenerationStatus } from "@/app/generated/prisma/enums";
+import {
+  getHeyGenAvatarLook,
+  getHeyGenVideoStatus,
+  createHeyGenVideo,
+  HeyGenApiError,
+  type HeyGenEngine,
+} from "@/lib/heygen";
+import type { VideoEngine, VideoGenerationStatus } from "@/app/generated/prisma/enums";
+import { estimatedCostCents } from "@/lib/heygen/pricing";
+
+// Maps the lowercase HeyGen API value (also what lib/validations/video.ts's
+// generateVideoSchema accepts from the client) to the Prisma enum value
+// stored on GeneratedVideo.engine.
+const ENGINE_TO_PRISMA: Record<HeyGenEngine, VideoEngine> = {
+  avatar_iii: "AVATAR_III" as VideoEngine,
+  avatar_iv: "AVATAR_IV" as VideoEngine,
+  avatar_v: "AVATAR_V" as VideoEngine,
+};
 
 export type GenerateVideoResult =
   | { ok: true; generatedVideoId: string }
@@ -28,6 +44,7 @@ export async function generateAvatarVideo(
   avatarId: string,
   script: string,
   avatarLookId?: string,
+  engine: HeyGenEngine = "avatar_iii",
 ): Promise<GenerateVideoResult> {
   const avatar = await prisma.avatar.findFirst({
     where: { id: avatarId, userId },
@@ -74,11 +91,14 @@ export async function generateAvatarVideo(
     return { ok: false, code: "NO_VOICE", error: "This avatar has no default voice configured in HeyGen yet." };
   }
 
+  const prismaEngine = ENGINE_TO_PRISMA[engine];
+
   try {
     const { video_id } = await createHeyGenVideo({
       avatarId: heygenLookId,
       script,
       voiceId,
+      engine,
       callbackUrl: callbackUrl(),
     });
 
@@ -89,6 +109,7 @@ export async function generateAvatarVideo(
         avatarLookId: resolvedLookId,
         script,
         status: "PROCESSING" as VideoGenerationStatus,
+        engine: prismaEngine,
         heygenVideoId: video_id,
       },
       select: { id: true },
@@ -108,6 +129,7 @@ export async function generateAvatarVideo(
         avatarLookId: resolvedLookId,
         script,
         status: "FAILED" as VideoGenerationStatus,
+        engine: prismaEngine,
         errorMessage: message,
       },
     });
@@ -126,7 +148,7 @@ export type RefreshResult =
 export async function refreshGeneratedVideoStatus(generatedVideoId: string, userId: string): Promise<RefreshResult> {
   const row = await prisma.generatedVideo.findFirst({
     where: { id: generatedVideoId, userId },
-    select: { id: true, heygenVideoId: true, status: true },
+    select: { id: true, heygenVideoId: true, status: true, engine: true },
   });
 
   if (!row) return { ok: false, code: "NOT_FOUND", error: "Not found" };
@@ -138,6 +160,12 @@ export async function refreshGeneratedVideoStatus(generatedVideoId: string, user
     const remote = await getHeyGenVideoStatus(row.heygenVideoId);
     const mapped = mapRemoteStatus(remote.status);
 
+    // duration/cost only meaningful once actually completed — HeyGen's
+    // status response has no cost field at all, so cost is always derived
+    // from duration x this row's own engine rate (see lib/heygen/pricing.ts).
+    const isCompleted = mapped === "COMPLETED";
+    const durationSeconds = isCompleted ? (remote.duration ?? undefined) : undefined;
+
     const updated = await prisma.generatedVideo.update({
       where: { id: row.id },
       data: {
@@ -146,6 +174,11 @@ export async function refreshGeneratedVideoStatus(generatedVideoId: string, user
         thumbnailUrl: remote.thumbnail_url ?? undefined,
         errorMessage: mapped === "FAILED" ? (remote.error?.message ?? "Video generation failed") : undefined,
         completedAt: mapped === "COMPLETED" || mapped === "FAILED" ? new Date() : undefined,
+        durationSeconds,
+        estimatedCostCents:
+          durationSeconds !== undefined
+            ? estimatedCostCents(row.engine, durationSeconds)
+            : undefined,
       },
       select: { status: true, videoUrl: true },
     });

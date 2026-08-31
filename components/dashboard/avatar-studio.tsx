@@ -11,6 +11,8 @@ import {
   GeneratedVideoRow as VideoRow,
   type GeneratedVideoData,
 } from "@/components/dashboard/generated-video-row";
+import { EnginePicker } from "@/components/dashboard/engine-picker";
+import type { HeyGenEngine } from "@/lib/heygen";
 
 const SCRIPT_MAX = 5000;
 
@@ -91,6 +93,9 @@ export function AvatarStudio({
   const [script, setScript] = useState("");
   const firstReadyLook = looks.find((l) => l.status === "ready") ?? null;
   const [selectedLookId, setSelectedLookId] = useState<string | null>(firstReadyLook?.id ?? null);
+  // Defaults to Avatar III (the lower-cost option) rather than HeyGen's own
+  // default of Avatar IV — see lib/validations/video.ts.
+  const [engine, setEngine] = useState<HeyGenEngine>("avatar_iii");
   const [state, setState] = useState<ActionState>(idle);
   const selectedLook = looks.find((l) => l.id === selectedLookId) ?? null;
 
@@ -100,7 +105,11 @@ export function AvatarStudio({
       const res = await fetch(`/api/dashboard/avatars/${avatarId}/generate-video`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script, ...(selectedLookId ? { avatarLookId: selectedLookId } : {}) }),
+        body: JSON.stringify({
+          script,
+          engine,
+          ...(selectedLookId ? { avatarLookId: selectedLookId } : {}),
+        }),
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => ({}))) as { error?: string };
@@ -137,6 +146,7 @@ export function AvatarStudio({
               <source src={selectedLook.videoUrl} type="video/mp4" />
             </video>
           )}
+          <EnginePicker value={engine} onChange={setEngine} />
           <Textarea
             value={script}
             onChange={(e) => setScript(e.target.value)}

@@ -26,6 +26,11 @@ export interface HeyGenVideoStatus {
   status: "pending" | "processing" | "completed" | "failed";
   video_url: string | null;
   thumbnail_url: string | null;
+  // Seconds, only meaningful once status is "completed" — confirmed via a
+  // real API response that this endpoint returns duration but no
+  // credit/cost figure (see lib/heygen/pricing.ts for how cost is derived
+  // from this instead).
+  duration: number | null;
   error: { code?: string; message?: string } | null;
 }
 
@@ -96,10 +101,13 @@ export async function getHeyGenVideoStatus(videoId: string): Promise<HeyGenVideo
 // Avatar Studio v1 is script-only). Returns a video_id synchronously —
 // HeyGen has no separate "queued" state, the job starts processing
 // immediately.
+export type HeyGenEngine = "avatar_iii" | "avatar_iv" | "avatar_v";
+
 export async function createHeyGenVideo(params: {
   avatarId: string;
   script: string;
   voiceId: string;
+  engine: HeyGenEngine;
   callbackUrl?: string;
 }): Promise<{ video_id: string }> {
   return heygenFetch<{ video_id: string }>("/v3/videos", {
@@ -109,6 +117,7 @@ export async function createHeyGenVideo(params: {
       avatar_id: params.avatarId,
       script: params.script,
       voice_id: params.voiceId,
+      engine: params.engine,
       ...(params.callbackUrl ? { callback_url: params.callbackUrl } : {}),
     }),
   });
