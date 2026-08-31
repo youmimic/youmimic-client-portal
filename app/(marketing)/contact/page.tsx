@@ -62,6 +62,25 @@ export default function ContactPage() {
         src="https://assets.calendly.com/assets/external/widget.js"
         strategy="lazyOnload"
       />
+
+      {/* Brevo Conversations chat widget — contact page only (not site-wide).
+          Renders as an iframe from conversations-widget.brevo.com once
+          loaded; see next.config.ts's CSP for the script-src/frame-src
+          entries this needs. */}
+      <Script id="brevo-conversations" strategy="lazyOnload">
+        {`
+          (function(d, w, c) {
+              w.BrevoConversationsID = '6a66a96b396a2cd6a604b5e7';
+              w[c] = w[c] || function() {
+                  (w[c].q = w[c].q || []).push(arguments);
+              };
+              var s = d.createElement('script');
+              s.async = true;
+              s.src = 'https://conversations-widget.brevo.com/brevo-conversations.js';
+              if (d.head) d.head.appendChild(s);
+          })(document, window, 'BrevoConversations');
+        `}
+      </Script>
     </>
   );
 }

@@ -2,9 +2,11 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 // The contact page embeds a Calendly inline widget (assets.calendly.com script,
-// calendly.com iframe + XHR) — see app/(marketing)/contact/page.tsx. That's the
-// only third-party origin the app talks to client-side; Sentry is tunneled
-// through the same-origin /monitoring rewrite below, so it needs no CSP entry.
+// calendly.com iframe + XHR) and a Brevo Conversations chat widget
+// (conversations-widget.brevo.com script, which renders its actual chat UI
+// in an iframe from the same host) — see app/(marketing)/contact/page.tsx.
+// Sentry is tunneled through the same-origin /monitoring rewrite below, so
+// it needs no CSP entry.
 //
 // img-src/media-src allow any https: host rather than a fixed list because
 // avatar thumbnails and generated videos are served directly from HeyGen's CDN
@@ -23,13 +25,13 @@ const isDev = process.env.NODE_ENV !== "production";
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://assets.calendly.com`,
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://assets.calendly.com https://conversations-widget.brevo.com`,
   "style-src 'self' 'unsafe-inline' https://assets.calendly.com",
   "img-src 'self' data: https:",
   "media-src 'self' https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://calendly.com https://*.calendly.com",
-  "frame-src https://calendly.com",
+  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com",
+  "frame-src https://calendly.com https://conversations-widget.brevo.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

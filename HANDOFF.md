@@ -1,5 +1,63 @@
 # HANDOFF.md
 
+## Session: Brevo Conversations chat widget on contact page — 2026-08-31
+
+User provided Brevo's standard chat-widget bootstrap snippet and asked for
+it on the contact page specifically (not site-wide — chat widgets are
+usually global, but followed the explicit scope given rather than
+assuming).
+
+**Before adding anything, checked what the snippet actually loads**, since
+it's a third-party script and this app has a CSP (`next.config.ts`, added
+2026-08-17) that blocks unlisted origins by default:
+- Fetched the actual widget JS (`conversations-widget.brevo.com/brevo-conversations.js`)
+  rather than guessing its CSP needs — confirmed it renders its chat UI in
+  an **iframe** hosted at that same domain. Since the real chat
+  functionality (WebSocket, images, its own styles) then runs inside that
+  iframe's own separate origin, it's largely outside this site's CSP
+  scope — only the bootstrap script load, the iframe embed, and a
+  defensive `connect-src` entry (for any pre-iframe API calls) were
+  actually needed.
+
+**`app/(marketing)/contact/page.tsx`** — added the snippet via `next/script`'s
+`<Script>` component (`strategy="lazyOnload"`, inline body), right after
+the existing Calendly `<Script>` — same pattern already established on
+this page, not a new convention.
+
+**`next.config.ts`** — added `https://conversations-widget.brevo.com` to
+`script-src`, `connect-src`, and `frame-src`. Updated the file's own
+top-of-file comment (which documents what third-party origins the CSP
+allows and why) to mention Brevo alongside the existing Calendly entry.
+
+## Verification
+
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npx next build     → clean
+```
+
+Functional check against a real dev server: `/contact` renders 200 with
+the Brevo bootstrap script present in the HTML (`BrevoConversationsID` and
+the widget script URL both found), the `Content-Security-Policy` response
+header includes the new domain in all three directives it was added to,
+and the homepage still loads normally (confirms the CSP change didn't
+break anything site-wide). No errors in the dev server log.
+
+**Not verified:** the actual chat bubble rendering/functioning in a real
+browser — same limitation noted for the Calendly widget back on
+2026-08-17, no browser automation available this session. Worth a quick
+manual check on `/contact` after this deploys, watching the browser
+console for any CSP violations in case Brevo's widget calls another
+domain at runtime that wasn't visible from statically inspecting the
+bootstrap script.
+
+## Not done / next
+
+- Not added to any page besides `/contact`, per the explicit scope given.
+  If a site-wide floating chat bubble was actually intended, this would
+  need moving into the root layout instead.
+
 ## Session: Stripe billing event recording + notifications — 2026-08-31
 
 User asked for a way to record Stripe subscription/payment events (started,
