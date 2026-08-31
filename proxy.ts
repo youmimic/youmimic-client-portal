@@ -51,8 +51,16 @@ export const proxy = auth(async (req) => {
       return NextResponse.redirect(new URL("/dashboard", nextUrl.origin));
     }
 
-    // requireEmailVerified: /dashboard/avatars requires a verified email address
-    if (matchesPrefix(pathname, "/dashboard/avatars") && !user.isEmailVerified) {
+    // requireEmailVerified: /dashboard/avatars and /dashboard/videos both
+    // require a verified email address — a video can only exist if it was
+    // generated from an avatar, which already required verification, so
+    // this is consistency (an unverified user can't have any videos to see
+    // anyway) rather than a new restriction.
+    if (
+      (matchesPrefix(pathname, "/dashboard/avatars") ||
+        matchesPrefix(pathname, "/dashboard/videos")) &&
+      !user.isEmailVerified
+    ) {
       const url = new URL("/verify-email", nextUrl.origin);
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);

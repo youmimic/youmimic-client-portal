@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Settings,
   UserCircle2,
+  Video,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/dashboard/bookings", label: "Bookings", icon: CalendarDays, exact: false },
   { href: "/dashboard/avatars", label: "Avatars", icon: UserCircle2, exact: false },
+  { href: "/dashboard/videos", label: "Videos", icon: Video, exact: false },
   { href: "/dashboard/billing", label: "Billing", icon: CreditCard, exact: false },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, exact: false },
 ];

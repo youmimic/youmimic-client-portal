@@ -1,5 +1,78 @@
 # HANDOFF.md
 
+## Session: Consolidated "Videos" dashboard page — 2026-08-31
+
+User said generated videos were hard to find in the client portal.
+Investigated before building anything: the only place a video was ever
+visible was buried at the bottom of that *specific* avatar's Studio page
+("Your videos" card) — with no consolidated view, a user with more than
+one avatar had no way to see everything they'd generated without
+remembering which avatar made which video and clicking into each one's
+Studio individually. No "recent videos" widget on the main dashboard
+either. Confirmed `GeneratedVideo.userId` is on the model directly, so a
+consolidated "all my videos" query needed no enterprise/ownership
+complexity.
+
+**Extracted `components/dashboard/generated-video-row.tsx`** (new) from
+`avatar-studio.tsx`'s previously-local `VideoRow` — the video card
+(thumbnail/player, status badge, "Check status" refresh action for
+pending/processing videos) is now shared rather than something the new
+page would have had to duplicate. Added an optional `avatar` prop (shown
+only on the consolidated view, where — unlike within a single avatar's own
+Studio page — the source avatar isn't already implied by which page you're
+on) that links back to that avatar's Studio.
+
+**New `app/(dashboard)/dashboard/videos/page.tsx`** — queries every
+`GeneratedVideo` for the signed-in user directly (`where: { userId }`,
+`orderBy: { createdAt: "desc" }`, including the avatar name/id), newest
+first, using the shared row component above. Empty state links to
+`/dashboard/avatars` to get started rather than just saying "nothing here."
+
+**New "Videos" nav entry** in `components/dashboard/app-sidebar.tsx`,
+placed right after "Avatars" (videos are generated *from* avatars, so kept
+that adjacency).
+
+**`proxy.ts`** — extended the existing `/dashboard/avatars`
+email-verification gate to also cover `/dashboard/videos`. Not a new
+restriction in practice: a video can only exist if it was generated from
+an avatar, which already required verification, so an unverified user
+could never have any videos to see anyway — this is consistency (so the
+nav doesn't offer a link that would just show an empty page) rather than
+tightening security.
+
+## Verification
+
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean (caught a real mistake: initially re-exported
+                     the video-row's type under an alias that turned out
+                     to only be visible to *other* files, not usable
+                     within avatar-studio.tsx itself where it was also
+                     referenced — fixed by importing the real type name
+                     directly instead of relying on the re-export)
+npm test           → 37/37 passing, unaffected
+npx next build     → clean, /dashboard/videos compiled
+```
+
+Beyond the automated checks: confirmed via a real dev server that
+`/dashboard/videos` is correctly registered and protected (307-redirects
+to `/login` for an unauthenticated request, not a 404 or a crash).
+Separately verified the exact Prisma query the new page uses — including
+the `avatar` relation include — directly against the real database via a
+throwaway script: confirmed the query shape is valid, and that real
+`GeneratedVideo` data already exists (4 rows) and resolves through the
+relation correctly (avatar name came back correctly attached).
+
+## Not done / next
+
+- No authenticated browser click-through of the new page with real data —
+  no browser automation available this session; the direct-DB query
+  verification above is the closest substitute.
+- The main `/dashboard` home page still has no "recent videos" widget —
+  only got a dedicated list page this round, not also surfaced on the
+  dashboard landing page. Worth considering if "easier to find" should
+  extend there too.
+
 ## Session: Brevo Conversations chat widget on contact page — 2026-08-31
 
 User provided Brevo's standard chat-widget bootstrap snippet and asked for
