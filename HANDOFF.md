@@ -1,5 +1,65 @@
 # HANDOFF.md
 
+## Session: Delete generated videos — 2026-08-31
+
+User asked for a way to delete a generated video from the portal (the
+Videos page / Studio page had no delete option — only "Check status").
+First pass deleted only the local DB row; the user then asked to also
+delete it from HeyGen's side so it's actually gone from both places.
+
+**What changed:**
+- `app/api/dashboard/videos/[id]/route.ts` (new) — `DELETE` handler,
+  scoped to the authenticated user's own videos (`findFirst` with
+  `userId` in the `where`, 404 if not found/not owned). Calls
+  `deleteHeyGenVideo()` first (best-effort — a `video_not_found` 404 is
+  treated as an acceptable outcome, not an error; any other HeyGen-side
+  failure still lets the local row get deleted but is returned as a
+  `warning` string so the user isn't left thinking it's gone from both
+  places when it isn't), then deletes the `GeneratedVideo` row.
+- `lib/heygen.ts` — added `deleteHeyGenVideo(videoId)`, `DELETE
+  /v3/videos/{video_id}`. **Correction to an earlier session's
+  assumption:** this endpoint is not listed on HeyGen's docs site (the
+  reference page 404s), and the original `createHeyGenVideo` comment
+  claimed no delete API existed — that was wrong. Confirmed live with a
+  fake video id: a too-short one 400s with "Video ID must be at least 32
+  characters", a well-formed-but-unknown one 404s with
+  `video_not_found` — proving the route is real and does an actual
+  existence check. (Legacy `v1/video.delete` and `v2/videos/{id}` also
+  exist but are flagged for removal 2026-10-31; v3 is current.)
+- `components/dashboard/generated-video-row.tsx` — added a "Delete"
+  button to the shared row component (used by both the Studio page and
+  the consolidated Videos page), gated behind `window.confirm(...)`.
+  Reworked `ActionState.loading` from a boolean to
+  `"status" | "delete" | null` so the two buttons don't show each other's
+  loading label. Shows `window.alert(json.warning)` if the delete
+  response carries one, since the row unmounts on refresh right after
+  and couldn't show an inline warning.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 44/44 passing
+npx next build     → clean, route listed: ƒ /api/dashboard/videos/[id]
+```
+Verified `deleteHeyGenVideo()` and the full route logic against the real
+dev DB and the real HeyGen API using only fake, well-formed video ids
+(never a real one — see [[heygen-safe-api-probing]] memory): confirmed
+it throws a 404 `HeyGenApiError` for an unknown id, that the route's
+`status === 404` check correctly treats that as non-fatal, and that both
+the "no `heygenVideoId`" and "fake `heygenVideoId`" paths still delete
+the local row. One verification command that would have hit the real
+leftover Tom Kenyon test video from the earlier session's incident was
+blocked by the environment's auto-mode classifier — correctly, since
+touching that video wasn't something the user had asked for.
+
+**Not done:** the stray real video created by the earlier incident
+(`video_id 0fee583eba3b3dec4fc04c3b38a3e93e`, Tom Kenyon's avatar) has
+not been cleaned up — would need the user's go-ahead first. No styled
+shadcn `AlertDialog` (kept to the native `window.confirm`/`alert`, per
+the user's "just add a confirmation" scope). No browser click-through
+this session.
+
 ## Session: Fix — HeyGen "engine" request shape — 2026-08-31
 
 User hit a real error clicking Generate right after the engine-picker

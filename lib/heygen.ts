@@ -127,3 +127,16 @@ export async function createHeyGenVideo(params: {
     }),
   });
 }
+
+// DELETE /v3/videos/{video_id} — not listed on HeyGen's docs site (which
+// 404s on the reference page), but confirmed live: a too-short id 400s with
+// "Video ID must be at least 32 characters" and a well-formed-but-unknown
+// id 404s with "video_not_found", so the route is real and does an actual
+// existence check rather than silently no-op'ing. Callers should treat a
+// video_not_found 404 as an acceptable outcome (already gone on HeyGen's
+// side), not a failure.
+export async function deleteHeyGenVideo(videoId: string): Promise<void> {
+  await heygenFetch<unknown>(`/v3/videos/${encodeURIComponent(videoId)}`, {
+    method: "DELETE",
+  });
+}

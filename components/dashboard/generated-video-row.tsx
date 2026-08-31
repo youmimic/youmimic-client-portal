@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-type ActionState = { loading: boolean; error: string | null };
-const idle: ActionState = { loading: false, error: null };
+type ActionState = { loading: "status" | "delete" | null; error: string | null };
+const idle: ActionState = { loading: null, error: null };
 
 export type GeneratedVideoData = {
   id: string;
@@ -76,7 +76,7 @@ export function GeneratedVideoRow({
   const [state, setState] = useState<ActionState>(idle);
 
   async function handleCheckStatus() {
-    setState({ loading: true, error: null });
+    setState({ loading: "status", error: null });
     try {
       const res = await fetch(`/api/dashboard/videos/${video.id}/refresh`, { method: "POST" });
       if (!res.ok) {
@@ -86,11 +86,31 @@ export function GeneratedVideoRow({
       setState(idle);
       router.refresh();
     } catch (e) {
-      setState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+      setState({ loading: null, error: e instanceof Error ? e.message : "Unknown error" });
     }
   }
 
   const isPending = video.status === "PENDING" || video.status === "PROCESSING";
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this video? This can't be undone.")) return;
+    setState({ loading: "delete", error: null });
+    try {
+      const res = await fetch(`/api/dashboard/videos/${video.id}`, { method: "DELETE" });
+      const json = (await res.json().catch(() => ({}))) as { error?: string; warning?: string };
+      if (!res.ok) {
+        throw new Error(json.error ?? `Request failed (${res.status})`);
+      }
+      // The row is about to unmount once the list refreshes, so a warning
+      // (removed here, but HeyGen-side deletion failed) can't be shown
+      // inline — surface it now, before that happens.
+      if (json.warning) window.alert(json.warning);
+      setState(idle);
+      router.refresh();
+    } catch (e) {
+      setState({ loading: null, error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
 
   return (
     <div className="py-3 border-t first:border-t-0 space-y-2">
@@ -131,14 +151,23 @@ export function GeneratedVideoRow({
         <p className="text-xs text-destructive">{video.errorMessage}</p>
       )}
 
-      {isPending && (
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="xs" disabled={state.loading} onClick={handleCheckStatus}>
-            {state.loading ? "Checking…" : "Check status"}
+      <div className="flex items-center gap-2">
+        {isPending && (
+          <Button variant="outline" size="xs" disabled={state.loading !== null} onClick={handleCheckStatus}>
+            {state.loading === "status" ? "Checking…" : "Check status"}
           </Button>
-          {state.error && <span className="text-xs text-destructive">{state.error}</span>}
-        </div>
-      )}
+        )}
+        <Button
+          variant="outline"
+          size="xs"
+          className="text-destructive hover:text-destructive"
+          disabled={state.loading !== null}
+          onClick={handleDelete}
+        >
+          {state.loading === "delete" ? "Deleting…" : "Delete"}
+        </Button>
+        {state.error && <span className="text-xs text-destructive">{state.error}</span>}
+      </div>
     </div>
   );
 }
