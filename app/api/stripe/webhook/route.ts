@@ -8,6 +8,41 @@ import {
   PlanType,
   SubscriptionStatus,
 } from "@/app/generated/prisma/enums";
+import { SYSTEM_EVENT_TYPE, SYSTEM_EVENT_LABEL } from "@/lib/stripe/system-event-types";
+import {
+  recordSystemEvent,
+  resolveSubscriptionOwner,
+  notifyBillingAdmins,
+} from "@/lib/stripe/notifications";
+import {
+  sendSubscriptionStartedEmail,
+  sendSubscriptionChangedEmail,
+  sendPaymentFailedEmail,
+} from "@/lib/mailer";
+
+const PLAN_LABELS: Record<string, string> = {
+  FREE: "Free",
+  CREATOR: "Creator",
+  ENTERPRISE: "Enterprise",
+};
+
+function appUrl(): string {
+  return process.env.BASE_URL ?? "http://localhost:3000";
+}
+
+// User-facing billing emails link to our own /dashboard/billing rather than
+// a freshly-generated Stripe customer-portal URL — portal session URLs are
+// short-lived/single-use, so embedding one directly in an email that might
+// be opened days later would already be broken. The billing page's own
+// "Manage billing" button (app/api/stripe/customer-portal/route.ts) creates
+// a fresh session on click instead.
+function billingUrl(): string {
+  return `${appUrl()}/dashboard/billing`;
+}
+
+function adminActivityUrl(): string {
+  return `${appUrl()}/admin/activity`;
+}
 
 // Maps Stripe subscription.status to our DB SubscriptionStatus enum
 const STRIPE_STATUS_MAP: Record<string, SubscriptionStatus> = {
@@ -70,21 +105,162 @@ async function countLiveSubscriptionsForCustomer(cid: string): Promise<number> {
 
 async function logAmbiguousInvoiceEvent(eventType: string, invoiceId: string | null, cid: string) {
   console.error(`Ambiguous ${eventType} for customer ${cid} (invoice ${invoiceId}) — has multiple active subscriptions, no subscription id on the invoice. Skipped fallback update; needs manual review.`);
-  await prisma.systemEvent.create({
-    data: {
-      type: "stripe_webhook_ambiguous_invoice",
-      source: "stripe_webhook",
-      message: `${eventType}: could not resolve a single subscription for customer with multiple active subscriptions`,
-      metadata: { invoiceId, stripeCustomerId: cid, eventType },
-    },
+  await recordSystemEvent({
+    type: SYSTEM_EVENT_TYPE.AMBIGUOUS_INVOICE,
+    source: "stripe_webhook",
+    message: `${eventType}: could not resolve a single subscription for customer with multiple active subscriptions`,
+    metadata: { invoiceId, stripeCustomerId: cid, eventType },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Notifications — record a SystemEvent and email the affected user + every
+// BILLING_ADMIN+ admin. Email failures are caught and logged rather than
+// rethrown: a Resend hiccup shouldn't turn an already-successful billing
+// update into a 500 that makes Stripe retry the whole webhook (same
+// tolerant-email pattern used elsewhere in this app, e.g.
+// app/api/forgot-password/route.ts).
+// ---------------------------------------------------------------------------
+
+async function notifySubscriptionStarted(
+  subscriptionId: string,
+  planType: string,
+  eventId: string,
+) {
+  const owner = await resolveSubscriptionOwner(subscriptionId);
+  if (!owner) return;
+
+  const planLabel = PLAN_LABELS[planType] ?? planType;
+
+  await recordSystemEvent({
+    type: SYSTEM_EVENT_TYPE.SUBSCRIPTION_STARTED,
+    source: "stripe_webhook",
+    message: `${planLabel} subscription started for ${owner.email}`,
+    metadata: { subscriptionId, planType },
+    userId: owner.userId,
+    enterpriseId: owner.enterpriseId,
+  });
+
+  try {
+    await sendSubscriptionStartedEmail({
+      to: owner.email,
+      name: owner.name ?? "there",
+      planLabel,
+      dashboardUrl: `${appUrl()}/dashboard`,
+      idempotencyKey: `subscription-started/${eventId}`,
+    });
+  } catch (err) {
+    console.error("subscription-started email failed:", err);
+  }
+
+  try {
+    await notifyBillingAdmins({
+      eventLabel: SYSTEM_EVENT_LABEL[SYSTEM_EVENT_TYPE.SUBSCRIPTION_STARTED],
+      summary: `${owner.email} started a ${planLabel} subscription.`,
+      detailsUrl: adminActivityUrl(),
+      idempotencyKey: `admin-subscription-started/${eventId}`,
+    });
+  } catch (err) {
+    console.error("admin subscription-started notification failed:", err);
+  }
+}
+
+async function notifySubscriptionChanged(
+  subscriptionId: string,
+  planType: string,
+  canceled: boolean,
+  eventId: string,
+) {
+  const owner = await resolveSubscriptionOwner(subscriptionId);
+  if (!owner) return;
+
+  const planLabel = PLAN_LABELS[planType] ?? planType;
+  const type = canceled
+    ? SYSTEM_EVENT_TYPE.SUBSCRIPTION_CANCELED
+    : SYSTEM_EVENT_TYPE.SUBSCRIPTION_UPDATED;
+
+  await recordSystemEvent({
+    type,
+    source: "stripe_webhook",
+    message: canceled
+      ? `${planLabel} subscription canceled for ${owner.email}`
+      : `${planLabel} subscription updated for ${owner.email}`,
+    metadata: { subscriptionId, planType },
+    userId: owner.userId,
+    enterpriseId: owner.enterpriseId,
+  });
+
+  try {
+    await sendSubscriptionChangedEmail({
+      to: owner.email,
+      name: owner.name ?? "there",
+      planLabel,
+      canceled,
+      billingUrl: billingUrl(),
+      idempotencyKey: `subscription-changed/${eventId}`,
+    });
+  } catch (err) {
+    console.error("subscription-changed email failed:", err);
+  }
+
+  try {
+    await notifyBillingAdmins({
+      eventLabel: SYSTEM_EVENT_LABEL[type],
+      summary: canceled
+        ? `${owner.email}'s ${planLabel} subscription was canceled.`
+        : `${owner.email}'s ${planLabel} subscription was updated.`,
+      detailsUrl: adminActivityUrl(),
+      idempotencyKey: `admin-subscription-changed/${eventId}`,
+    });
+  } catch (err) {
+    console.error("admin subscription-changed notification failed:", err);
+  }
+}
+
+async function notifyPaymentFailed(subscriptionId: string, eventId: string) {
+  const owner = await resolveSubscriptionOwner(subscriptionId);
+  if (!owner) return;
+
+  await recordSystemEvent({
+    type: SYSTEM_EVENT_TYPE.PAYMENT_FAILED,
+    source: "stripe_webhook",
+    message: `Payment failed for ${owner.email}`,
+    metadata: { subscriptionId },
+    userId: owner.userId,
+    enterpriseId: owner.enterpriseId,
+  });
+
+  try {
+    await sendPaymentFailedEmail({
+      to: owner.email,
+      name: owner.name ?? "there",
+      portalUrl: billingUrl(),
+      idempotencyKey: `payment-failed/${eventId}`,
+    });
+  } catch (err) {
+    console.error("payment-failed email failed:", err);
+  }
+
+  try {
+    await notifyBillingAdmins({
+      eventLabel: SYSTEM_EVENT_LABEL[SYSTEM_EVENT_TYPE.PAYMENT_FAILED],
+      summary: `A payment failed for ${owner.email}.`,
+      detailsUrl: adminActivityUrl(),
+      idempotencyKey: `admin-payment-failed/${eventId}`,
+    });
+  } catch (err) {
+    console.error("admin payment-failed notification failed:", err);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Handler helpers
 // ---------------------------------------------------------------------------
 
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+async function handleCheckoutCompleted(
+  session: Stripe.Checkout.Session,
+  eventId: string,
+) {
   const cid = customerId(session.customer);
   if (!cid) return;
 
@@ -106,9 +282,19 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       status: SubscriptionStatus.ACTIVE,
     },
   });
+
+  if (subId) {
+    const updated = await prisma.subscription.findFirst({
+      where: { stripeCustomerId: cid, stripeSubscriptionId: subId },
+      select: { id: true },
+    });
+    if (updated) {
+      await notifySubscriptionStarted(updated.id, planType, eventId);
+    }
+  }
 }
 
-async function handleSubscriptionUpsert(sub: Stripe.Subscription) {
+async function handleSubscriptionUpsert(sub: Stripe.Subscription, eventId: string) {
   const cid = customerId(sub.customer);
   if (!cid) return;
 
@@ -157,22 +343,40 @@ async function handleSubscriptionUpsert(sub: Stripe.Subscription) {
     });
   }
 
+  // Fetched unconditionally (not just when canceled) — also needed below to
+  // decide whether this update is notification-worthy.
+  const local = await prisma.subscription.findUnique({
+    where: { stripeSubscriptionId: sub.id },
+    select: { id: true, planType: true, billingComponent: true, avatarId: true },
+  });
+
   // Phase 2 avatar billing: once Stripe confirms the subscription is
   // actually gone (not just scheduled via cancel_at_period_end), flip the
   // avatar to ARCHIVED. Done here rather than in the customer-initiated
   // cancel call so a subscription cancelled directly in Stripe (or one that
   // fails to renew) is reflected too, not just self-serve cancellations.
-  if (sub.status === "canceled") {
-    const local = await prisma.subscription.findUnique({
-      where: { stripeSubscriptionId: sub.id },
-      select: { avatarId: true, billingComponent: true },
+  if (
+    sub.status === "canceled" &&
+    local?.billingComponent === "AVATAR_STORAGE" &&
+    local.avatarId
+  ) {
+    await prisma.avatar.update({
+      where: { id: local.avatarId },
+      data: { billingStatus: "ARCHIVED" },
     });
-    if (local?.billingComponent === "AVATAR_STORAGE" && local.avatarId) {
-      await prisma.avatar.update({
-        where: { id: local.avatarId },
-        data: { billingStatus: "ARCHIVED" },
-      });
-    }
+  }
+
+  // Notify only for the primary plan subscription, not per-avatar
+  // AVATAR_STORAGE add-ons — those change far more often and aren't really
+  // "your subscription" from the user's perspective, so notifying on every
+  // one would be noisy rather than useful.
+  if (local && local.billingComponent === "STANDARD") {
+    await notifySubscriptionChanged(
+      local.id,
+      local.planType,
+      sub.status === "canceled",
+      eventId,
+    );
   }
 }
 
@@ -212,7 +416,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   });
 }
 
-async function handleInvoiceFailed(invoice: Stripe.Invoice) {
+async function handleInvoiceFailed(invoice: Stripe.Invoice, eventId: string) {
   const cid = customerId(invoice.customer);
   if (!cid) return;
 
@@ -223,14 +427,24 @@ async function handleInvoiceFailed(invoice: Stripe.Invoice) {
     return;
   }
 
+  const where = subId
+    ? { stripeSubscriptionId: subId }
+    : { stripeCustomerId: cid, status: { not: SubscriptionStatus.CANCELED } };
+
   // Never mark an already-canceled row PAST_DUE, even in the unambiguous
   // (<=1 live subscription) case.
   await prisma.subscription.updateMany({
-    where: subId
-      ? { stripeSubscriptionId: subId }
-      : { stripeCustomerId: cid, status: { not: SubscriptionStatus.CANCELED } },
+    where,
     data: { status: SubscriptionStatus.PAST_DUE },
   });
+
+  const updated = await prisma.subscription.findFirst({
+    where,
+    select: { id: true },
+  });
+  if (updated) {
+    await notifyPaymentFailed(updated.id, eventId);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +478,7 @@ export async function POST(req: Request) {
       case "checkout.session.completed":
         await handleCheckoutCompleted(
           event.data.object as Stripe.Checkout.Session,
+          event.id,
         );
         break;
 
@@ -271,6 +486,7 @@ export async function POST(req: Request) {
       case "customer.subscription.deleted":
         await handleSubscriptionUpsert(
           event.data.object as Stripe.Subscription,
+          event.id,
         );
         break;
 
@@ -279,7 +495,7 @@ export async function POST(req: Request) {
         break;
 
       case "invoice.payment_failed":
-        await handleInvoiceFailed(event.data.object as Stripe.Invoice);
+        await handleInvoiceFailed(event.data.object as Stripe.Invoice, event.id);
         break;
 
       default:

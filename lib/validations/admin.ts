@@ -307,6 +307,27 @@ export const listSubscriptionsQuerySchema = z.object({
 
 export type ListSubscriptionsQuery = z.infer<typeof listSubscriptionsQuerySchema>;
 
+// Not a Prisma enum — SystemEvent.type is a free-form string column (see
+// lib/stripe/notifications.ts's SYSTEM_EVENT_TYPE for the canonical values
+// this app actually writes).
+const SYSTEM_EVENT_TYPE_FILTER = [
+  "stripe_subscription_started",
+  "stripe_subscription_updated",
+  "stripe_subscription_canceled",
+  "stripe_payment_failed",
+  "stripe_webhook_ambiguous_invoice",
+  "all",
+] as const;
+
+export const listSystemEventsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().max(200).optional(),
+  type: z.enum(SYSTEM_EVENT_TYPE_FILTER).default("all"),
+});
+
+export type ListSystemEventsQuery = z.infer<typeof listSystemEventsQuerySchema>;
+
 // Enterprise ownership transfer — reason required (surfaced in the audit log
 // and to the new/old owner if we ever notify them).
 export const transferOwnerSchema = z.object({

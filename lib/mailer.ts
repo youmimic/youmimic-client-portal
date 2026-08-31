@@ -6,6 +6,10 @@ import { ForgotPasswordEmail } from "@/emails/templates/forgot-password-email";
 import { AdminWelcomeEmail } from "@/emails/templates/admin-welcome-email";
 import { ContactNotificationEmail } from "@/emails/templates/contact-notification-email";
 import { InviteEmail } from "@/emails/templates/invite-email";
+import { SubscriptionStartedEmail } from "@/emails/templates/subscription-started-email";
+import { SubscriptionChangedEmail } from "@/emails/templates/subscription-changed-email";
+import { PaymentFailedEmail } from "@/emails/templates/payment-failed-email";
+import { AdminBillingEventEmail } from "@/emails/templates/admin-billing-event-email";
 import type { ContactInput } from "@/lib/validations/contact";
 
 type SendVerifyEmailParams = {
@@ -167,6 +171,152 @@ export async function sendInviteEmail({
       subject: `You've been invited to join ${enterpriseName} on youmimic`,
       react: InviteEmail({ enterpriseName, inviterName, acceptUrl }),
       tags: [{ name: "category", value: "team_invite" }],
+    },
+    { idempotencyKey },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+type SendSubscriptionStartedEmailParams = {
+  to: string;
+  name: string;
+  planLabel: string;
+  dashboardUrl: string;
+  idempotencyKey: string;
+};
+
+export async function sendSubscriptionStartedEmail({
+  to,
+  name,
+  planLabel,
+  dashboardUrl,
+  idempotencyKey,
+}: SendSubscriptionStartedEmailParams) {
+  const from = getFromEmail();
+
+  const { data, error } = await resend.emails.send(
+    {
+      from,
+      to: [to],
+      subject: "Your youmimic subscription is active",
+      react: SubscriptionStartedEmail({ name, planLabel, dashboardUrl }),
+      tags: [{ name: "category", value: "subscription_started" }],
+    },
+    { idempotencyKey },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+type SendSubscriptionChangedEmailParams = {
+  to: string;
+  name: string;
+  planLabel: string;
+  canceled: boolean;
+  billingUrl: string;
+  idempotencyKey: string;
+};
+
+export async function sendSubscriptionChangedEmail({
+  to,
+  name,
+  planLabel,
+  canceled,
+  billingUrl,
+  idempotencyKey,
+}: SendSubscriptionChangedEmailParams) {
+  const from = getFromEmail();
+
+  const { data, error } = await resend.emails.send(
+    {
+      from,
+      to: [to],
+      subject: canceled
+        ? "Your youmimic subscription has been canceled"
+        : "Your youmimic subscription was updated",
+      react: SubscriptionChangedEmail({ name, planLabel, canceled, billingUrl }),
+      tags: [{ name: "category", value: "subscription_changed" }],
+    },
+    { idempotencyKey },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+type SendPaymentFailedEmailParams = {
+  to: string;
+  name: string;
+  portalUrl: string;
+  idempotencyKey: string;
+};
+
+export async function sendPaymentFailedEmail({
+  to,
+  name,
+  portalUrl,
+  idempotencyKey,
+}: SendPaymentFailedEmailParams) {
+  const from = getFromEmail();
+
+  const { data, error } = await resend.emails.send(
+    {
+      from,
+      to: [to],
+      subject: "Action needed: your youmimic payment failed",
+      react: PaymentFailedEmail({ name, portalUrl }),
+      tags: [{ name: "category", value: "payment_failed" }],
+    },
+    { idempotencyKey },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+type SendAdminBillingEventEmailParams = {
+  to: string[];
+  eventLabel: string;
+  summary: string;
+  detailsUrl: string;
+  idempotencyKey: string;
+};
+
+// Sent to every BILLING_ADMIN+ admin in a single message (internal team
+// distribution, not customer-facing — see lib/billing/system-events.ts for
+// why exposing admin addresses to each other in the To: header is an
+// accepted tradeoff here).
+export async function sendAdminBillingEventEmail({
+  to,
+  eventLabel,
+  summary,
+  detailsUrl,
+  idempotencyKey,
+}: SendAdminBillingEventEmailParams) {
+  const from = getFromEmail();
+
+  const { data, error } = await resend.emails.send(
+    {
+      from,
+      to,
+      subject: `[youmimic billing] ${eventLabel}`,
+      react: AdminBillingEventEmail({ eventLabel, summary, detailsUrl }),
+      tags: [{ name: "category", value: "admin_billing_event" }],
     },
     { idempotencyKey },
   );

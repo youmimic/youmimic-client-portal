@@ -176,6 +176,7 @@ model Enterprise {
   bookings      Booking[]
   invites       Invite[]
   contacts      EnterpriseContact[]
+  systemEvents  SystemEvent[]
 
   @@index([ownerUserId])
   @@map("enterprises")
@@ -607,11 +608,18 @@ model SystemEvent {
   message   String
   metadata  Json?
   userId    String?
+  // Set for enterprise-owned subscriptions/payments (userId stays null in
+  // that case) — kept as its own typed relation rather than folding the id
+  // into metadata, matching how every other model in this schema stores a
+  // real foreign key instead of an id embedded in a JSON blob.
+  enterpriseId String?
   createdAt DateTime @default(now())
 
-  user User? @relation(fields: [userId], references: [id])
+  user       User?       @relation(fields: [userId], references: [id])
+  enterprise Enterprise? @relation(fields: [enterpriseId], references: [id])
 
   @@index([userId])
+  @@index([enterpriseId])
   @@map("system_events")
 }
 

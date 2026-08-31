@@ -144,3 +144,10 @@ export function canManageAvatars(role: AdminRoleValue): boolean {
 export function canManageQuickLinks(role: AdminRoleValue): boolean {
   return hasMinRole(role, "BILLING_ADMIN");
 }
+
+// Billing/subscription activity feed (SystemEvent rows) — BILLING_ADMIN
+// minimum, same tier and reasoning as canViewSubscriptions: this is
+// billing-scoped, read-only, and fits the role's name.
+export function canViewActivity(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "BILLING_ADMIN");
+}

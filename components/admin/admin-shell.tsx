@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
+  Activity,
   ArrowLeft,
   Building2,
   CalendarDays,
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/admin/users", label: "Users", icon: Users, exact: false },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays, exact: false },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard, exact: false },
+  { href: "/admin/activity", label: "Activity", icon: Activity, exact: false },
 ];
 
 type SidebarContentProps = {

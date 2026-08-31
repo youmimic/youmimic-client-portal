@@ -1,5 +1,185 @@
 # HANDOFF.md
 
+## Session: Stripe billing event recording + notifications — 2026-08-31
+
+User asked for a way to record Stripe subscription/payment events (started,
+updated, canceled, payment failed) in the client portal and notify both the
+affected user and admins. Investigated before building anything: found two
+models already in `schema.prisma` that looked built for exactly this and
+were never finished — `SystemEvent` (written once, from an existing
+ambiguous-invoice edge case in the webhook handler, but nothing ever reads
+it) and an entirely unused `Webhook`/`EmailLog` pair. Chose to finish
+wiring up `SystemEvent` rather than invent something new.
+
+Confirmed scope via `AskUserQuestion` before implementing (a multi-part
+feature with real judgment calls): (1) which events warrant a
+notification — user picked **payment failed, subscription started, and
+subscription updated/canceled**, explicitly **not** payment succeeded (avoids
+noise on routine successful renewals); (2) admin recipients — every user
+at **`BILLING_ADMIN` role or above** (queried dynamically, not a static
+address); (3) build an admin page to actually view recorded events, not
+just fire emails into the void like the existing unused write.
+
+**Schema** — added `SystemEvent.enterpriseId` (+ `Enterprise.systemEvents`
+back-relation) via a new additive migration
+(`20260831034646_add_system_event_enterprise_id`), so enterprise-owned
+subscription events can be attributed to the enterprise, not just
+`userId` (which stays null for those — matches `Subscription`'s own
+personal-vs-enterprise-owned split).
+
+**New: `lib/stripe/system-event-types.ts`** — pure constants (event type
+strings + human labels), deliberately split out from the server-only logic
+below because the admin page (client component) needs the same label map
+for display and can't import anything that pulls in `"server-only"`.
+
+**New: `lib/stripe/notifications.ts`** (server-only) —
+`recordSystemEvent()`, `resolveSubscriptionOwner()` (resolves the actual
+person to notify: the user directly for a personal subscription, the
+enterprise owner for an enterprise-owned one — `Subscription.userId` is
+null in that case), and `notifyBillingAdmins()` (queries
+`adminRole: { in: [BILLING_ADMIN, ADMIN, SUPER_ADMIN] } }`, sends one email
+to all of them at once — internal team distribution, not customer-facing,
+so exposing admin addresses to each other in the `To:` header is an
+accepted tradeoff, same scale assumption as `CONTACT_EMAIL`'s
+single-recipient pattern elsewhere in this app).
+
+**New email templates** (`emails/templates/`): `subscription-started-email.tsx`,
+`subscription-changed-email.tsx` (one template, conditional copy for
+updated vs. canceled), `payment-failed-email.tsx`, and
+`admin-billing-event-email.tsx` (one generic admin template parameterized
+by event/summary/link, rather than one admin template per event type).
+Matching `lib/mailer.ts`'s existing `EmailLayout` + `resend.emails.send()`
++ `idempotencyKey` pattern exactly.
+
+**`payment-failed-email.tsx`'s action link points at `/dashboard/billing`,
+not a freshly-generated Stripe customer-portal URL** — deliberate: portal
+session URLs are short-lived/single-use, so embedding one directly in an
+email that might be opened days later would already be broken by the time
+it's clicked. The billing page's existing "Manage billing" button already
+creates a fresh session on click.
+
+**Wired into `app/api/stripe/webhook/route.ts`**:
+- `handleCheckoutCompleted` — now looks up the subscription it just
+  activated and calls `notifySubscriptionStarted`.
+- `handleSubscriptionUpsert` — restructured to fetch the local
+  subscription row unconditionally (previously only fetched when
+  `status === "canceled"`, for the avatar-archival check) so the same
+  fetch can also drive the new notification. **Deliberately scoped to
+  `billingComponent === "STANDARD"` only** — this handler also processes
+  AVATAR_STORAGE add-on subscriptions (per the existing archival logic),
+  and those change far more often; notifying on every one would be noisy
+  rather than useful. Distinguishes "updated" vs. "canceled" via
+  `sub.status === "canceled"`, matching the existing avatar-archival
+  check's own logic.
+- `handleInvoiceFailed` — restructured to capture the `where` clause once
+  and reuse it for a follow-up lookup after the `updateMany`, to resolve
+  which row to notify about. **Not** restricted to STANDARD — a failed
+  payment is rarer and more actionable than a routine update, so this
+  notifies regardless of billing component.
+- Each handler now receives Stripe's `event.id`, threaded through to build
+  idempotency keys for the new email sends (`subscription-started/{eventId}`,
+  etc.) — protects against Stripe's own webhook-retry mechanism causing a
+  duplicate notification for the same delivery.
+- Migrated the pre-existing `logAmbiguousInvoiceEvent` helper to call the
+  new shared `recordSystemEvent()` (using the same `SystemEvent` table,
+  now with a canonical type constant) instead of writing to
+  `prisma.systemEvent` inline — consistency only, **no new notification
+  behavior added to that case** (still doesn't email anyone), so its
+  existing, deliberately conservative "log and stop, needs manual review"
+  behavior is unchanged.
+- All email sends (user-facing and admin-facing) are wrapped in
+  try/catch and logged rather than rethrown — a Resend hiccup must never
+  turn an already-successful billing DB update into a 500 that makes
+  Stripe retry the whole webhook. Same tolerant-email pattern already used
+  in `app/api/forgot-password/route.ts`.
+
+**New: `lib/admin/rbac.ts`'s `canViewActivity()`** — `BILLING_ADMIN`
+minimum, same tier and reasoning as the existing `canViewSubscriptions`.
+
+**New: `app/api/admin/activity/route.ts`** + **`app/(admin)/admin/activity/page.tsx`**
+— paginated, searchable, type-filterable list of `SystemEvent` rows.
+Copied the exact structure of the existing admin subscriptions list
+page/route (search debounce, pagination, responsive hidden columns) rather
+than inventing a new pattern. No extra client-side RBAC redirect needed:
+`(admin)/layout.tsx` already gates on "has any adminRole at all", and
+`canViewActivity`'s `BILLING_ADMIN` floor is the same floor that grants
+admin-area access in the first place — every admin who can reach `/admin/*`
+can already reach this page, same as `/admin/subscriptions`.
+
+**New: "Activity" nav entry** in `components/admin/admin-shell.tsx`
+(`lucide-react`'s `Activity` icon), added to the flat nav list — matches
+the existing convention of no role-based nav filtering (enforcement is at
+the page/API layer, not by hiding links).
+
+## Verification
+
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 37/37 passing (30 pre-existing + 7 new for
+                      lib/stripe/notifications.ts's resolveSubscriptionOwner
+                      and notifyBillingAdmins)
+npx next build     → clean, all routes including the two new ones compiled
+```
+
+**Real regression caught by the test suite, not assumed away:** the
+webhook route now transitively imports `lib/stripe/notifications.ts` and
+`lib/mailer.ts`, both of which start with `import "server-only"` —
+`"server-only"` is a Next.js-bundler-special-cased marker, not a real
+resolvable npm package (confirmed: not in `node_modules`, not in
+`package.json`), so it can't be imported outside Next's own build pipeline.
+This broke the *existing* `app/api/stripe/webhook/route.test.ts` (it
+couldn't even load the module anymore). Fixed by mocking both modules in
+that test file, matching the existing `@/lib/prisma` mock already there
+for the same underlying reason.
+
+**New unit tests** (`lib/stripe/notifications.test.ts`) needed the same
+`vi.mock("server-only", () => ({}))` stub, since this is the first test
+file in the suite where the module under test itself has that import (not
+just a dependency being mocked away).
+
+**Functional verification beyond the automated checks:**
+- Dev server: `/admin/activity` correctly 307-redirects to `/login`
+  (route registered, middleware protecting it) rather than 404;
+  `/api/admin/activity` correctly returns 401 rather than 404; the webhook
+  endpoint still returns 400 for a missing signature (unaffected by the
+  handler changes). No import/module errors in the dev log.
+- **Verified the schema migration and the exact Prisma select shape the
+  new API route uses actually work against the real database**: wrote a
+  throwaway script (via `npx tsx`, run from the project root so relative
+  imports resolved — Prisma 7's generated client ships as `.ts`, not
+  precompiled `.js`, so plain `node` couldn't load it directly), created a
+  test `SystemEvent` row, queried it back with the identical
+  `select`/`include` shape `app/api/admin/activity/route.ts` uses
+  (including the new `enterprise` relation resolving correctly), then
+  deleted it. Confirmed both the migration and the query logic are sound
+  independent of the HTTP/auth layer.
+- **Not done:** a full authenticated click-through of `/admin/activity`
+  with real data, and an actual end-to-end Stripe webhook delivery
+  (would need either real admin credentials or Stripe CLI test-event
+  tooling, neither available this session) — judged the DB-level
+  verification above as sufficient given the API/page layers were already
+  confirmed correctly wired (registered, protected, no runtime errors) and
+  the core notification logic (`resolveSubscriptionOwner`,
+  `notifyBillingAdmins`) is unit-tested directly.
+
+## Not done / next
+
+- `/reset-password` and `/verify-email`-style token endpoints aren't
+  related to this feature — unrelated to what's below.
+- A full authenticated click-through of the new admin activity page with
+  real data (see above).
+- A real end-to-end Stripe webhook delivery test (Stripe CLI `stripe
+  trigger`, or a real test-mode event) to confirm the full pipeline fires
+  correctly, not just its individual pieces.
+- User-facing "recent activity" surface on the dashboard billing page
+  (only the admin side got a UI this round — the user side is email-only,
+  matching the original scope decision).
+- The pre-existing `public/youmimic-logo-dark.png` /
+  `public/youmimic-logo-light.png` deletions showing in `git status` are
+  unrelated to this session — they were already pending before this
+  session started.
+
 ## Session: Popup button copy + dev-mode MaxListenersExceededWarning — 2026-08-17
 
 Two small follow-ups to the legal-document popup session above.

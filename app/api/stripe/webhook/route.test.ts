@@ -21,6 +21,24 @@ vi.mock("@/lib/prisma", () => ({
   default: {},
 }));
 
+// lib/stripe/notifications.ts and lib/mailer.ts both import "server-only",
+// a marker package Next's bundler strips/handles specially — it doesn't
+// resolve at all in Vitest's plain Node environment, so both must be
+// mocked out (same reason lib/prisma.ts is mocked above). Not exercised by
+// the tests below either way — notification/DB-writing logic for the
+// webhook handlers is out of scope here, same as the rest of this file.
+vi.mock("@/lib/stripe/notifications", () => ({
+  recordSystemEvent: vi.fn(),
+  resolveSubscriptionOwner: vi.fn(),
+  notifyBillingAdmins: vi.fn(),
+}));
+
+vi.mock("@/lib/mailer", () => ({
+  sendSubscriptionStartedEmail: vi.fn(),
+  sendSubscriptionChangedEmail: vi.fn(),
+  sendPaymentFailedEmail: vi.fn(),
+}));
+
 function makeRequest(body: string, signature = "sig_test"): Request {
   return new Request("http://localhost/api/stripe/webhook", {
     method: "POST",
