@@ -11,7 +11,6 @@ import {
   Video,
   Cpu,
   Share2,
-  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -118,224 +117,16 @@ const useCases = [
 ];
 
 
-// ─── Product mockup — always light surface regardless of theme ────────────────
-// Sits against the dark hero; uses explicit palette hex values.
-
-function ProductMockup() {
-  return (
-    <div
-      className="relative w-full max-w-105 overflow-hidden rounded-2xl shadow-2xl"
-      style={{
-        backgroundColor: "#EDEDED",
-        border: "1px solid rgba(51,51,51,0.12)",
-      }}
-    >
-      {/* Window chrome */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{
-          backgroundColor: "rgba(51,51,51,0.05)",
-          borderBottom: "1px solid rgba(51,51,51,0.09)",
-        }}
-      >
-        <div className="flex gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="size-2.25 rounded-full"
-              style={{ backgroundColor: "#4C9997", opacity: 0.4 }}
-            />
-          ))}
-        </div>
-        <span
-          className="flex-1 text-center text-xs font-medium tracking-wide"
-          style={{ color: "#333333" }}
-        >
-          YouMimic Studio
-        </span>
-        <div className="size-2.25" />
-      </div>
-
-      {/* Body */}
-      <div className="space-y-3 p-4">
-        {/* Video preview + status sidebar */}
-        <div className="flex gap-3">
-          {/* Video area */}
-          <div
-            className="relative flex-1 overflow-hidden rounded-xl"
-            style={{
-              backgroundColor: "rgba(51,51,51,0.07)",
-              border: "1px solid rgba(51,51,51,0.09)",
-              backgroundImage: "url('/hero-bg.jpg')",
-              backgroundSize: "cover",
-            }}
-          >
-            <div className="flex aspect-video items-center justify-center">
-              <div
-                className="flex size-14 items-center justify-center rounded-full text-base font-semibold"
-                style={{
-                  backgroundColor: "rgba(76,153,151,0.15)",
-                  color: "#4C9997",
-                  boxShadow: "0 0 0 2px rgba(76,153,151,0.20)",
-                }}
-              >
-                SC
-              </div>
-            </div>
-            {/* Play overlay */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span
-                className="flex size-9 items-center justify-center rounded-full"
-                style={{ backgroundColor: "rgba(51,51,51,0.10)" }}
-              >
-                <Play className="ml-0.5 size-4" style={{ color: "#333333" }} />
-              </span>
-            </div>
-            <div
-              className="absolute bottom-2 left-2 rounded-md px-2 py-0.5 text-[10px] font-medium"
-              style={{
-                backgroundColor: "rgba(237,237,237,0.85)",
-                color: "#333333",
-                border: "1px solid rgba(76,153,151,0.15)",
-              }}
-            >
-              Preview
-            </div>
-          </div>
-
-          {/* Status + languages panel */}
-          <div className="flex w-25 shrink-0 flex-col gap-2">
-            <div
-              className="rounded-lg p-2.5"
-              style={{
-                backgroundColor: "rgba(51,51,51,0.04)",
-                border: "1px solid rgba(51,51,51,0.09)",
-              }}
-            >
-              <p
-                className="mb-1 text-[9px] font-medium uppercase tracking-wider"
-                style={{ color: "#333333" }}
-              >
-                Status
-              </p>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="size-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: "#4C9997" }}
-                />
-                <span
-                  className="text-xs font-medium"
-                  style={{ color: "#333333" }}
-                >
-                  Ready
-                </span>
-              </div>
-            </div>
-            <div
-              className="rounded-lg p-2.5"
-              style={{
-                backgroundColor: "rgba(51,51,51,0.04)",
-                border: "1px solid rgba(51,51,51,0.09)",
-              }}
-            >
-              <p
-                className="mb-1.5 text-[9px] font-medium uppercase tracking-wider"
-                style={{ color: "#333333" }}
-              >
-                Languages
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {["EN", "ES", "FR", "DE", "ZH"].map((l) => (
-                  <span
-                    key={l}
-                    className="rounded font-mono text-[9px]"
-                    style={{
-                      backgroundColor: "rgba(76,153,151,0.25)",
-                      color: "#333333",
-                      border: "1px solid rgba(76,153,151,0.45)",
-                      padding: "1px 4px",
-                    }}
-                  >
-                    {l}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Script lines */}
-        <div
-          className="rounded-xl p-3"
-          style={{
-            backgroundColor: "rgba(51,51,51,0.04)",
-            border: "1px solid rgba(51,51,51,0.09)",
-          }}
-        >
-          <p
-            className="mb-2 text-[9px] font-medium uppercase tracking-wider"
-            style={{ color: "#333333" }}
-          >
-            Script
-          </p>
-          <div className="space-y-2">
-            {[1, 11 / 12, 4 / 5, 3 / 5].map((w, i) => (
-              <div
-                key={i}
-                className="h-1.5 rounded-full"
-                style={{
-                  width: `${w * 100}%`,
-                  backgroundColor:
-                    i < 3 ? "rgba(51,51,51,0.12)" : "rgba(51,51,51,0.06)",
-                }}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Action row */}
-        <div className="flex items-center justify-between gap-2 pt-0.5">
-          <div
-            className="flex items-center gap-2 text-[11px]"
-            style={{ color: "#333333", opacity: 0.7 }}
-          >
-            <span
-              className="size-1.5 shrink-0 rounded-full"
-              style={{ backgroundColor: "#4C9997" }}
-            />
-            Sarah Chen · Active
-          </div>
-          <div className="flex gap-1.5">
-            <span
-              className="rounded-md px-3 py-1 text-[11px] font-medium"
-              style={{
-                backgroundColor: "rgba(51,51,51,0.06)",
-                color: "#333333",
-                border: "1px solid rgba(51,51,51,0.10)",
-              }}
-            >
-              Preview
-            </span>
-            <span
-              className="rounded-md px-3 py-1 text-[11px] font-medium"
-              style={{ backgroundColor: "#4C9997", color: "#FFFFFF" }}
-            >
-              Generate
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
   return (
     <>
-      {/* ── Hero — always dark, palette-atmospheric ───────────────────────── */}
-      <section className="relative min-h-150 overflow-hidden lg:min-h-170">
+      {/* ── Hero — Starlink-style: full-viewport, single centered column,
+          oversized type, minimal copy, one CTA. Same colors/background
+          layers as before (dark #333333, teal ambient tint) — structure
+          and copy length changed, not the palette or font. ──────────── */}
+      <section className="relative flex min-h-screen items-center overflow-hidden">
         {/* Layer 1: Background — charcoal fallback; /public/hero-bg.jpg activates automatically */}
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -345,8 +136,15 @@ export default function HomePage() {
           }}
         />
 
-        {/* Layer 2: Directional gradient — text side opaque, image side open */}
-        <div className="absolute inset-0 bg-linear-to-r from-[#333333]/95 via-[#333333]/78 to-[#333333]/42" />
+        {/* Layer 2: Vignette — edges darker, center clearer, for a more
+            cinematic full-bleed feel than the old left-to-right gradient */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at center, rgba(51,51,51,0.55) 0%, rgba(51,51,51,0.92) 100%)",
+          }}
+        />
 
         {/* Layer 3: Ambient palette tint for atmosphere */}
         <div
@@ -358,81 +156,48 @@ export default function HomePage() {
           }}
         />
 
-        {/* Content */}
-        <div className="relative z-10 mx-auto grid max-w-6xl grid-cols-1 gap-12 px-4 py-28 sm:px-6 sm:py-36 lg:grid-cols-2 lg:items-center lg:gap-16 lg:py-40">
-          {/* Copy */}
-          <div>
-            <div
-              className="mb-6 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs"
+        {/* Content — single centered column, no badge, no mockup, one CTA */}
+        <div className="relative z-10 mx-auto max-w-4xl px-4 py-28 text-center sm:px-6">
+          <h1
+            className="text-6xl font-semibold leading-[1.02] tracking-tight sm:text-7xl lg:text-8xl"
+            style={{ color: "#FFFFFF" }}
+          >
+            Say it once.
+            <br />
+            Scale it everywhere.
+          </h1>
+          <p
+            className="mx-auto mt-6 max-w-xl text-lg leading-relaxed sm:text-xl"
+            style={{ color: "rgba(255,255,255,0.75)" }}
+          >
+            One AI avatar. Every language, every channel.
+          </p>
+          <div className="mt-10 flex justify-center">
+            <Button
+              asChild
+              className="h-12 px-8 text-base font-medium"
               style={{
-                border: "1px solid rgba(76,153,151,0.30)",
-                backgroundColor: "rgba(76,153,151,0.10)",
-                color: "#4C9997",
+                backgroundColor: "#4C9997",
+                color: "#FFFFFF",
+                borderColor: "transparent",
               }}
             >
-              AI-powered video avatars for business
-            </div>
-            <h1
-              className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl"
-              style={{ color: "#FFFFFF" }}
-            >
-              Say it once.
-              <br />
-              Scale it everywhere.
-            </h1>
-            <p
-              className="mt-6 max-w-lg text-lg leading-relaxed"
-              style={{ color: "rgba(255,255,255,0.75)" }}
-            >
-              YouMimic creates a professional AI avatar from a single recorded
-              session. Deploy consistent, on-brand video communication across
-              every language, market, and channel—without a camera crew.
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              {/* Primary CTA — Green Teal */}
-              <Button
-                asChild
-                className="h-11 px-6 text-sm font-medium"
-                style={{
-                  backgroundColor: "#4C9997",
-                  color: "#FFFFFF",
-                  borderColor: "transparent",
-                }}
-              >
-                <Link href="/signup">Get started free</Link>
-              </Button>
-              {/* Secondary CTA — white outline */}
-              <Button
-                asChild
-                variant="ghost"
-                className="h-11 px-6 text-sm font-medium"
-                style={{
-                  border: "1px solid rgba(255,255,255,0.30)",
-                  color: "#FFFFFF",
-                }}
-              >
-                <Link href="/login">Sign in to portal</Link>
-              </Button>
-            </div>
-          </div>
-
-          {/* Product mockup — desktop only */}
-          <div className="hidden lg:flex lg:justify-end">
-            <ProductMockup />
+              <Link href="/signup">Get started free</Link>
+            </Button>
           </div>
         </div>
       </section>
 
       {/* ── Stats ────────────────────────────────────────────────────────── */}
-      <section className="border-b border-border bg-muted py-10">
+      <section className="bg-muted py-16 sm:py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <dl className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-10 sm:grid-cols-4">
             {stats.map(({ value, label }) => (
-              <div key={label} className="text-center sm:text-left">
-                <dd className="text-3xl font-semibold tracking-tight text-primary">
+              <div key={label} className="text-center">
+                <dd className="text-5xl font-semibold tracking-tight text-primary sm:text-6xl">
                   {value}
                 </dd>
-                <dt className="mt-1 text-sm text-muted-foreground">{label}</dt>
+                <dt className="mt-2 text-sm text-muted-foreground">{label}</dt>
               </div>
             ))}
           </dl>
@@ -440,30 +205,27 @@ export default function HomePage() {
       </section>
 
       {/* ── Features ─────────────────────────────────────────────────────── */}
-      <section className="border-b border-border py-20 sm:py-24">
+      <section className="py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-12 text-center">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              Built for how businesses actually communicate
+          <div className="mb-16 text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+              Built to scale how you communicate
             </h2>
-            <p className="mx-auto mt-3 max-w-md text-muted-foreground">
+            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
               Traditional video production doesn&apos;t scale. YouMimic does.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-10 sm:grid-cols-2">
             {features.map(({ icon: Icon, title, body }) => (
-              <div
-                key={title}
-                className="flex gap-5 rounded-xl border border-border bg-card p-6"
-              >
-                <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 border border-accent/20">
-                  <Icon className="size-5 text-accent" />
+              <div key={title} className="flex gap-5">
+                <div className="mt-0.5 flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent/10">
+                  <Icon className="size-6 text-accent" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">
+                  <h3 className="text-base font-semibold text-foreground">
                     {title}
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-2 leading-relaxed text-muted-foreground">
                     {body}
                   </p>
                 </div>
@@ -474,34 +236,30 @@ export default function HomePage() {
       </section>
 
       {/* ── How it works ─────────────────────────────────────────────────── */}
-      <section className="border-b border-border bg-muted py-20 sm:py-24">
+      <section className="bg-muted py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-14 text-center">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              From one session to unlimited output
+          <div className="mb-16 text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+              One session. Unlimited output.
             </h2>
-            <p className="mx-auto mt-3 max-w-md text-muted-foreground">
-              Three steps from your first recording to organization-wide
-              deployment.
+            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
+              Three steps to organization-wide deployment.
             </p>
           </div>
-          <div className="grid gap-5 sm:grid-cols-3">
+          <div className="grid gap-10 sm:grid-cols-3">
             {steps.map(({ n, icon: Icon, title, body }) => (
-              <div
-                key={n}
-                className="relative rounded-xl border border-border bg-card p-6"
-              >
-                <div className="mb-5 flex items-start justify-between">
-                  {/* Step badge — teal primary */}
-                  <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+              <div key={n} className="relative">
+                <div className="mb-6 flex items-center justify-between">
+                  {/* Step number — teal primary */}
+                  <span className="text-5xl font-semibold tracking-tight text-primary">
                     {n}
                   </span>
-                  <Icon className="size-5 text-accent" />
+                  <Icon className="size-6 text-accent" />
                 </div>
                 <h3 className="mb-2 text-base font-semibold text-foreground">
                   {title}
                 </h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
+                <p className="leading-relaxed text-muted-foreground">
                   {body}
                 </p>
               </div>
@@ -511,22 +269,21 @@ export default function HomePage() {
       </section>
 
       {/* ── Avatar showcase ──────────────────────────────────────────────── */}
-      <section className="border-b border-border py-20 sm:py-24">
+      <section className="py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-12">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <div className="mb-16 text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
               Your team, deployed at scale
             </h2>
-            <p className="mt-3 max-w-md text-muted-foreground">
-              Each avatar is a precision representation of a professional
-              identity—ready to communicate on their behalf in any language.
+            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
+              One avatar per person. Any language, on demand.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-3">
             {avatars.map(({ initial, name, role, status, langs }) => (
               <div
                 key={name}
-                className="flex items-start gap-4 rounded-xl border border-border bg-card p-5"
+                className="flex items-start gap-4 rounded-xl bg-card p-6 shadow-sm"
               >
                 {/* Avatar circle — teal tint */}
                 <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent/15 text-base font-semibold text-accent">
@@ -570,27 +327,27 @@ export default function HomePage() {
       </section>
 
       {/* ── Use cases ────────────────────────────────────────────────────── */}
-      <section className="border-b border-border bg-muted py-20 sm:py-24">
+      <section className="bg-muted py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-12 text-center">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <div className="mb-16 text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
               Where teams deploy YouMimic
             </h2>
-            <p className="mx-auto mt-3 max-w-md text-muted-foreground">
-              One platform. Multiple communication surfaces.
+            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
+              One platform. Every communication surface.
             </p>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-10 sm:grid-cols-2">
             {useCases.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="flex gap-4">
-                <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 border border-accent/20">
-                  <Icon className="size-5 text-accent" />
+              <div key={title} className="flex gap-5">
+                <div className="mt-0.5 flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent/10">
+                  <Icon className="size-6 text-accent" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">
+                  <h3 className="text-base font-semibold text-foreground">
                     {title}
                   </h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-2 leading-relaxed text-muted-foreground">
                     {body}
                   </p>
                 </div>
@@ -601,14 +358,14 @@ export default function HomePage() {
       </section>
 
       {/* ── Pricing ──────────────────────────────────────────────────────── */}
-      <section className="border-b border-border py-20 sm:py-24">
+      <section className="py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-12 text-center">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <div className="mb-16 text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
               Transparent, flexible pricing
             </h2>
-            <p className="mx-auto mt-3 max-w-md text-muted-foreground">
-              Start with a single avatar. Scale as your organization grows.
+            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
+              Start with a single avatar. Scale as you grow.
             </p>
           </div>
           <PricingPlans />
@@ -616,16 +373,15 @@ export default function HomePage() {
       </section>
 
       {/* ── Book a demo ──────────────────────────────────────────────────── */}
-      <section className="border-b border-border bg-muted py-16 sm:py-20">
+      <section className="bg-muted py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-4 text-center sm:px-6">
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
             Book a Demo Meeting Today
           </h2>
-          <p className="mx-auto mt-3 max-w-md text-muted-foreground">
-            See a YouMimic avatar generate a video in real time — pick a time
-            that works for you.
+          <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
+            See your avatar generate a video in real time.
           </p>
-          <Button asChild className="mt-6 h-11 px-6 text-sm font-medium">
+          <Button asChild className="mt-8 h-12 px-8 text-base font-medium">
             <Link href="/contact#book-demo">Book a Demo</Link>
           </Button>
         </div>
@@ -633,7 +389,7 @@ export default function HomePage() {
 
       {/* ── Final CTA — dark, matches hero palette ───────────────────────── */}
       <section
-        className="relative overflow-hidden py-24 sm:py-32"
+        className="relative overflow-hidden py-32 sm:py-40"
         style={{ backgroundColor: "#333333" }}
       >
         {/* Subtle ambient tint */}
@@ -647,22 +403,22 @@ export default function HomePage() {
         />
         <div className="relative z-10 mx-auto max-w-6xl px-4 text-center sm:px-6">
           <h2
-            className="text-2xl font-semibold tracking-tight sm:text-3xl"
+            className="text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl"
             style={{ color: "#FFFFFF" }}
           >
             Ready to deploy your first AI avatar?
           </h2>
           <p
-            className="mx-auto mt-4 max-w-sm text-sm leading-relaxed"
+            className="mx-auto mt-5 max-w-sm text-lg leading-relaxed"
             style={{ color: "rgba(255,255,255,0.75)" }}
           >
-            Join teams already using YouMimic to scale professional video
-            communication without additional production overhead.
+            Scale professional video communication without a production
+            crew.
           </p>
-          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+          <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
             <Button
               asChild
-              className="h-11 px-6 text-sm font-medium"
+              className="h-12 px-8 text-base font-medium"
               style={{
                 backgroundColor: "#4C9997",
                 color: "#FFFFFF",
@@ -674,7 +430,7 @@ export default function HomePage() {
             <Button
               asChild
               variant="ghost"
-              className="h-11 px-6 text-sm font-medium"
+              className="h-12 px-8 text-base font-medium"
               style={{
                 border: "1px solid rgba(255,255,255,0.25)",
                 color: "#FFFFFF",

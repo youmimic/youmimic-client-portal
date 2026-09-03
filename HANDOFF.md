@@ -1,5 +1,140 @@
 # HANDOFF.md
 
+## Session: Homepage — full Starlink-style structure — 2026-08-31
+
+Follow-up to the hero preview below, same day: user confirmed the hero
+direction landed and asked to extend the same treatment to the rest of the
+homepage (Stats through Final CTA), still scoped to the homepage only —
+other pages, the header nav, and the color palette/font all stay untouched,
+per the same constraints as the hero preview. User also noted the Wix
+draft can be a secondary reference — already leaned on for this page's
+pricing tiers and the "Book a Demo Meeting Today" section in an earlier
+session today; Starlink governs the structural/visual language for
+everything else.
+
+**What changed** (`app/(marketing)/page.tsx`, every section after the
+hero): applied one consistent set of structural changes across Stats,
+Features, How it works, Avatar showcase, Use cases, Pricing, Book a demo,
+and Final CTA:
+- **Removed the thin `border-b border-border` divider** between every
+  section, relying on background-color alternation (`bg-background`/
+  `bg-muted`, unchanged tokens) for separation instead — closer to
+  Starlink's color-block section transitions than a bordered/framed layout.
+- **Removed card borders** on the Features/How-it-works/Avatar-showcase
+  grids (previously `border border-border`), replacing with either no
+  border (relying on `bg-card`'s existing contrast against the section
+  background) or a soft `shadow-sm` on the avatar cards — less "boxed",
+  more open.
+- **Roughly doubled section heading size** — every `h2` went from
+  `text-2xl sm:text-3xl` to a consistent `text-3xl sm:text-4xl lg:text-5xl`
+  (Final CTA slightly larger again at `text-4xl sm:text-5xl lg:text-6xl`,
+  matching its closer visual weight to the hero); Stats' big numbers went
+  from `text-3xl` to `text-5xl sm:text-6xl`; How-it-works' step badges
+  became bare `text-5xl` numerals instead of a small bordered box.
+- **More generous vertical padding** throughout — most sections went from
+  `py-20 sm:py-24` to `py-24 sm:py-32`; Final CTA from `py-24 sm:py-32` to
+  `py-32 sm:py-40`.
+- **Tightened body copy** — every section subhead and several card
+  descriptions shortened to punchier one-liners (all new original copy,
+  not derived from any external source), consistent with the hero's
+  earlier copy trim.
+- **Not changed**: `app/globals.css` tokens, Montserrat font setup, the
+  header nav, the hero (already done), and every non-homepage page.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing (unchanged)
+npx next build     → clean
+```
+Started the real dev server and fetched the actual rendered homepage HTML:
+confirmed the new heading-scale class string appears across the restyled
+sections, confirmed the new short copy renders, confirmed the only
+remaining `border-b border-border` on the page belongs to the (intentionally
+untouched) header, and confirmed the exact same `#333333`/`#4C9997` hex
+values are still what's rendered.
+
+**Not done / next:**
+- Still homepage-only, by design — `/solutions`, `/solutions/small-business`,
+  `/pricing`, `/contact`, and the stub pages retain their pre-existing
+  layout density, pending a decision on whether to extend this further.
+- No real browser screenshot (same environment limitation as every UI
+  change today) — recommend viewing it live, same as the hero preview.
+
+## Session: Homepage hero — Starlink-style structure preview — 2026-08-31
+
+User's (non-technical) boss wants the site to have "the feel of" starlink.com/au
+or telstra.com.au. Rather than guessing at a vague brief, described the
+structural differences between the two (Starlink: minimal nav, huge
+full-bleed hero, oversized type, sparse dark layout, one clear CTA —
+"one bold idea, minimally presented"; Telstra: full mega-menu nav, moderate
+hero, neutral corporate palette, many product sections — "many products,
+clearly organized") so the user could get a concrete answer from their boss
+instead of relaying "make it feel like Starlink" unchanged. User confirmed
+Starlink direction, and (via `AskUserQuestion`) scoped this to a **hero-only
+preview** first — not a full homepage rebuild — with the header nav staying
+exactly as it is (it does real work: Solutions dropdown, Plans, Connect,
+Sign in, Get started). Explicit constraint: do not change the color palette
+or font — this is a structure/layout-only change, reusing the exact hex
+values and Montserrat setup from earlier sessions today.
+
+**What changed** (`app/(marketing)/page.tsx`, hero section only):
+- Full-viewport height (`min-h-screen`) instead of the previous
+  `min-h-150 lg:min-h-170` — the hero now dominates the initial view the
+  way Starlink's does.
+- Single centered column instead of the previous two-column (copy left,
+  `ProductMockup` app-screenshot right) layout — closer to Starlink's
+  imagery/statement-driven hero than a product-demo layout. `ProductMockup`
+  (previously only rendered here) is no longer used anywhere, so the
+  now-dead ~200-line component function and its now-unused `Play` icon
+  import were deleted outright per this repo's own convention (don't leave
+  orphaned code) — recoverable from git history if wanted elsewhere later.
+- Headline size roughly doubled proportionally (`text-4xl sm:text-5xl
+  lg:text-6xl` → `text-6xl sm:text-7xl lg:text-8xl`), tighter leading.
+- Dropped the small "AI-powered video avatars for business" pill badge —
+  Starlink's hero pattern doesn't use an eyebrow tag above the headline.
+- Body copy trimmed from a two-sentence paragraph to one short line ("One
+  AI avatar. Every language, every channel." — new original copy, not
+  derived from any external source).
+- Dropped the secondary "Sign in to portal" ghost button, leaving one
+  primary CTA ("Get started free") — matches Starlink's single-clear-action
+  hero pattern; sign-in remains reachable via the header nav (unchanged),
+  so no real functionality was actually removed.
+- Background layer 2 changed from a left-to-right directional gradient
+  (which existed to keep the old two-column layout's text side legible)
+  to a centered radial vignette, since the layout is now single-column
+  and centered — same exact colors (`#333333` base, teal `rgba(76,153,151,…)`
+  ambient tints) as before, just a different gradient shape to match the
+  new centered composition.
+- **Not changed**: `app/globals.css` tokens, `--font-sans`/Montserrat setup,
+  every other homepage section (Stats/Features/How it works/Avatar
+  showcase/Use cases/Pricing/Book a demo/Final CTA), and the header nav —
+  all exactly as they were before this session.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing (unchanged)
+npx next build     → clean
+```
+Started the real dev server and fetched the actual rendered homepage HTML:
+confirmed the new `text-8xl` heading class and the new short subline are
+present, confirmed the old badge text and "Sign in to portal" both return
+zero matches (successfully removed, not just visually hidden), and
+confirmed the exact same `#333333`/`#4C9997` hex values are still what's
+rendered — nothing about the palette shifted.
+
+**Not done / next:**
+- This is a preview of one section only — the rest of the homepage (Stats
+  through Final CTA) still uses the pre-existing layout/density, by design,
+  pending feedback from the user's boss on whether the hero direction is
+  right before extending the Starlink treatment further.
+- No real browser screenshot (same environment limitation as earlier
+  sessions today) — the user will need to view this live to judge the
+  visual "feel," which is the actual point of scoping this as a preview.
+
 ## Session: Marketing site rebuild (glassengine.wixstudio.com/youmimicai reference) — 2026-08-31
 
 User shared a Wix Studio draft as the new marketing-site reference and
