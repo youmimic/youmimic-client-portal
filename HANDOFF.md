@@ -1,5 +1,85 @@
 # HANDOFF.md
 
+## Session: Contact page — link contact-bg.avif instead of .jpg — 2026-08-31
+
+Small follow-up, same day. `public/contact-bg.avif` (128KB, vs. 381KB for
+the `.jpg`) appeared in the project directly — the user asked to
+reference that instead. `app/(marketing)/contact/page.tsx`'s parallax
+section `backgroundImage` URL changed from `/contact-bg.jpg` to
+`/contact-bg.avif`, no other changes.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML and a direct request to the dev
+server: the page references `/contact-bg.avif` and that file serves with
+a 200.
+
+## Session: Contact page — real office locations + parallax (licensed image swap) — 2026-08-31
+
+User asked to look at the Wix draft's contact page and "fix ours
+accordingly," said the page's image was licensed and to download it, and
+to add a similar parallax effect.
+
+**Image licensing — checked, and the user's assumption didn't hold.**
+Traced the Wix contact page's image URL and found its filename pattern
+(`37738912282_53f226216f_b`) matches Flickr's photo-id/secret naming
+scheme, not a stock-site pattern like the earlier Unsplash/Pexels cases.
+Looked up that exact Flickr photo directly: "Hobart City Council
+Building" by photographer Peter Miller, licensed **All rights reserved**
+— Wix had embedded it without clearing rights, a real risk had it been
+copied over. Declined to download or use that specific image and told the
+user why, rather than proceeding on their "it's licensed" assumption or
+silently swapping in something else without explanation.
+
+**What was still real and safe to bring over from that page:** the
+headline ("We'd love to hear from you"), and three real office locations
+— facts, not creative content, so no licensing concern: Hobart (Level 5,
+24 Davey Street, Tasmania 7008), Brisbane (79 McLachlan Street, Fortitude
+Valley, Queensland 4006), Sydney (Opening Soon).
+
+**Image swap for the parallax section**: searched Pexels for a fitting
+office/skyscraper photo, confirmed it carries the standard Pexels License
+("Free to use", same verification process as the Book-a-Meeting video
+from an earlier session) — "Office Buildings from Directly Below
+Perspective" by Masood Aslami — and downloaded it directly from Pexels'
+CDN (`public/contact-bg.jpg`, 1920×1280, 381KB).
+
+**What changed** (`app/(marketing)/contact/page.tsx`):
+- Header `<h1>` copy updated to "We'd love to hear from you" (from "Talk
+  to our team").
+- New "Our offices" section: a parallax background band using `bg-fixed`
+  (native CSS `background-attachment: fixed` — the image stays in place
+  while the page scrolls over it, no JS/library needed) with
+  `public/contact-bg.jpg`, a dark `#333333` overlay at 75% opacity for
+  text legibility, and three translucent cards (white text/borders at low
+  opacity over the photo) showing the real office locations above.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML from the dev server: all three city
+names and their real addresses/status render correctly, the `bg-fixed`
+class is present, and `/contact-bg.jpg` serves with a 200.
+
+**Not done / next:**
+- Did not attempt to restructure `ContactForm`/the contact Zod schema to
+  match the Wix form's exact field split (first/last name, optional
+  phone) — our existing single-`name` field plus `companyName` is a
+  reasonable existing pattern, not something obviously broken; flagged as
+  optional further work rather than done automatically.
+- No real browser screenshot (same environment limitation as every UI
+  change this session) — the parallax effect specifically is one of those
+  things best judged by actually scrolling the page.
+
 ## Session: Hero image sized to 80vh/80vw on desktop — 2026-08-31
 
 Follow-up, same day. Asked to make the hero image cover at least 80% of

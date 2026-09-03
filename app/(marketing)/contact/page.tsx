@@ -8,6 +8,12 @@ export const metadata: Metadata = {
     "Book a demo or reach out to the YouMimic team to learn how AI video avatars can scale your business communication.",
 };
 
+const offices = [
+  { city: "Hobart", address: "Level 5, 24 Davey Street, Tasmania 7008" },
+  { city: "Brisbane", address: "79 McLachlan Street, Fortitude Valley, Queensland 4006" },
+  { city: "Sydney", address: "Opening Soon" },
+];
+
 export default function ContactPage() {
   return (
     <>
@@ -17,13 +23,50 @@ export default function ContactPage() {
           <div className="max-w-xl">
             <p className="mb-3 text-sm font-medium text-accent">Get in touch</p>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Talk to our team
+              We&apos;d love to hear from you
             </h1>
             <p className="mt-4 leading-relaxed text-muted-foreground">
               Whether you&apos;re exploring AI video avatars for the first time
               or ready to deploy at scale, we&apos;re here to help. Send us a
               message or book a time directly below.
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Our offices — parallax background band (bg-fixed keeps the image
+          in place while the page scrolls over it, a plain-CSS effect, no
+          JS needed). Image is a properly licensed Pexels photo (Pexels
+          License, "Free to use") — not the Wix reference's own photo,
+          which turned out to be a Flickr image marked "All rights
+          reserved" and wasn't safe to use. */}
+      <section
+        className="relative bg-fixed bg-cover bg-center py-24 sm:py-32"
+        style={{ backgroundImage: "url('/contact-bg.avif')" }}
+      >
+        <div
+          className="absolute inset-0"
+          style={{ backgroundColor: "rgba(51,51,51,0.75)" }}
+        />
+        <div className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6">
+          <h2 className="text-center text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "#FFFFFF" }}>
+            Our offices
+          </h2>
+          <div className="mt-12 grid gap-6 sm:grid-cols-3">
+            {offices.map(({ city, address }) => (
+              <div
+                key={city}
+                className="rounded-xl p-6 text-center"
+                style={{ backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)" }}
+              >
+                <p className="text-lg font-semibold" style={{ color: "#FFFFFF" }}>
+                  {city}
+                </p>
+                <p className="mt-2 text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>
+                  {address}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
