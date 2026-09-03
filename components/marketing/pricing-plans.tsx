@@ -13,46 +13,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import {
+  corporate,
+  midMarket,
+  smallBusiness,
+  type BillingTermKey,
+} from "@/lib/pricing/plans";
 
-type BillingTerm = "12" | "24";
-
-// Real, confirmed pricing (glassengine.wixstudio.com/youmimicai) — not
-// placeholders. Corporate is a flat monthly rate regardless of term; Mid
-// Market and Small Business each have distinct price/avatar-count per
-// 12-month vs 24-month commitment.
-const corporate = {
-  name: "Corporate",
-  tagline: "For large organizations using AI avatars across every department.",
-  price: "$4,999 p/m",
-  features: [
-    "Unlimited avatars",
-    "Priority video processing",
-    "Brand governance controls",
-    "Dedicated account manager",
-  ],
-  cta: "Book Now",
-};
-
-const byTerm: Record<
-  BillingTerm,
-  {
-    midMarket: { avatars: string; price: string };
-    smallBusiness: { avatars: string; price: string };
-  }
-> = {
-  "12": {
-    midMarket: { avatars: "10 avatars", price: "$2,499 p/m" },
-    smallBusiness: { avatars: "2 avatars", price: "$899 p/m" },
-  },
-  "24": {
-    midMarket: { avatars: "5 avatars", price: "$1,499 p/m" },
-    smallBusiness: { avatars: "3 avatars", price: "$499 p/m" },
-  },
-};
+function bookNowHref(planType: "MID_MARKET" | "SMALL_BUSINESS", term: BillingTermKey): string {
+  const checkoutPath = `/dashboard/checkout?plan=${planType}&term=${term}`;
+  return `/signup?callbackUrl=${encodeURIComponent(checkoutPath)}`;
+}
 
 export function PricingPlans() {
-  const [term, setTerm] = useState<BillingTerm>("12");
-  const t = byTerm[term];
+  const [term, setTerm] = useState<BillingTermKey>("MONTHLY_12");
+  const midMarketTier = midMarket.byTerm[term];
+  const smallBusinessTier = smallBusiness.byTerm[term];
 
   return (
     <div className="space-y-8">
@@ -60,7 +36,10 @@ export function PricingPlans() {
           counts change with commitment length; Corporate is a flat rate. */}
       <div className="flex justify-center">
         <div className="inline-flex rounded-lg border border-border bg-muted p-1">
-          {(["12", "24"] as const).map((value) => (
+          {([
+            { value: "MONTHLY_12" as const, label: "12 months" },
+            { value: "MONTHLY_24" as const, label: "24 months" },
+          ]).map(({ value, label }) => (
             <button
               key={value}
               type="button"
@@ -72,7 +51,7 @@ export function PricingPlans() {
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {value} months
+              {label}
             </button>
           ))}
         </div>
@@ -85,7 +64,7 @@ export function PricingPlans() {
             <CardDescription>{corporate.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <p className="mb-4 text-lg font-semibold text-foreground">{corporate.price}</p>
+            <p className="mb-4 text-lg font-semibold text-foreground">{corporate.priceDisplay}</p>
             <ul className="space-y-2">
               {corporate.features.map((feature) => (
                 <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -96,8 +75,10 @@ export function PricingPlans() {
             </ul>
           </CardContent>
           <CardFooter>
+            {/* Corporate deliberately stays "Contact Sales" only — no
+                self-serve payment flow, per the product owner's decision. */}
             <Button asChild variant="outline" className="w-full">
-              <Link href="/contact#book-demo">{corporate.cta}</Link>
+              <Link href="/contact#book-demo">Book Now</Link>
             </Button>
           </CardFooter>
         </Card>
@@ -107,15 +88,13 @@ export function PricingPlans() {
             <span className="mb-2 self-start rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
               Most popular
             </span>
-            <CardTitle className="text-base">Mid Market</CardTitle>
-            <CardDescription>
-              For growing teams scaling AI video communication across departments.
-            </CardDescription>
+            <CardTitle className="text-base">{midMarket.name}</CardTitle>
+            <CardDescription>{midMarket.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <p className="mb-4 text-lg font-semibold text-foreground">{t.midMarket.price}</p>
+            <p className="mb-4 text-lg font-semibold text-foreground">{midMarketTier.priceDisplay}</p>
             <ul className="space-y-2">
-              {[t.midMarket.avatars, "Priority video processing", "Multilingual generation", "Email + chat support"].map(
+              {[midMarketTier.avatars, "Priority video processing", "Multilingual generation", "Email + chat support"].map(
                 (feature) => (
                   <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
@@ -127,20 +106,20 @@ export function PricingPlans() {
           </CardContent>
           <CardFooter>
             <Button asChild className="w-full">
-              <Link href="/contact#book-demo">Book Now</Link>
+              <Link href={bookNowHref("MID_MARKET", term)}>Book Now</Link>
             </Button>
           </CardFooter>
         </Card>
 
         <Card className="flex flex-col">
           <CardHeader>
-            <CardTitle className="text-base">Small Business</CardTitle>
-            <CardDescription>For individuals and focused teams getting started with AI video.</CardDescription>
+            <CardTitle className="text-base">{smallBusiness.name}</CardTitle>
+            <CardDescription>{smallBusiness.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <p className="mb-4 text-lg font-semibold text-foreground">{t.smallBusiness.price}</p>
+            <p className="mb-4 text-lg font-semibold text-foreground">{smallBusinessTier.priceDisplay}</p>
             <ul className="space-y-2">
-              {[t.smallBusiness.avatars, "Core video generation", "Standard processing queue", "Email support"].map(
+              {[smallBusinessTier.avatars, "Core video generation", "Standard processing queue", "Email support"].map(
                 (feature) => (
                   <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
@@ -152,7 +131,7 @@ export function PricingPlans() {
           </CardContent>
           <CardFooter>
             <Button asChild variant="outline" className="w-full">
-              <Link href="/contact#book-demo">Book Now</Link>
+              <Link href={bookNowHref("SMALL_BUSINESS", term)}>Book Now</Link>
             </Button>
           </CardFooter>
         </Card>

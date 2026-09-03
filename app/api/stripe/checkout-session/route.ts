@@ -4,15 +4,42 @@ import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import stripe from "@/lib/stripe";
 
-const PLAN_PRICE_MAP = {
-  CREATOR: process.env.STRIPE_CREATOR_PRICE_ID,
-  ENTERPRISE: process.env.STRIPE_ENTERPRISE_PRICE_ID,
-} as const;
+// MID_MARKET/SMALL_BUSINESS both bill monthly regardless of the 12mo/24mo
+// commitment term shown on the pricing page — the term only changes which
+// price (monthly rate) applies, not the billing interval. See
+// prisma/schema.prisma's BillingTerm enum comment.
+function resolvePriceId(
+  planType: "CREATOR" | "ENTERPRISE" | "MID_MARKET" | "SMALL_BUSINESS",
+  billingTerm?: "MONTHLY_12" | "MONTHLY_24",
+): string | undefined {
+  switch (planType) {
+    case "CREATOR":
+      return process.env.STRIPE_CREATOR_PRICE_ID;
+    case "ENTERPRISE":
+      return process.env.STRIPE_ENTERPRISE_PRICE_ID;
+    case "MID_MARKET":
+      return billingTerm === "MONTHLY_24"
+        ? process.env.STRIPE_MID_MARKET_24MO_PRICE_ID
+        : process.env.STRIPE_MID_MARKET_12MO_PRICE_ID;
+    case "SMALL_BUSINESS":
+      return billingTerm === "MONTHLY_24"
+        ? process.env.STRIPE_SMALL_BUSINESS_24MO_PRICE_ID
+        : process.env.STRIPE_SMALL_BUSINESS_12MO_PRICE_ID;
+  }
+}
 
-const checkoutSchema = z.object({
-  planType: z.enum(["CREATOR", "ENTERPRISE"]),
-  enterpriseId: z.string().optional(),
-});
+const checkoutSchema = z
+  .object({
+    planType: z.enum(["CREATOR", "ENTERPRISE", "MID_MARKET", "SMALL_BUSINESS"]),
+    enterpriseId: z.string().optional(),
+    billingTerm: z.enum(["MONTHLY_12", "MONTHLY_24"]).optional(),
+  })
+  .refine(
+    (data) =>
+      !(data.planType === "MID_MARKET" || data.planType === "SMALL_BUSINESS") ||
+      data.billingTerm !== undefined,
+    { message: "billingTerm is required for MID_MARKET and SMALL_BUSINESS", path: ["billingTerm"] },
+  );
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -35,7 +62,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const { planType, enterpriseId } = parsed.data;
+  const { planType, enterpriseId, billingTerm } = parsed.data;
+
+  // MID_MARKET/SMALL_BUSINESS are personal (USER-owned) plans, same shape as
+  // CREATOR — the marketing pricing page a self-serve visitor books from has
+  // no notion of an Enterprise, and these tiers don't need one.
+  const isPersonalPlan =
+    planType === "CREATOR" || planType === "MID_MARKET" || planType === "SMALL_BUSINESS";
 
   if (planType === "ENTERPRISE") {
     if (!enterpriseId) {
@@ -55,7 +88,7 @@ export async function POST(req: Request) {
     }
   }
 
-  if (planType === "CREATOR") {
+  if (isPersonalPlan) {
     const ownedEnterprise = await prisma.enterprise.findFirst({
       where: { ownerUserId: session.user.id },
       select: { id: true },
@@ -68,7 +101,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const priceId = PLAN_PRICE_MAP[planType];
+  const priceId = resolvePriceId(planType, billingTerm);
   if (!priceId || priceId === "price_...") {
     return NextResponse.json(
       { error: "Plan price is not configured" },
@@ -81,14 +114,13 @@ export async function POST(req: Request) {
   try {
     // billingComponent: STANDARD — must never reuse a Phase 1 avatar-billing
     // row's (PLATFORM_FEE / AVATAR_STORAGE) stripeCustomerId here.
-    const existingSub =
-      planType === "CREATOR"
-        ? await prisma.subscription.findFirst({
-            where: { userId: session.user.id, ownerType: "USER", billingComponent: "STANDARD" },
-          })
-        : await prisma.subscription.findFirst({
-            where: { enterpriseId, ownerType: "ENTERPRISE", billingComponent: "STANDARD" },
-          });
+    const existingSub = isPersonalPlan
+      ? await prisma.subscription.findFirst({
+          where: { userId: session.user.id, ownerType: "USER", billingComponent: "STANDARD" },
+        })
+      : await prisma.subscription.findFirst({
+          where: { enterpriseId, ownerType: "ENTERPRISE", billingComponent: "STANDARD" },
+        });
 
     let stripeCustomerId: string;
 
@@ -106,20 +138,20 @@ export async function POST(req: Request) {
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.name,
-        metadata:
-          planType === "CREATOR"
-            ? { userId: session.user.id }
-            : { enterpriseId: enterpriseId! },
+        metadata: isPersonalPlan
+          ? { userId: session.user.id }
+          : { enterpriseId: enterpriseId! },
       });
       stripeCustomerId = customer.id;
 
       await prisma.subscription.create({
         data: {
-          ownerType: planType === "CREATOR" ? "USER" : "ENTERPRISE",
-          userId: planType === "CREATOR" ? session.user.id : null,
+          ownerType: isPersonalPlan ? "USER" : "ENTERPRISE",
+          userId: isPersonalPlan ? session.user.id : null,
           enterpriseId: planType === "ENTERPRISE" ? enterpriseId : null,
           stripeCustomerId,
           planType,
+          billingTerm,
           status: "INCOMPLETE",
         },
       });
@@ -129,8 +161,14 @@ export async function POST(req: Request) {
     // is updated before they land on a subscription-gated page.
     // CREATOR plans go to bookings (the primary gated feature).
     // ENTERPRISE plans go to billing (subscription is B2B-managed, not user-facing gated).
+    // MID_MARKET/SMALL_BUSINESS have no specific gated feature to send them
+    // to the way CREATOR has bookings, so they land on the dashboard home.
     const redirectAfterCheckout =
-      planType === "CREATOR" ? "/dashboard/bookings" : "/dashboard/billing";
+      planType === "CREATOR"
+        ? "/dashboard/bookings"
+        : planType === "MID_MARKET" || planType === "SMALL_BUSINESS"
+          ? "/dashboard"
+          : "/dashboard/billing";
 
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
@@ -140,7 +178,7 @@ export async function POST(req: Request) {
       cancel_url: `${appUrl}/dashboard/billing`,
       metadata: {
         planType,
-        userId: planType === "CREATOR" ? session.user.id : "",
+        userId: isPersonalPlan ? session.user.id : "",
         enterpriseId: planType === "ENTERPRISE" ? (enterpriseId ?? "") : "",
       },
     });

@@ -73,7 +73,7 @@ export const updateUserSchema = z.object({
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
-export const PLAN_TYPES = ["FREE", "CREATOR", "ENTERPRISE"] as const;
+export const PLAN_TYPES = ["FREE", "CREATOR", "ENTERPRISE", "MID_MARKET", "SMALL_BUSINESS"] as const;
 const PLAN_TYPE_FILTER = [...PLAN_TYPES, "all"] as const;
 
 export const SUBSCRIPTION_STATUSES = [

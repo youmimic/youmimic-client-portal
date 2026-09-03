@@ -7,7 +7,14 @@ import type { ButtonProps } from "@/components/ui/button";
 const SALES_EMAIL = process.env.NEXT_PUBLIC_SALES_EMAIL ?? "sales@youmimic.com";
 
 export type BillingAction =
-  | { type: "checkout"; planType: "CREATOR" | "ENTERPRISE"; enterpriseId?: string }
+  | {
+      type: "checkout";
+      planType: "CREATOR" | "ENTERPRISE" | "MID_MARKET" | "SMALL_BUSINESS";
+      enterpriseId?: string;
+      // Required by the API for MID_MARKET/SMALL_BUSINESS, ignored for
+      // CREATOR/ENTERPRISE — see app/api/stripe/checkout-session/route.ts.
+      billingTerm?: "MONTHLY_12" | "MONTHLY_24";
+    }
   | { type: "portal"; enterpriseId?: string }
   | { type: "managed" }; // enterprise billing is handled by the YouMimic team
 
@@ -54,6 +61,7 @@ export function BillingActionButton({
           ? {
               planType: action.planType,
               ...(action.enterpriseId && { enterpriseId: action.enterpriseId }),
+              ...(action.billingTerm && { billingTerm: action.billingTerm }),
             }
           : {
               ...(action.enterpriseId && { enterpriseId: action.enterpriseId }),

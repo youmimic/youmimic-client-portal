@@ -33,6 +33,8 @@ export const PLAN_CREDIT_LIMITS_MILLI: Record<PlanType, number> = {
   FREE: 0,
   CREATOR: PLACEHOLDER_HIGH_LIMIT_MILLI,
   ENTERPRISE: PLACEHOLDER_HIGH_LIMIT_MILLI,
+  MID_MARKET: PLACEHOLDER_HIGH_LIMIT_MILLI,
+  SMALL_BUSINESS: PLACEHOLDER_HIGH_LIMIT_MILLI,
 };
 
 export function creditsForDurationMilli(engine: VideoEngine, durationSeconds: number): number {

@@ -17,6 +17,23 @@ enum PlanType {
   FREE
   CREATOR
   ENTERPRISE
+  // Self-serve marketing-pricing-page tiers (distinct from the personal
+  // CREATOR plan and the sales-assisted ENTERPRISE plan) — see
+  // components/marketing/pricing-plans.tsx. Corporate (the third public
+  // tier) deliberately has no enum value: it stays "Contact Sales" only,
+  // never touches Stripe checkout.
+  MID_MARKET
+  SMALL_BUSINESS
+}
+
+// Which commitment length a MID_MARKET/SMALL_BUSINESS subscriber chose on
+// the pricing page — both terms bill monthly (Stripe has no native
+// "minimum commitment" concept), the 24-month term is just a lower monthly
+// rate. Recorded for visibility/reporting only; this does not enforce any
+// early-cancellation penalty.
+enum BillingTerm {
+  MONTHLY_12
+  MONTHLY_24
 }
 
 enum SubscriptionStatus {
@@ -259,6 +276,10 @@ model Subscription {
 
   planType             PlanType           @default(FREE)
   status               SubscriptionStatus @default(INCOMPLETE)
+
+  // Only meaningful for MID_MARKET/SMALL_BUSINESS (see BillingTerm's own
+  // comment) — null for every other plan type, including pre-existing rows.
+  billingTerm          BillingTerm?
 
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?

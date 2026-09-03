@@ -1,5 +1,126 @@
 # HANDOFF.md
 
+## Session: Self-serve payment flow for Mid Market / Small Business — 2026-08-31
+
+User asked for "Book Now" on the pricing plans to lead to a real payment
+flow — pay the plan's price, then proceed as a subscriber. This is real
+money/payment infrastructure, so went through a full research → clarifying
+questions → written plan cycle (`C:\Users\milan\.claude\plans\validated-petting-honey.md`)
+before any code, rather than guessing at account/billing semantics.
+
+**What was found before designing anything**: Stripe checkout already
+existed (`app/api/stripe/checkout-session/route.ts`) but only for 2 plans
+(`CREATOR`/`ENTERPRISE`), only reachable from inside the authenticated
+`/dashboard/billing` page — never from the public marketing site — with a
+hardcoded 2-entry price map and no billing-term concept. Three decisions
+confirmed with the user via `AskUserQuestion`: (1) sign up/log in first,
+then pay — reuse the existing authenticated-checkout shape rather than
+building guest checkout; (2) Corporate ($4,999/mo) stays "Contact Sales"
+only, unchanged; (3) the user has Stripe API access, so I created the real
+priced products/prices programmatically (test mode) rather than needing
+them hand-made in the Stripe Dashboard.
+
+**Schema** (`prisma/schema.prisma`, migration
+`20260903113304_add_mid_market_small_business_plans`, purely additive):
+`PlanType` gained `MID_MARKET`/`SMALL_BUSINESS` (Corporate deliberately has
+no enum value — it never touches Stripe); new `BillingTerm` enum
+(`MONTHLY_12`/`MONTHLY_24`) and a nullable `Subscription.billingTerm`
+field. Both new plan tiers bill **monthly** regardless of term — the
+12-vs-24-month choice on the pricing page is a commitment-length label
+(lower monthly rate for the longer term, telco-style), not a Stripe
+billing interval; `billingTerm` is recorded for visibility only, this pass
+does **not** build any early-cancellation/contract enforcement.
+
+**Stripe setup**: ran a one-off `npx tsx` script (test-mode key only,
+refused to run against anything not prefixed `sk_test_`) creating 2
+products × 2 prices each — "YouMimic Mid Market" ($2,499/mo 12mo term,
+$1,499/mo 24mo term) and "YouMimic Small Business" ($899/mo 12mo,
+$499/mo 24mo), all AUD/monthly. The 4 resulting real price IDs went into
+`.env` as `STRIPE_MID_MARKET_12MO_PRICE_ID`, `STRIPE_MID_MARKET_24MO_PRICE_ID`,
+`STRIPE_SMALL_BUSINESS_12MO_PRICE_ID`, `STRIPE_SMALL_BUSINESS_24MO_PRICE_ID`
+— same one-env-var-per-price convention the existing `STRIPE_CREATOR_PRICE_ID`/
+`STRIPE_ENTERPRISE_PRICE_ID` already use.
+
+**What changed:**
+- `app/api/stripe/checkout-session/route.ts` — extended (not replaced):
+  `resolvePriceId()` replaces the old flat `PLAN_PRICE_MAP`, branching on
+  `billingTerm` for the two new plan types; `MID_MARKET`/`SMALL_BUSINESS`
+  are modeled as `ownerType: "USER"`, exactly like `CREATOR` (personal
+  subscription, no `Enterprise` involved — a self-serve pricing-page
+  visitor has no notion of one); the enterprise-owner-can't-subscribe-to-
+  personal-plans check now also covers the two new types; the placeholder
+  `Subscription` row created before redirecting to Stripe now also records
+  `billingTerm`; post-checkout redirect for the two new plans goes to
+  `/dashboard` (no specific gated feature to send them to the way
+  `CREATOR` has `/dashboard/bookings`).
+- `lib/pricing/plans.ts` (new) — single source of truth for the real
+  dollar amounts/avatar counts per tier+term, shared by both the pricing
+  page and the new checkout page so a price literally cannot drift by
+  being hand-copied in two places.
+- `components/marketing/pricing-plans.tsx` — Mid Market/Small Business
+  "Book Now" now link to `/signup?callbackUrl=/dashboard/checkout?plan=...&term=...`
+  (routes to signup by default since a public pricing page's primary
+  audience is new prospects; existing customers can still reach login via
+  signup's own "Already have an account?" link, with the callback URL
+  preserved either way). Corporate's "Book Now" is unchanged
+  (`/contact#book-demo`). Internal term state changed from ad-hoc `"12"`/
+  `"24"` strings to the real `BillingTerm` enum values directly, removing
+  a translation layer.
+- `app/(dashboard)/dashboard/checkout/page.tsx` (new) — the "payment page"
+  the user asked for: reads `plan`/`term` from the URL, shows a summary
+  (price, term, included avatars), and a "Proceed to payment" button.
+  Automatically auth-gated by `proxy.ts`'s existing `/dashboard`
+  protection — no new middleware needed. Reuses
+  `components/dashboard/billing-actions.tsx`'s existing `BillingActionButton`
+  (extended to accept the two new plan types + `billingTerm`) rather than
+  writing a new client component from scratch.
+- `lib/validations/admin.ts`, `lib/heygen/credits.ts` — two small
+  exhaustiveness fixes TypeScript surfaced immediately after the schema
+  change (an admin filter array and this session's earlier credit-limit
+  `Record<PlanType, number>` both needed the two new enum values added).
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean (with all 6 Stripe price env vars set)
+```
+Went well beyond markup-level checks given real payment infrastructure is
+involved:
+- Confirmed all 4 new Stripe prices directly via the Stripe API
+  (`prices.retrieve`) — correct amount, currency, monthly interval, active.
+- Full authenticated end-to-end run against the real dev server: created a
+  throwaway test user, signed in through the real NextAuth credentials
+  flow (CSRF token + cookies, not mocked), called the real
+  `/api/stripe/checkout-session` endpoint as that user, confirmed a 200
+  with a genuine `checkout.stripe.com` URL, confirmed the resulting
+  `Subscription` row in the DB had the correct `planType`/`billingTerm`/
+  `status`/`ownerType`, then cleaned up (deleted the Stripe test customer,
+  the DB rows, and the test user) — no real card was ever entered, Stripe
+  Checkout *session creation* alone doesn't charge anything.
+- Confirmed via curl that unauthenticated `/dashboard/checkout` correctly
+  redirects to `/login` (existing middleware, no gap), and that the
+  pricing page's rendered HTML has the correct `signup?callbackUrl=...`
+  hrefs for both new tiers.
+- Hit a real environment issue mid-verification: a dev server from earlier
+  in this session was still running and had stale `.env` (Next only reads
+  env vars at boot), causing a false-looking 500 on first attempt — `lsof`
+  failed to actually kill it under Git Bash on Windows; `taskkill /PID
+  <pid> /F` was needed. Not a code bug, but worth knowing for next time.
+
+**Not done / next (explicitly out of scope, per the approved plan):**
+- Avatar-count enforcement — nothing limits/tracks per-plan avatar counts
+  for any plan today; this pass only displays the number.
+- Contract-term enforcement — `billingTerm` is recorded, not enforced
+  against early cancellation.
+- Guest checkout (pay before an account exists).
+- Corporate stays entirely off the Stripe path.
+- No real browser screenshot of the new `/dashboard/checkout` page (same
+  environment limitation as every UI change this session) — the
+  functional flow was verified at the HTTP/API level instead, which
+  matters more for a payment feature than visual appearance.
+
 ## Session: Newsletter form moved into Social column + relabeled — 2026-08-31
 
 Follow-up, same conversation. Two more adjustments to the newsletter form
