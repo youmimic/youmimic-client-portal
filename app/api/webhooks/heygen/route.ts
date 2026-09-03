@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getHeyGenVideoStatus, HeyGenApiError } from "@/lib/heygen";
 import { estimatedCostCents } from "@/lib/heygen/pricing";
+import { reconcileCredits, releaseReservationForVideo } from "@/lib/usage/ledger";
 import type { VideoGenerationStatus } from "@/app/generated/prisma/enums";
 
 // HeyGen signs the raw request body with HMAC-SHA256 using the endpoint's
@@ -133,6 +134,12 @@ export async function POST(req: Request) {
             : undefined,
       },
     });
+
+    if (isCompleted && durationSeconds !== undefined) {
+      await reconcileCredits({ videoId: local.id, engine: local.engine, actualDurationSeconds: durationSeconds });
+    } else if (mapped === "FAILED") {
+      await releaseReservationForVideo(local.id);
+    }
   } catch (err) {
     const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
     console.error(`Failed to reconcile HeyGen video ${videoId} after webhook:`, message);

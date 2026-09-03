@@ -1,5 +1,110 @@
 # HANDOFF.md
 
+## Session: Credit-based monthly usage tracking (Avatar Studio) — 2026-08-31
+
+Follows directly from the delete-video session below: once a `GeneratedVideo`
+row could be deleted, nothing survived to answer "how much has this user
+used" — and the user asked for exactly that, framed as tracking against a
+future per-plan monthly limit (e.g. "20 minutes of Avatar III or
+equivalent"). Full design went through several rounds of `AskUserQuestion`
+and a written, user-approved plan (`C:\Users\milan\.claude\plans\validated-petting-honey.md`)
+before any code — six decisions were locked in directly with the product
+owner: block generation once over a limit; reset on the user's real Stripe
+billing cycle, not calendar month; track in abstract **credits**, not raw
+$/duration, since other engine types may price differently later; a
+**dedicated table**, not the generic `SystemEvent` (explicitly reserved for
+admin events); **estimate + reserve at generate-time, reconcile once HeyGen
+reports the real duration** (HeyGen never returns a duration before
+completion, so blocking "the request that pushes someone over" requires an
+upfront estimate); and limits keyed off the existing `PlanType` enum.
+
+**What changed:**
+- `prisma/schema.prisma` — new `UsageLedgerEntry` model + `UsageLedgerStatus`
+  enum (`RESERVED`/`RECONCILED`/`RELEASED`), migration
+  `20260831093706_add_usage_ledger`. `videoId` is nullable with
+  `onDelete: SetNull` — the one deliberate exception in this schema to
+  cascading on `GeneratedVideo`, so a ledger entry survives video deletion.
+  Credits stored as integer **millicredits** (credits × 1000, mirroring how
+  the app already stores money as integer cents) to avoid floating-point
+  summation drift when totaling many rows against a hard limit.
+- `lib/heygen/credits.ts` (new) — `ENGINE_CREDITS_PER_SECOND_MILLI` and
+  `PLAN_CREDIT_LIMITS_MILLI`, structurally separate from
+  `lib/heygen/pricing.ts`'s `$/sec` table per the "credits are their own
+  unit" decision. **Every number in this file is a placeholder** — the
+  per-plan limits are set very high on purpose (effectively unlimited) so
+  the real mechanism ships without blocking any real user on a made-up
+  number; only `FREE` is 0 (no live path to Avatar Studio on a bare FREE
+  plan today anyway). Lower these once the product owner has real target
+  figures — no other code needs to change when that happens.
+- `lib/heygen/duration-estimate.ts` (new) — `estimateDurationSeconds()`, a
+  150-words-per-minute heuristic to estimate a script's spoken length before
+  HeyGen has ever rendered it. Also a placeholder constant, flagged to tune
+  once real `estimatedDurationSeconds` vs `actualDurationSeconds` pairs
+  accumulate in the ledger.
+- `lib/usage/ledger.ts` (new) — `resolveBillingPeriod`, `reserveCredits` /
+  `reserveCreditsForGeneration`, `releaseReservation` /
+  `releaseReservationForVideo`, `reconcileCredits`. Billing-period
+  resolution reuses the same subscription (personal, or an owned
+  enterprise's) that already gates Avatar Studio access, snapshotting
+  `periodStart`/`periodEnd` onto each row at reservation time rather than
+  deriving them live, so "sum this period" stays an exact-match query and
+  history stays stable if the subscription's period fields change later for
+  an unrelated reason. Release/reconcile use a conditional
+  `updateMany({ where: { status: "RESERVED" } })`, same idempotency idiom as
+  `claimInviteAndCreateMembership`'s pending→accepted flip, so webhook
+  retries and repeated manual refreshes are safe no-ops.
+- `lib/subscription.ts` — extracted `getApplicableSubscription()` (accepts
+  an optional Prisma client so it also works inside a transaction);
+  `userHasActiveSubscription()` now calls it. No behavior change, just
+  factoring so the ledger's period-resolution logic can't silently drift
+  from the existing access-gate logic.
+- `lib/heygen/generate-video.ts` — `generateAvatarVideo()` now reserves
+  credits (via `reserveCreditsForGeneration`) right after avatar/look/voice
+  resolution and before the HeyGen `createHeyGenVideo()` call; blocked
+  reservations return a new `OVER_LIMIT` result code before HeyGen is ever
+  called. HeyGen call failure releases the reservation (credits given
+  back). `refreshGeneratedVideoStatus()` now reconciles credits on
+  `COMPLETED` and releases the reservation on `FAILED`.
+- `app/api/webhooks/heygen/route.ts` — same reconcile/release wiring as the
+  manual refresh path, kept duplicated rather than shared, matching this
+  codebase's existing pattern for that file pair.
+- `app/api/dashboard/avatars/[avatarId]/generate-video/route.ts` —
+  `OVER_LIMIT` now maps to **402 Payment Required**, distinct from 403 (no
+  subscription), 502 (HeyGen error), and 422 (validation).
+- Tests: `lib/heygen/credits.test.ts`, `lib/heygen/duration-estimate.test.ts`,
+  `lib/usage/ledger.test.ts` (mocks `@/lib/prisma` following
+  `lib/rate-limit.test.ts`'s established pattern; ledger functions that take
+  a `tx` parameter are tested by passing a fake transaction client directly,
+  no mocking needed for those).
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean (after `npx prisma generate` — migrate dev applied
+                    the migration but the client needed a separate
+                    regenerate before the new model's types were visible)
+npm test           → 69/69 passing (25 new)
+npx next build     → clean
+```
+Also ran a throwaway-row verification script directly against the dev DB
+(`npx tsx --env-file=.env`, same pattern as every other DB verification this
+session) covering the full lifecycle without ever calling the live HeyGen
+API: reserve → link to a `GeneratedVideo` → reconcile → delete the video →
+confirmed the ledger entry survives with `videoId` null and its credits
+still count toward the period sum; reserve → release → confirmed the sum
+returns to exactly its pre-reservation value and the row is `RELEASED`.
+
+**Not done (by design — see the plan file):**
+- Real credit-per-engine and per-plan limit numbers — currently high
+  placeholders, waiting on the product owner.
+- Milestone 2 (usage visibility in the UI — showing credits-used-vs-limit
+  on `/dashboard/videos` or near the generate form) — deliberately deferred
+  as a separate, purely-additive follow-up.
+- No stuck-`RESERVED` cleanup job (a video stuck in `PROCESSING` forever
+  keeps its reservation indefinitely) — accepted as a low-frequency edge
+  case for v1, no scheduled-jobs infrastructure exists in this codebase yet.
+- No browser click-through this session.
+
 ## Session: Delete generated videos — 2026-08-31
 
 User asked for a way to delete a generated video from the portal (the

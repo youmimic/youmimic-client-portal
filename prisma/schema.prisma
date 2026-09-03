@@ -86,6 +86,7 @@ model User {
   adminLogs               AdminLog[]        @relation("AdminUser")
   adminLogsAsTarget       AdminLog[]        @relation("AdminLogTarget")
   bookingNotesAuthored    BookingNote[]
+  usageLedgerEntries      UsageLedgerEntry[]
 
   @@map("users")
 }
@@ -289,6 +290,7 @@ model Subscription {
   user                 User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
   enterprise           Enterprise?        @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
   payments             Payment[]
+  usageLedgerEntries   UsageLedgerEntry[]
 
   @@unique([avatarId])
   @@index([userId])
@@ -481,11 +483,71 @@ model GeneratedVideo {
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   avatar     Avatar      @relation(fields: [avatarId], references: [id], onDelete: Cascade)
   avatarLook AvatarLook? @relation(fields: [avatarLookId], references: [id], onDelete: SetNull)
+  usageLedgerEntries UsageLedgerEntry[]
 
   @@index([userId])
   @@index([avatarId])
   @@index([avatarLookId])
   @@map("generated_videos")
+}
+
+enum UsageLedgerStatus {
+  RESERVED   // estimate reserved at generate-time, HeyGen job in flight
+  RECONCILED // HeyGen reported COMPLETED; creditsCharged reflects real duration
+  RELEASED   // never happened / failed before or during generation; credits given back
+}
+
+// Durable per-generation usage record for monthly credit-limit enforcement.
+// Deliberately NOT folded into GeneratedVideo (deleting a video must not
+// erase what it cost against the user's plan limit) and deliberately NOT
+// using the generic SystemEvent table (reserved for admin-facing events,
+// not usage metering). Credits are estimated and reserved at generate-time
+// (HeyGen never reports a video's duration before it completes, so a limit
+// can only actually block "the request that would push someone over" if
+// something is charged before that request is sent), then reconciled to
+// the real duration once HeyGen reports completion.
+model UsageLedgerEntry {
+  id             String            @id @default(cuid())
+  userId         String
+  subscriptionId String?
+  // Nullable + SetNull — the one deliberate exception in this schema to
+  // Cascade-on-GeneratedVideo, so this row survives video deletion (see
+  // app/api/dashboard/videos/[id]/route.ts).
+  videoId        String?
+
+  engine VideoEngine
+  status UsageLedgerStatus @default(RESERVED)
+
+  estimatedDurationSeconds Float
+  // Millicredits (credits x 1000), stored as an integer to avoid floating-
+  // point summation drift when totaling many rows against a hard limit —
+  // same reasoning as why Payment.amount is integer cents, not a float
+  // dollar amount.
+  creditsReservedMilli     Int
+
+  // Both populated only once RECONCILED.
+  actualDurationSeconds Float?
+  creditsChargedMilli   Int?
+
+  // Snapshotted at reservation time rather than derived live from
+  // Subscription.currentPeriodStart/End — keeps "sum this period" an exact-
+  // match query on a composite index, and keeps history stable even if the
+  // subscription's period fields change later for an unrelated reason
+  // (plan change, Stripe correction).
+  periodStart DateTime
+  periodEnd   DateTime
+
+  createdAt    DateTime  @default(now())
+  reconciledAt DateTime?
+  releasedAt   DateTime?
+
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription?   @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  video        GeneratedVideo? @relation(fields: [videoId], references: [id], onDelete: SetNull)
+
+  @@index([userId, periodStart, periodEnd])
+  @@index([videoId])
+  @@map("usage_ledger_entries")
 }
 
 enum BookingStatus {

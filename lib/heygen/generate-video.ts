@@ -8,6 +8,7 @@ import {
 } from "@/lib/heygen";
 import type { VideoEngine, VideoGenerationStatus } from "@/app/generated/prisma/enums";
 import { estimatedCostCents } from "@/lib/heygen/pricing";
+import { reserveCreditsForGeneration, releaseReservation, reconcileCredits, releaseReservationForVideo } from "@/lib/usage/ledger";
 
 // Maps the lowercase HeyGen API value (also what lib/validations/video.ts's
 // generateVideoSchema accepts from the client) to the Prisma enum value
@@ -20,7 +21,11 @@ const ENGINE_TO_PRISMA: Record<HeyGenEngine, VideoEngine> = {
 
 export type GenerateVideoResult =
   | { ok: true; generatedVideoId: string }
-  | { ok: false; code: "AVATAR_NOT_READY" | "NO_VOICE" | "HEYGEN_ERROR"; error: string };
+  | {
+      ok: false;
+      code: "AVATAR_NOT_READY" | "NO_VOICE" | "HEYGEN_ERROR" | "OVER_LIMIT";
+      error: string;
+    };
 
 function callbackUrl(): string | undefined {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -93,6 +98,20 @@ export async function generateAvatarVideo(
 
   const prismaEngine = ENGINE_TO_PRISMA[engine];
 
+  // Reserve credits before ever calling HeyGen — HeyGen doesn't report a
+  // video's duration until it completes, so the only way to block "the
+  // request that would push someone over their limit" (rather than just
+  // the next one after) is to estimate and reserve upfront. See
+  // lib/usage/ledger.ts.
+  const reservation = await reserveCreditsForGeneration({ userId, engine: prismaEngine, script });
+  if (!reservation.ok) {
+    return {
+      ok: false,
+      code: "OVER_LIMIT",
+      error: `You've used all your video credits for this billing period (resets ${reservation.periodEnd.toDateString()}).`,
+    };
+  }
+
   try {
     const { video_id } = await createHeyGenVideo({
       avatarId: heygenLookId,
@@ -115,9 +134,18 @@ export async function generateAvatarVideo(
       select: { id: true },
     });
 
+    await prisma.usageLedgerEntry.update({
+      where: { id: reservation.ledgerEntryId },
+      data: { videoId: generatedVideo.id },
+    });
+
     return { ok: true, generatedVideoId: generatedVideo.id };
   } catch (err) {
     const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
+
+    // HeyGen never accepted the job — give the reserved credits back rather
+    // than counting them against this billing period.
+    await releaseReservation(reservation.ledgerEntryId);
 
     // Never leave this silently unbilled-for-nothing — record the failed
     // attempt (no heygenVideoId, since HeyGen never accepted the job) so it
@@ -182,6 +210,12 @@ export async function refreshGeneratedVideoStatus(generatedVideoId: string, user
       },
       select: { status: true, videoUrl: true },
     });
+
+    if (isCompleted && durationSeconds !== undefined) {
+      await reconcileCredits({ videoId: row.id, engine: row.engine, actualDurationSeconds: durationSeconds });
+    } else if (mapped === "FAILED") {
+      await releaseReservationForVideo(row.id);
+    }
 
     return { ok: true, status: updated.status, videoUrl: updated.videoUrl };
   } catch (err) {

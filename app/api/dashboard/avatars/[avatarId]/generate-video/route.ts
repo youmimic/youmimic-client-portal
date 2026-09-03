@@ -47,7 +47,8 @@ export async function POST(
     parsed.data.engine,
   );
   if (!result.ok) {
-    const status = result.code === "HEYGEN_ERROR" ? 502 : 422;
+    const status =
+      result.code === "HEYGEN_ERROR" ? 502 : result.code === "OVER_LIMIT" ? 402 : 422;
     return NextResponse.json({ error: result.error, code: result.code }, { status });
   }
 
