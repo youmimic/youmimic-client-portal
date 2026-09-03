@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { NewsletterForm } from "@/components/marketing/newsletter-form";
 
 // Only platforms with a confirmed real URL are rendered — no placeholder
 // or guessed social links. Add more here as real URLs are confirmed.
@@ -84,6 +85,12 @@ export function MarketingFooter() {
                   </li>
                 ))}
               </ul>
+
+              {/* Newsletter signup — same column as Social, directly below
+                  the social links. */}
+              <div className="mt-6">
+                <NewsletterForm />
+              </div>
             </div>
           )}
         </div>

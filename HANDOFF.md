@@ -1,5 +1,92 @@
 # HANDOFF.md
 
+## Session: Newsletter form moved into Social column + relabeled — 2026-08-31
+
+Follow-up, same conversation. Two more adjustments to the newsletter form
+just added:
+1. Moved it from its own full-width block below the three-column grid
+   into the **same column as Social**, directly below the social links —
+   `components/marketing/marketing-footer.tsx`'s Social `<div>` now
+   renders `<NewsletterForm />` right after its `<ul>`, and the standalone
+   wrapper block that used to sit below the whole grid was removed.
+2. Since the form now lives in a ~1/3-width column instead of the full
+   footer width, the input+submit-button pair (previously side-by-side at
+   `sm:`) would have been cramped — changed to always stack vertically
+   regardless of screen width, and the button to `w-full` instead of
+   `shrink-0`.
+3. Relabeled: `components/marketing/newsletter-form.tsx`'s label restyled
+   to match the `<h3>` heading treatment already used for the
+   Company/Navigation/Social column titles (`text-sm font-semibold
+   text-foreground`, was `text-sm font-medium text-muted-foreground`), and
+   its text changed from "Get product updates in your inbox" to
+   "Subscribe to our newsletter from the CEO". Removed a now-redundant
+   `mt-3` on the input row since the label's own `mb-3` already provides
+   that spacing.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML from the dev server: byte-offset
+ordering shows the form's `id="sib-form"` now appears after the "Social"
+heading (not after the whole 3-column grid), the new label text is
+present, and the old label text returns zero matches.
+
+## Session: Brevo newsletter form in the footer — 2026-08-31
+
+User provided their Brevo ("Sendinblue") newsletter-signup embed code and
+asked for it in the footer, below the Social column, restyled to match
+the site rather than Brevo's default look.
+
+**What changed:**
+- `next.config.ts` — CSP `form-action` directive extended from `'self'`
+  to `'self' https://*.sibforms.com`. The form does a plain native POST
+  (no fetch/XHR, no client JS) directly to Brevo's forms host, so this
+  needed a `form-action` allowance specifically — not `script-src` or
+  `connect-src`, which govern different things and wouldn't have covered
+  this. Without it the browser would silently block the submit.
+- `components/marketing/newsletter-form.tsx` (new) — the form restyled
+  with this site's own Tailwind tokens (border/background/ring/primary
+  colors, inherited Montserrat) instead of loading Brevo's own stylesheet
+  and Roboto `@font-face` block, which would have fought the site's actual
+  typography. The functional parts of Brevo's generated markup are
+  unchanged, since Brevo's backend reads them directly: the `action` URL,
+  `id="sib-form"`, the `EMAIL` field name, and the three bookkeeping
+  fields (`email_address_check` honeypot, `locale`, `html_type`) — only
+  the `EMAIL` field's `type` was changed from `text` to `email` for native
+  browser validation, which doesn't affect what Brevo receives (the field
+  name is what its backend keys off, not the input type). No client JS —
+  it's a plain server-rendered form, so the footer stays a server
+  component.
+- `components/marketing/marketing-footer.tsx` — renders `<NewsletterForm
+  />` in its own block below the Company/Navigation/Social grid, above the
+  copyright bar.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML from the dev server that every
+functionally-required piece survived the restyle: `id="sib-form"`, the
+exact Brevo `action` URL, `name="EMAIL"`, and all three hidden/bookkeeping
+fields (`email_address_check`, `locale=en`, `html_type=simple`) are all
+present in the actual output, not just in the source.
+
+**Not done / next:**
+- Did not test an actual live submission against Brevo's endpoint (would
+  create a real subscriber in the client's Brevo list, not something to
+  do without asking first) — verified the markup is structurally correct
+  and CSP allows the POST, not that Brevo accepts and processes it
+  end-to-end.
+- No real browser screenshot (same environment limitation as every UI
+  change today).
+
 ## Session: Contact page — link contact-bg.avif instead of .jpg — 2026-08-31
 
 Small follow-up, same day. `public/contact-bg.avif` (128KB, vs. 381KB for

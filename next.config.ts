@@ -5,6 +5,9 @@ import type { NextConfig } from "next";
 // calendly.com iframe + XHR) and a Brevo Conversations chat widget
 // (conversations-widget.brevo.com script, which renders its actual chat UI
 // in an iframe from the same host) — see app/(marketing)/contact/page.tsx.
+// The footer's newsletter signup posts directly (plain HTML form, no JS)
+// to Brevo's forms host — needs a form-action allowance, not script/connect,
+// since the browser navigates there rather than fetching it.
 // Sentry is tunneled through the same-origin /monitoring rewrite below, so
 // it needs no CSP entry.
 //
@@ -34,7 +37,7 @@ const CONTENT_SECURITY_POLICY = [
   "frame-src https://calendly.com https://conversations-widget.brevo.com",
   "object-src 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  "form-action 'self' https://*.sibforms.com",
   "frame-ancestors 'none'",
 ].join("; ");
 
