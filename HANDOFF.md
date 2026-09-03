@@ -1,5 +1,76 @@
 # HANDOFF.md
 
+## Session: Removed avatar showcase, simplified jargon — 2026-08-31
+
+Small follow-up, same day. Two changes to `app/(marketing)/page.tsx`:
+
+1. **Removed the "Your team, deployed at scale" section entirely** (the
+   avatar showcase grid with the three sample people/status/language
+   cards) — its `avatars` data array, the JSX block, and the now-unused
+   `cn` import (only that section used it) were all deleted, not just
+   hidden.
+2. **Replaced "deploy"/"deployment" and other technical-sounding wording**
+   with plainer language across every remaining section — this was
+   explicitly requested as an example ("change deploy to less technical"),
+   so beyond just the literal word swap, also softened adjacent jargon
+   sitting right next to it (e.g. "Role-based controls... audit trails" →
+   "Control who can do what... see what's been made"; "at scale" →
+   dropped/rephrased in a few spots; "organization-wide deployment" →
+   "get your whole team going"). Full list of rewrites: feature titles
+   ("Immediate deployment" → "Ready right away", "Production at scale" →
+   "As many videos as you need", "Multilingual by default" → "Speaks every
+   language", "Enterprise governance" → "Built-in oversight"), a step title
+   ("Generate and deploy" → "Generate and share"), section
+   headings/subheads across Features, How it works, Use cases, Pricing, and
+   Final CTA, and — since it renders on this page via the shared
+   `PricingPlans` component — the Corporate tier's tagline in
+   `components/marketing/pricing-plans.tsx` ("deploying AI avatars" →
+   "using AI avatars").
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML: the avatar showcase section and its
+sample names are gone entirely (zero matches, not just visually hidden),
+a case-insensitive search for "deploy" across the whole rendered homepage
+returns zero matches, and the new simplified copy renders correctly.
+
+## Session: Pricing CTA consistency + plan-uncertainty CTA — 2026-08-31
+
+Small follow-up, same day. Two changes:
+
+1. **`components/marketing/pricing-plans.tsx`** — the Small Business
+   24-month tier had a distinct CTA, "Learn More with a 15min meeting"
+   (carried over verbatim from the Wix draft's own pricing tiers). Changed
+   to "Book Now" so every tier/term now uses the same CTA — the per-tier
+   `cta` field in the `byTerm` data (only ever used by that one entry) was
+   removed entirely rather than left as dead/unused shape, since nothing
+   varies it anymore.
+2. **`app/(marketing)/page.tsx`** — rewrote the homepage section
+   immediately below Pricing (previously "Book a Demo Meeting Today" / "See
+   your avatar generate a video in real time.") into a plan-uncertainty
+   prompt: "Not sure which plan fits your business?" / "Book a quick
+   meeting and we'll help you find the right one." / button now reads
+   "Book a Meeting" — same `/contact#book-demo` destination, same section
+   styling from the earlier Starlink-structure pass, copy only.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML from the dev server: "Learn More with
+a 15min meeting" no longer appears anywhere, all 3 pricing tiers now render
+"Book Now" (this component is shared, so `/pricing` picked it up too, not
+just the homepage), and the new plan-uncertainty section's headline/button
+copy renders correctly.
+
 ## Session: Homepage — full Starlink-style structure — 2026-08-31
 
 Follow-up to the hero preview below, same day: user confirmed the hero

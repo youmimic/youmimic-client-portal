@@ -13,7 +13,6 @@ import {
   Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { PricingPlans } from "@/components/marketing/pricing-plans";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -28,23 +27,23 @@ const stats = [
 const features = [
   {
     icon: Zap,
-    title: "Immediate deployment",
-    body: "Record one session and generate production-quality video immediately. No reshoots, no scheduling, no waiting.",
+    title: "Ready right away",
+    body: "Record one session and get professional video straight away. No reshoots, no scheduling, no waiting around.",
   },
   {
     icon: Layers,
-    title: "Production at scale",
-    body: "Your avatar produces an unlimited number of videos in parallel. One person's presence, organization-wide reach.",
+    title: "As many videos as you need",
+    body: "Your avatar can make videos all day, every day. One person's time, felt by your whole team.",
   },
   {
     icon: Globe,
-    title: "Multilingual by default",
-    body: "Deliver the same message in any language from a single source recording—no re-recording, no dubbing.",
+    title: "Speaks every language",
+    body: "Say it once and it comes out in any language you need—no re-recording, no translators.",
   },
   {
     icon: Building2,
-    title: "Enterprise governance",
-    body: "Role-based controls, brand guidelines, and audit trails built in. Deploy responsibly at every level.",
+    title: "Built-in oversight",
+    body: "Control who can do what, keep your brand consistent, and see what's been made. Everything stays in order.",
   },
 ];
 
@@ -64,32 +63,8 @@ const steps = [
   {
     n: "03",
     icon: Share2,
-    title: "Generate and deploy",
-    body: "Upload a script. Your avatar delivers a polished, on-brand video ready for any channel and any audience.",
-  },
-];
-
-const avatars = [
-  {
-    initial: "S",
-    name: "Sarah Chen",
-    role: "Head of Marketing",
-    status: "Active" as const,
-    langs: ["EN", "ZH", "ES", "FR"],
-  },
-  {
-    initial: "M",
-    name: "Marcus Reid",
-    role: "Training Director",
-    status: "Active" as const,
-    langs: ["EN", "DE", "JA"],
-  },
-  {
-    initial: "A",
-    name: "Anita Sharma",
-    role: "Customer Relations",
-    status: "Processing" as const,
-    langs: ["EN", "HI", "FR"],
+    title: "Generate and share",
+    body: "Type or paste your script. Your avatar turns it into a polished, on-brand video ready to send anywhere.",
   },
 ];
 
@@ -97,7 +72,7 @@ const useCases = [
   {
     icon: Users,
     title: "Employee training",
-    body: "Deliver consistent onboarding, compliance training, and skill development across global teams at scale.",
+    body: "Give every team the same clear onboarding, compliance training, and skill-building — wherever they are.",
   },
   {
     icon: Radio,
@@ -209,10 +184,10 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Built to scale how you communicate
+              Made for how you actually communicate
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              Traditional video production doesn&apos;t scale. YouMimic does.
+              Old-school video takes too long. YouMimic doesn&apos;t.
             </p>
           </div>
           <div className="grid gap-10 sm:grid-cols-2">
@@ -243,7 +218,7 @@ export default function HomePage() {
               One session. Unlimited output.
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              Three steps to organization-wide deployment.
+              Three steps to get your whole team going.
             </p>
           </div>
           <div className="grid gap-10 sm:grid-cols-3">
@@ -268,73 +243,15 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Avatar showcase ──────────────────────────────────────────────── */}
-      <section className="py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Your team, deployed at scale
-            </h2>
-            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              One avatar per person. Any language, on demand.
-            </p>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-3">
-            {avatars.map(({ initial, name, role, status, langs }) => (
-              <div
-                key={name}
-                className="flex items-start gap-4 rounded-xl bg-card p-6 shadow-sm"
-              >
-                {/* Avatar circle — teal tint */}
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent/15 text-base font-semibold text-accent">
-                  {initial}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {name}
-                    </p>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <span
-                        className={cn(
-                          "size-1.5 rounded-full",
-                          status === "Active"
-                            ? "bg-accent" /* teal — ready/active */
-                            : "bg-secondary-foreground/40" /* muted — processing */,
-                        )}
-                      />
-                      <span className="text-[11px] text-muted-foreground">
-                        {status}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{role}</p>
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {langs.map((lang) => (
-                      <span
-                        key={lang}
-                        className="rounded border border-border bg-secondary/50 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-                      >
-                        {lang}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ── Use cases ────────────────────────────────────────────────────── */}
       <section className="bg-muted py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Where teams deploy YouMimic
+              Where teams use YouMimic
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              One platform. Every communication surface.
+              One platform. Every way you communicate.
             </p>
           </div>
           <div className="grid gap-10 sm:grid-cols-2">
@@ -365,7 +282,7 @@ export default function HomePage() {
               Transparent, flexible pricing
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              Start with a single avatar. Scale as you grow.
+              Start with one avatar. Add more as you grow.
             </p>
           </div>
           <PricingPlans />
@@ -376,13 +293,13 @@ export default function HomePage() {
       <section className="bg-muted py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-4 text-center sm:px-6">
           <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-            Book a Demo Meeting Today
+            Not sure which plan fits your business?
           </h2>
           <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-            See your avatar generate a video in real time.
+            Book a quick meeting and we&apos;ll help you find the right one.
           </p>
           <Button asChild className="mt-8 h-12 px-8 text-base font-medium">
-            <Link href="/contact#book-demo">Book a Demo</Link>
+            <Link href="/contact#book-demo">Book a Meeting</Link>
           </Button>
         </div>
       </section>
@@ -406,14 +323,13 @@ export default function HomePage() {
             className="text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl"
             style={{ color: "#FFFFFF" }}
           >
-            Ready to deploy your first AI avatar?
+            Ready to create your first AI avatar?
           </h2>
           <p
             className="mx-auto mt-5 max-w-sm text-lg leading-relaxed"
             style={{ color: "rgba(255,255,255,0.75)" }}
           >
-            Scale professional video communication without a production
-            crew.
+            Make professional videos without a production crew.
           </p>
           <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
             <Button

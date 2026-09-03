@@ -22,7 +22,7 @@ type BillingTerm = "12" | "24";
 // 12-month vs 24-month commitment.
 const corporate = {
   name: "Corporate",
-  tagline: "For large organizations deploying AI avatars across every department.",
+  tagline: "For large organizations using AI avatars across every department.",
   price: "$4,999 p/m",
   features: [
     "Unlimited avatars",
@@ -37,16 +37,16 @@ const byTerm: Record<
   BillingTerm,
   {
     midMarket: { avatars: string; price: string };
-    smallBusiness: { avatars: string; price: string; cta: string };
+    smallBusiness: { avatars: string; price: string };
   }
 > = {
   "12": {
     midMarket: { avatars: "10 avatars", price: "$2,499 p/m" },
-    smallBusiness: { avatars: "2 avatars", price: "$899 p/m", cta: "Book Now" },
+    smallBusiness: { avatars: "2 avatars", price: "$899 p/m" },
   },
   "24": {
     midMarket: { avatars: "5 avatars", price: "$1,499 p/m" },
-    smallBusiness: { avatars: "3 avatars", price: "$499 p/m", cta: "Learn More with a 15min meeting" },
+    smallBusiness: { avatars: "3 avatars", price: "$499 p/m" },
   },
 };
 
@@ -152,7 +152,7 @@ export function PricingPlans() {
           </CardContent>
           <CardFooter>
             <Button asChild variant="outline" className="w-full">
-              <Link href="/contact#book-demo">{t.smallBusiness.cta}</Link>
+              <Link href="/contact#book-demo">Book Now</Link>
             </Button>
           </CardFooter>
         </Card>
