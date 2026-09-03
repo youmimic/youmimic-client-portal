@@ -1,5 +1,245 @@
 # HANDOFF.md
 
+## Session: Marketing site rebuild (glassengine.wixstudio.com/youmimicai reference) — 2026-08-31
+
+User shared a Wix Studio draft as the new marketing-site reference and
+asked for a full rebuild to match, explicitly requesting clarifying
+questions first. Went through `AskUserQuestion` + a written, user-approved
+plan (`C:\Users\milan\.claude\plans\validated-petting-honey.md`) before any
+code, since this touched nav structure, pricing (real dollar figures), and
+several new pages — confirmed: full rebuild (not just pricing); write real
+YouMimic copy matching the Wix draft's section *structure*, not its literal
+unedited Wix placeholder sentences; the 5 pricing tiers/dollar amounts are
+real and approved to publish as-is; the 5 new footer pages (Press/Dataroom/
+AI Ethics/Media Center/Careers, none of which have real content anywhere,
+including on the Wix draft itself) become honest "coming soon" stubs, not
+fabricated content. One judgment call made without a separate question: the
+Wix draft's "Brad" testimonial is an unattributed placeholder, not a real
+customer quote we have consent to publish — the Small Business page's
+testimonial slot became an unattributed use-case scenario instead of an
+invented named quote.
+
+**What changed:**
+- `components/marketing/marketing-nav.tsx` — added a Solutions dropdown
+  (new shadcn `dropdown-menu` component, `npx shadcn add dropdown-menu` —
+  this project's UI kit is Base UI-flavored, so `DropdownMenuItem` needed
+  `render={<Link .../>}` rather than Radix's `asChild`, confirmed against
+  `components/ui/dialog.tsx`'s existing use of the same pattern) with a
+  "Small Business" child link; renamed the "Pricing" nav label to **Plans**
+  and "Contact" to **Connect** (labels only — kept the existing `/pricing`
+  and `/contact` URLs so nothing existing breaks). Mobile panel got a
+  matching nested-disclosure pattern for the Solutions submenu.
+- `components/marketing/pricing-plans.tsx` — replaced the old 3-tier
+  generic pricing (Creator/Enterprise/Custom, "Contact us") with the real,
+  confirmed 5-tier structure (Corporate $4,999/mo flat; Mid Market
+  10 avatars/$2,499/mo on a 12-month term or 5 avatars/$1,499/mo on 24
+  months; Small Business 2 avatars/$899/mo on 12 months or 3 avatars/
+  $499/mo on 24 months with distinct "Learn More with a 15min meeting"
+  CTA). Built as a 12/24-month billing toggle over 3 product cards rather
+  than 5 flat cards — a real UX improvement for what's structurally 3
+  products × up to 2 terms, and a small, self-contained change (component
+  became `"use client"` with toggle state, same pattern already used by
+  `MarketingNav`). This same component is shared by `/pricing` and the
+  homepage's embedded Pricing section, so both picked up the new tiers
+  automatically. **Flagged for the user, not silently "fixed"**: Mid Market
+  gets *fewer* avatars on the longer 24-month term while Small Business
+  gets *more* — an asymmetry that might be a typo on the source site, but
+  implemented exactly as confirmed real.
+- `app/(marketing)/solutions/small-business/page.tsx` (new) — the Wix
+  draft's Small Business Solutions page, restructured with real copy: hero,
+  six numbered service offerings (Social Media, Project Proposals,
+  Personalised Outreach, Language, Sales, Newsletters — each with fresh
+  1-2 sentence copy, not Wix's empty placeholders), a stats section in the
+  same style as the homepage's existing stats block (not Wix's odd "32K
+  Token Access"), and an unattributed use-case scenario in place of a
+  fabricated testimonial. The existing general `/solutions` hub (5
+  capabilities + 13 industries, already richer than the Wix draft) was left
+  untouched — this is a new, more specific sub-page, not a replacement.
+- `components/marketing/coming-soon-page.tsx` (new, shared) +
+  `app/(marketing)/press/page.tsx`, `dataroom/page.tsx`, `ai-ethics/page.tsx`,
+  `media-center/page.tsx`, `careers/page.tsx` (new, thin) — five honest
+  placeholder pages instead of 5x copy-pasted boilerplate.
+- `components/marketing/marketing-footer.tsx` — full rebuild: Company
+  column (Press, Dataroom, Contact, Privacy Policy → the existing
+  `public/privacy-policy.pdf`, Business Terms → the existing
+  `public/terms-of-business.pdf`, AI Ethics, Media Center, Careers),
+  Navigation column (mirrors the header nav, including Small Business),
+  Social column (LinkedIn and Facebook — the two real URLs the user
+  provided mid-session; Twitter/X and YouTube omitted rather than guessed,
+  easy to add once real URLs exist), and the real ABN from the Wix draft's
+  own footer ("ABN 39 695 563 627"). Kept the existing Sign in/Get started
+  links in the bottom bar rather than removing working navigation. **Note**:
+  `lucide-react` (`^1.17.0`) no longer ships brand/logo icons (Facebook,
+  LinkedIn, Twitter, YouTube were removed from the package over trademark
+  concerns) — every social entry uses a generic external-link glyph
+  (`ArrowUpRight`) instead of pulling in a separate icon package for this
+  alone.
+- `app/(marketing)/page.tsx` — added a "Book a Demo Meeting Today" CTA
+  section between Pricing and the Final CTA, linking to `/contact#book-demo`.
+- `app/(marketing)/contact/page.tsx` — added `id="book-demo"` (with
+  `scroll-mt-20` to clear the sticky header) to the existing Calendly
+  section, so every new "Book Now" CTA across the site can deep-link
+  straight to the booking widget instead of just the page top. No new
+  booking system — reused the Calendly integration already there.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean (after fixing the asChild → render prop issue
+                    and swapping the removed lucide-react brand icons)
+npm test           → 69/69 passing (unchanged — no test-covered code touched)
+npx next build     → clean; all 9 new/changed marketing routes compiled
+```
+Started the real dev server (no `chromium-cli`/Playwright/Puppeteer
+available in this environment, same limitation as the brand-palette
+session) and curl-checked every new/changed route for a 200: `/`,
+`/pricing`, `/solutions`, `/solutions/small-business`, `/press`,
+`/dataroom`, `/ai-ethics`, `/media-center`, `/careers`, `/contact`. Fetched
+the actual rendered HTML and confirmed: the real pricing figures appear
+(`$4,999 p/m`, `$2,499 p/m`, `$899 p/m`, `10 avatars`, `2 avatars` — the
+12-month default state; 24-month figures are behind client-side toggle
+state, correctly not in the initial server HTML), the new nav labels
+(Plans/Connect/Small Business) render, every new footer link resolves to
+the right href, `/contact#book-demo` appears on pricing CTAs, the ABN line
+is present, and both real social URLs render. Confirmed the footer itself
+renders exactly once per page (an initial grep hit on "ABN" 4× in one file
+turned out to be Next dev mode's normal embedded RSC payload duplicating
+page text, not a real rendering bug — checked by counting actual `<footer>`
+elements, which was 1).
+
+**Not done:**
+- Twitter/X and YouTube URLs — omitted, not guessed; add them to
+  `marketing-footer.tsx`'s `allSocialLinks` array whenever real ones exist.
+- No real content for Dataroom/AI Ethics/Media Center/Careers beyond the
+  honest placeholder — none exists anywhere to build real pages from (Press
+  got real content — see follow-up below).
+- No real browser screenshot (same tooling gap as the brand-palette
+  session) — recommend `/run-skill-generator` if visual UI verification
+  becomes a recurring need.
+
+### Follow-up, same day: real content for the Press page
+
+User asked to pull the Wix draft's `/expertise` page content into `/press`.
+That page turned out to be a list of 9 real press mentions/awards (iAwards
+nomination, TasICT President's Awards, a Blackbird Ventures/Startmate
+shortlist beating 900 companies, TasICT Finalist, Top Companies 2026, an
+Ausprenour article, Australian Business Journal, a DXC Technology
+partnership, a YouMimic Ambassador announcement) — real facts, but most
+items' body copy on the source was still Wix's own generic placeholder
+text, and the two items with real text had typos ("nomiated"/"iAwrads",
+"Startemate"). `app/(marketing)/press/page.tsx` was rebuilt from the
+`ComingSoonPage` stub into a proper card grid: real headline for every
+item (typos corrected), and a short, honest, non-fabricated line for each
+— naming the real recognition rather than inventing specifics the source
+didn't actually have. This is the client's own company's own promotional
+content being carried into their own site, not third-party material.
+
+Verified: `npm run typecheck`/`lint` clean, `next build` compiles `/press`,
+and confirmed via the real dev server that all 9 real headlines and their
+corrected/honest body text render in the actual HTML.
+
+## Session: Brand palette & font compliance sweep — 2026-08-31
+
+User gave the definitive brand spec — Black `#333333`, White `#FFFFFF`,
+White Carbon (backgrounds) `#EDEDED`, Green Teal `#4C9997`; Montserrat
+Bold/Regular — and asked to make sure the site follows it. Investigation
+(via `AskUserQuestion` + a written, user-approved plan at
+`C:\Users\milan\.claude\plans\validated-petting-honey.md` before any code)
+found three areas in different states, all fixed:
+
+1. **Dashboard app** (`app/globals.css`) already had a token system built
+   around this palette from an earlier session, but imprecisely — pure
+   `#000000` foreground instead of `#333333`, a custom off-white background
+   instead of `#EDEDED`, oklch approximations instead of the exact teal hex.
+   Also a real bug: a later `:root` block put `'Avenir Next', 'Avenir'`
+   *ahead of* Montserrat in `--font-sans`, so Montserrat silently lost on
+   any device that had those fonts installed (common on Mac).
+2. **Marketing site** (`app/(marketing)/page.tsx`,
+   `app/(marketing)/solutions/page.tsx`) — most sections already used the
+   dashboard's semantic token classes, so fixing (1) fixed those for free.
+   But the Hero, `ProductMockup`, and the dark "Final CTA" sections are
+   deliberately hardcoded to an "always dark regardless of theme" design
+   (explicit existing code comments confirm this is intentional), using an
+   entirely different, older palette: brown `#604B33`, sage `#60918C`,
+   near-black `#191818`, off-white `#ECEAE9`, blue-grey `#9AB5C7`.
+3. **Email templates** (`emails/config.ts`, `emails/components/email-layout.tsx`,
+   `emails/templates/*.tsx`) — the same old brown/sage/near-black palette,
+   partly centralized in `emails/config.ts`'s `brandConfig.colors` (most
+   templates go through `EmailLayout`), but three templates
+   (`invite-email.tsx`, `contact-notification-email.tsx`,
+   `verify-email.tsx`) hand-roll their own copy of the layout with
+   hardcoded literals instead of importing `EmailLayout` — a pre-existing
+   duplication, left as-is structurally (out of scope), just with its
+   literal values fixed.
+
+**What changed:**
+- `app/globals.css` — light-mode `--foreground`/`--card-foreground`/
+  `--popover-foreground` → `#333333`; `--background`/`--secondary`/`--muted`
+  → `#EDEDED`; `--card`/`--popover` → `#FFFFFF`; `--primary`/`--accent`/
+  `--ring` → `#4C9997` (switched from oklch approximations to literal hex —
+  the exact brand source-of-truth values, no conversion rounding). Dark
+  mode kept its existing near-black/off-white structure (the brand spec
+  only defines light-mode values) but `--primary`/`--accent`/`--ring` also
+  set to the literal `#4C9997`. Fixed the font bug: `--font-sans` no longer
+  lists `'Avenir Next', 'Avenir'` ahead of Montserrat.
+- `app/(marketing)/page.tsx`, `app/(marketing)/solutions/page.tsx` — every
+  hardcoded hex in the Hero, `ProductMockup`, and dark CTA sections mapped
+  to the new palette (brown/sage → teal, near-black → `#333333`, off-white
+  → `#FFFFFF` for text / `#EDEDED` for background surfaces). The blue-grey
+  `#9AB5C7` (muted text on the dark hero, no equivalent hue in the new
+  4-color palette) became white at reduced opacity
+  (`rgba(255,255,255,0.75)`) rather than an invented off-brand color.
+- `emails/config.ts` — `brandConfig.colors` repointed to the new palette;
+  `muted` collapsed from the old `#5f5a5a` straight to `#333333` (the
+  4-color spec has no separate muted grey); `secondary`/`brown` (otherwise
+  unused outside the old header gradient) also set to `#4C9997`;
+  `accentSoft` set to a light tint of teal (needed because `BrandConfig`'s
+  type requires the field).
+- `emails/components/email-layout.tsx` — the header's
+  `linear-gradient(135deg, primary, secondary)` became a solid
+  `backgroundColor: c.primary` fill (both gradient stops were already the
+  same teal, so a gradient was pointless). Same fix applied identically
+  inside the three hand-rolled templates. Every other template's one
+  hardcoded `color: "#191818"` body-text line → `#333333`.
+- **Deliberately not changed**: `fontFamily: "Arial, sans-serif"` in email
+  templates — custom web fonts are unreliable across email clients
+  (Gmail/Outlook strip `@font-face`), so a system-safe stack there is
+  standard practice, not a gap.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npx next build     → clean
+```
+Grepped the whole repo for every old-palette hex (`604B33`, `608982`,
+`60918C`, `191818`, `9AB5C7`, `ECEAE9`, `F7F6F5`, `5f5a5a`, `ACC8CE`,
+`e3e0de`, `f4f3f2`) — zero remaining occurrences. Started the real dev
+server and fetched the actual rendered HTML/CSS (`curl`, not just build
+success — no `chromium-cli`/Playwright/Puppeteer available in this Windows
+environment to take a real screenshot, so this was the closest verification
+to what a browser actually receives): confirmed the homepage and solutions
+page HTML contain the new hex values and zero old ones, and confirmed the
+compiled CSS chunk has `--font-sans: var(--font-montserrat), sans-serif`
+with no `Avenir` reference and the correct token hex values (`#333`/`#fff`/
+`#ededed`/`#4c9997` — CSS-minifier shorthand for the same colors). Also
+rendered two email templates (one via `EmailLayout`, one hand-rolled) with
+`@react-email/render` directly: confirmed no `linear-gradient` remains and
+no old-palette hex appears in the output.
+
+**Not done:**
+- No real browser screenshot (tooling unavailable in this environment) —
+  recommend a manual visual check, or running `/run-skill-generator` to set
+  up `chromium-cli`/Playwright for this project if visual UI verification
+  will be needed regularly.
+- The ~30 files using semantic status-color Tailwind classes
+  (`bg-green-100`/`text-red-800`/etc. for success/error/warning badges)
+  were deliberately left untouched — functional status indicators, a
+  different design concern from brand identity.
+- The three email templates duplicating `EmailLayout`'s structure instead
+  of importing it were not refactored — real cleanup opportunity, but
+  structural, beyond "follow the palette."
+
 ## Session: Credit-based monthly usage tracking (Avatar Studio) — 2026-08-31
 
 Follows directly from the delete-video session below: once a `GeneratedVideo`

@@ -615,6 +615,22 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── Book a demo ──────────────────────────────────────────────────── */}
+      <section className="border-b border-border bg-muted py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-4 text-center sm:px-6">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Book a Demo Meeting Today
+          </h2>
+          <p className="mx-auto mt-3 max-w-md text-muted-foreground">
+            See a YouMimic avatar generate a video in real time — pick a time
+            that works for you.
+          </p>
+          <Button asChild className="mt-6 h-11 px-6 text-sm font-medium">
+            <Link href="/contact#book-demo">Book a Demo</Link>
+          </Button>
+        </div>
+      </section>
+
       {/* ── Final CTA — dark, matches hero palette ───────────────────────── */}
       <section
         className="relative overflow-hidden py-24 sm:py-32"

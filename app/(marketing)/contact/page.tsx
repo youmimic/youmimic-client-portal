@@ -41,7 +41,7 @@ export default function ContactPage() {
             </div>
 
             {/* Calendly inline widget */}
-            <div>
+            <div id="book-demo" className="scroll-mt-20">
               <h2 className="mb-6 text-xl font-semibold text-foreground">
                 Book a demo
               </h2>
