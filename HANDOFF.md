@@ -1,5 +1,285 @@
 # HANDOFF.md
 
+## Session: Hero image sized to 80vh/80vw on desktop — 2026-08-31
+
+Follow-up, same day. Asked to make the hero image cover at least 80% of
+viewport height and width on desktop.
+
+**What changed** (`app/(marketing)/page.tsx`): the hero image's wrapper was
+previously a single child inside the same `max-w-5xl` container as the
+headline/CTA text, so it could never grow wider than that (1024px)
+regardless of screen size. Split it into its own container, independent
+of the text column below it:
+- Below `lg`: unchanged — `max-w-5xl` with the same padding as the text,
+  `aspect-21/9` sizing (so mobile/tablet keep exactly the look from the
+  last two sessions).
+- At `lg` and up: `lg:max-w-none lg:px-0` on the outer wrapper (drops the
+  1024px cap and matching padding), `lg:aspect-auto lg:h-[80vh]
+  lg:w-[80vw]` on the image itself (drops the aspect-ratio-driven sizing
+  in favor of explicit viewport-relative dimensions, then centers via the
+  existing `mx-auto`).
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML from the dev server that
+`lg:h-[80vh]`, `lg:w-[80vw]`, and `lg:max-w-none` are all present on the
+correct elements.
+
+**Not done / next:**
+- No real browser screenshot (same environment limitation as every UI
+  change today) — worth a direct look on an actual desktop-width window,
+  since viewport-unit sizing is exactly the kind of thing that's hard to
+  fully judge from markup alone.
+- The underlying hero photo licensing question is still separately
+  pending from an earlier session.
+
+## Session: Hero reorder + licensed Pexels video on Book a Meeting — 2026-08-31
+
+Follow-up, same day. Two requests: put the hero's text/CTA below the image
+(previously above it), and add a specific Pexels video to the "Book a
+Meeting" section, with hover-triggered motion.
+
+**Video licensing — confirmed directly, not assumed.** Fetched the given
+Pexels video page (id `6290476`) and confirmed it's covered by the
+standard Pexels License ("Free to use", free for commercial use, official
+"Free download" button on the page itself — unlike the earlier Wix hero
+photo, this isn't a third-party-credited image embedded in someone else's
+draft site, it's stock footage from Pexels' own platform under Pexels'
+own permissive terms). Traced the official download link
+(`pexels.com/download/video/6290476/`) to its actual CDN redirect and
+downloaded a web-appropriate resolution directly from Pexels' CDN — the
+default download was a 34MB 4K file, too heavy for a page; found and used
+the 1280×720 variant instead (`public/book-meeting.mp4`, 3.8MB) by
+checking Pexels' predictable video-file naming pattern for smaller sizes.
+
+**What changed** (`app/(marketing)/page.tsx`):
+- **Hero**: reordered so the rounded image banner (added last session)
+  now comes first, with the headline/subline/CTAs below it — matches the
+  Wix reference's actual image-then-heading order. No color/copy changes,
+  pure reorder.
+- **Book a demo section**: added the downloaded video
+  (`public/book-meeting.mp4`) below the "Book a Meeting" button, in a
+  rounded container matching the site's established corner-rounding
+  convention. Autoplaying, looped, muted, `playsInline` (standard for a
+  background-style decorative video). Hover motion — `hover:scale-105
+  transition-transform duration-300` — done in pure CSS/Tailwind, no
+  client-side JS needed, so the page stays a server component.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML and a direct request to the running
+dev server: the video element and its `hover:scale-105` class are present,
+`/book-meeting.mp4` serves with a 200 and is permitted by the existing CSP
+(`media-src 'self' https:`, no config change needed), and — checked by
+byte offset in the raw HTML, not just presence — the image div's markup
+now appears before the `<h1>` element, confirming the reorder actually
+took effect rather than just looking right by coincidence.
+
+**Not done / next:**
+- Hero photo licensing (the background image inside the rounded banner,
+  separate from this session's video) — still pending from an earlier
+  session.
+- No real browser screenshot (same environment limitation as every UI
+  change today) — worth checking the hover effect and video playback
+  directly.
+
+## Session: Hero/Final CTA color rebalance (white hero, teal close) — 2026-08-31
+
+Follow-up, same day. User asked for the hero background to be a different
+color than dark, still from the approved 4-color palette (confirmed via
+`AskUserQuestion`: **white**, not a new color), and for the rest of the
+page's light/dark rhythm to be re-balanced accordingly (also confirmed:
+holistic pass, not just swap the two dark bands 1:1).
+
+**What changed** (`app/(marketing)/page.tsx`):
+- **Hero**: background `#333333` → `#FFFFFF`. Since white text over a
+  photo backdrop no longer made sense on a white section, restructured the
+  composition from "full-viewport text overlaid on a dark photo backdrop"
+  to a stacked layout — headline/subline/CTAs first (now dark `#333333`
+  text, matching a light section), with the rounded-corner photo (kept
+  from the prior session's change) displayed as a supporting banner image
+  below the copy, at a fixed `aspect-21/9` rather than filling the
+  viewport height. The photo itself keeps its own dark vignette/teal tint
+  internally for atmosphere — nothing needs to read on top of it anymore,
+  so the vignette is a pure visual choice, not a legibility requirement.
+  Dropped `min-h-screen` (was specifically about the old full-bleed
+  dramatic composition, doesn't fit a stacked layout as well) in favor of
+  generous section padding matching the rest of the page.
+- **Final CTA**: background `#333333` → `#4C9997` (Green Teal) — bookends
+  the now-white hero with one bold accent close instead of matching dark.
+  The primary button flipped from teal-on-nothing to white-bg/teal-text
+  (a teal button would have vanished against a teal section background);
+  the outline "Sign in" button kept white-on-transparent since teal, like
+  the old dark background, still contrasts against it.
+- **Not changed**: every section in between (Stats, Features, Modules,
+  How it works, Use cases, Pricing, Book a demo) — these were already
+  neutral light tones (`--background`/`--muted` both resolve to the same
+  `#EDEDED` in light mode, an existing fact about this codebase's tokens,
+  not something introduced here), so the "rebalance" concretely meant the
+  two former-dark bookend sections, not the middle content.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML: hero's `background-color:#FFFFFF`
+and Final CTA's `background-color:#4C9997` are both present, the primary
+buttons' colors are correctly inverted in each section, the established
+headline is unchanged, and only the three already-approved palette hex
+values (`#333333`/`#4C9997`/`#FFFFFF`) appear as literal inline colors
+anywhere on the page.
+
+**Not done / next:**
+- Hero photo licensing — still pending the user's confirmation of the Wix
+  image's actual source URL (unrelated to this color change; the same
+  placeholder `hero-bg.jpg` is used either way).
+- No real browser screenshot (same environment limitation as every UI
+  change today) — worth a direct visual check given how much the hero's
+  composition changed, not just its color.
+
+## Session: Rounded hero image + hero-adjacent Wix content — 2026-08-31
+
+Follow-up, same day. Two requests: round the hero image's corners "like
+the wix one", and pull related content from the Wix site into the hero.
+
+**Hero photo licensing — traced, not resolved.** Asked to try tracing the
+Wix hero photo's license. Searched for the credited photographer, "Vitaly
+Gariev" — confirmed an active Unsplash/Pexels contributor
+(`@silverkblack`), and photos on those platforms carry the permissive
+Unsplash License (free for commercial use, no permission required). This
+makes it *likely* the Wix hero photo is sourced from one of those
+libraries via Wix's own stock-photo integration, but it isn't
+*confirmed* — text-based fetches of the Wix site can't retrieve the actual
+image file to verify it's the same photo. Asked the user to grab the
+direct image URL from the Wix editor so it can be confirmed against
+`images.unsplash.com`/`images.pexels.com` before using it directly; still
+pending, not resolved this session.
+
+**What changed** (`app/(marketing)/page.tsx`, hero section only):
+- **Rounded image frame**: the hero photo layer (background image +
+  vignette + ambient tint, previously all `absolute inset-0` spanning the
+  full section edge-to-edge) is now wrapped in a single inset container —
+  `inset-6 sm:inset-10 lg:inset-16`, `rounded-[2rem] sm:rounded-[2.5rem]`,
+  `overflow-hidden`. The section's existing dark `#333333` background now
+  shows through as a visible frame around the rounded image, matching the
+  rounded treatment the user described seeing on the live Wix site
+  (text-based analysis of that site didn't clearly show rounding, likely a
+  limitation of fetching a JS-heavy Wix page as text rather than rendering
+  it — deferred to the user's direct visual observation).
+- **Added a secondary "Contact Sales" link** next to the existing "Get
+  started free" button — this mirrors a real, non-placeholder element
+  confirmed on the Wix hero (a "Contact Sales" link next to its own
+  heading), pointed at the same `/contact#book-demo` destination already
+  used by every other CTA on the page.
+- **Did not change** the established headline ("Say it once. Scale it
+  everywhere.") — the Wix hero's own real heading, "View our plans for
+  your Business", is a much more generic CTA-style heading than our
+  already-user-approved tagline, so it wasn't adopted; only the
+  hero-adjacent "Contact Sales" link was pulled in as genuinely new real
+  content.
+- **Not changed**: color tokens, Montserrat setup, the hero photo file
+  itself (still the placeholder `hero-bg.jpg`, pending the licensing
+  question above), every other section.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML: the new `rounded-[2rem]`/
+`rounded-[2.5rem]` classes are present, the "Contact Sales" link renders
+with the correct `href`, the established headline text is unchanged, and
+the same `#333333`/`#4C9997` hex values are still what's rendered.
+
+**Not done / next:**
+- Hero photo licensing — waiting on the user to confirm the Wix image's
+  actual source URL.
+- No real browser screenshot (same environment limitation as every UI
+  change today) — the rounded-corner framing specifically is worth a
+  direct visual check once the real photo is in place.
+
+## Session: Blend real Wix content into homepage — 2026-08-31
+
+User's boss decided to go with the Wix draft's design/content over the
+pure Starlink direction. Rather than treat this as a full reversion,
+scoped it as a blend: keep the Starlink pass's spacing/type-scale/
+minimal-border visual language as the underlying skeleton (confirmed via
+`AskUserQuestion`), and layer in real Wix content wherever it actually
+exists — pricing, demo booking, nav labels, and footer were already pulled
+in from earlier sessions today, so the remaining question was whether
+anything real was still missing.
+
+**Images — flagged, not silently worked around.** The user asked to
+"keep the images from the wix template." Re-fetched the Wix homepage
+specifically to inventory its images: the hero background photo is
+explicitly credited to a third-party photographer ("Image by Vitaly
+Gariev") — not something safe to scrape and rehost on a separate
+codebase without knowing the license terms extend past Wix's own hosting.
+The company logo, by contrast, is the client's own asset and was already
+sitting in `public/` (`youmimic-green-transparent.png`/
+`youmimic-white-transparent.png`) from earlier work. Raised this
+distinction directly with the user rather than guessing; they confirmed:
+keep the existing `public/hero-bg.jpg` for now, get a properly licensed
+file from the client later if the Wix photo specifically is wanted.
+
+**Content audit.** Re-fetched the Wix homepage a second time asking it to
+classify every section as real business content vs. generic unedited Wix
+placeholder filler. Result: pricing/demo/footer/nav (already incorporated)
+plus one genuinely new, real item never yet used — three named course
+modules, **Speak / Read / Write** ("conversation courses" / "reading
+courses" / "writing courses"). Everything else on the Wix draft's home
+page is still Wix's own boilerplate placeholder text (including the hero
+copy itself), so — consistent with every prior content-blend decision this
+session — not adopted verbatim.
+
+**What changed** (`app/(marketing)/page.tsx`): added a new "Speak. Read.
+Write." section between Features and How it works, three cards (icon +
+title + one-line body, original copy expanding on the real module names/
+descriptions from the source), in the same visual language as the rest of
+the page (no card borders, centered heading, generous spacing). Fixed the
+section background alternation while inserting it — the new section's
+`bg-muted` made three sections in a row muted (Modules, How it works, Use
+cases all shared it); flipped "How it works" back to a plain background to
+restore proper Stats→Features→Modules→How-it-works→Use-cases alternation.
+Two new lucide icon imports (`MessageCircle`, `PenLine`).
+
+**Not changed**: color tokens, Montserrat setup, every other section's
+copy/structure from the earlier Starlink and jargon-simplification passes,
+the hero image.
+
+**Verification:**
+```
+npm run lint      → 0 errors, 3 pre-existing warnings (unchanged)
+npm run typecheck → clean
+npm test           → 69/69 passing
+npx next build     → clean
+```
+Confirmed via the real rendered HTML from the dev server: the new
+Speak/Read/Write section and its three labels render, and the exact same
+`#333333`/`#4C9997` hex values are still what's rendered.
+
+**Not done / next:**
+- Hero photo — still the existing `public/hero-bg.jpg`, pending either a
+  properly licensed file from the client or a decision to source one
+  separately.
+- No real browser screenshot (same environment limitation as every UI
+  change today).
+
 ## Session: Removed avatar showcase, simplified jargon — 2026-08-31
 
 Small follow-up, same day. Two changes to `app/(marketing)/page.tsx`:

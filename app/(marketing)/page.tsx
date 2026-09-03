@@ -11,6 +11,8 @@ import {
   Video,
   Cpu,
   Share2,
+  MessageCircle,
+  PenLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PricingPlans } from "@/components/marketing/pricing-plans";
@@ -44,6 +46,24 @@ const features = [
     icon: Building2,
     title: "Built-in oversight",
     body: "Control who can do what, keep your brand consistent, and see what's been made. Everything stays in order.",
+  },
+];
+
+const modules = [
+  {
+    icon: MessageCircle,
+    title: "Speak",
+    body: "Conversation courses your avatar can lead — practice, roleplay, and everyday dialogue, in any language.",
+  },
+  {
+    icon: BookOpen,
+    title: "Read",
+    body: "Reading courses that turn written material into spoken video lessons, ready to watch or listen to.",
+  },
+  {
+    icon: PenLine,
+    title: "Write",
+    body: "Writing courses delivered as video walkthroughs — clear guidance, without a wall of text.",
   },
 ];
 
@@ -97,45 +117,48 @@ const useCases = [
 export default function HomePage() {
   return (
     <>
-      {/* ── Hero — Starlink-style: full-viewport, single centered column,
-          oversized type, minimal copy, one CTA. Same colors/background
-          layers as before (dark #333333, teal ambient tint) — structure
-          and copy length changed, not the palette or font. ──────────── */}
-      <section className="relative flex min-h-screen items-center overflow-hidden">
-        {/* Layer 1: Background — charcoal fallback; /public/hero-bg.jpg activates automatically */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundColor: "#333333",
-            backgroundImage: "url('/hero-bg.jpg')",
-          }}
-        />
+      {/* ── Hero — white background (not dark), stacked composition: text
+          content first, rounded image banner below it. Same palette/font
+          as everywhere else — this section just no longer sits on the
+          dark #333333 band; text needs dark-on-light color instead of
+          light-on-dark now. ─────────────────────────────────────────── */}
+      <section className="py-24 sm:py-32" style={{ backgroundColor: "#FFFFFF" }}>
+        {/* Rounded image banner — own container, sized independently from
+            the text content below so it can grow past max-w-5xl on
+            desktop. Below lg: same aspect-ratio-based sizing as before,
+            matching the text column's width. At lg+: fixed to at least
+            80vh/80vw, matching the text column only via centering. */}
+        <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 lg:max-w-none lg:px-0">
+          <div className="relative mx-auto aspect-21/9 w-full overflow-hidden rounded-[2rem] shadow-lg sm:rounded-[2.5rem] lg:aspect-auto lg:h-[80vh] lg:w-[80vw]">
+            <div
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+              style={{
+                backgroundColor: "#333333",
+                backgroundImage: "url('/hero-bg.jpg')",
+              }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(ellipse at center, rgba(51,51,51,0.35) 0%, rgba(51,51,51,0.75) 100%)",
+              }}
+            />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(ellipse at 15% 85%, rgba(76,153,151,0.28) 0%, transparent 52%), " +
+                  "radial-gradient(ellipse at 78% 18%, rgba(76,153,151,0.20) 0%, transparent 48%)",
+              }}
+            />
+          </div>
+        </div>
 
-        {/* Layer 2: Vignette — edges darker, center clearer, for a more
-            cinematic full-bleed feel than the old left-to-right gradient */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse at center, rgba(51,51,51,0.55) 0%, rgba(51,51,51,0.92) 100%)",
-          }}
-        />
-
-        {/* Layer 3: Ambient palette tint for atmosphere */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(ellipse at 15% 85%, rgba(76,153,151,0.28) 0%, transparent 52%), " +
-              "radial-gradient(ellipse at 78% 18%, rgba(76,153,151,0.20) 0%, transparent 48%)",
-          }}
-        />
-
-        {/* Content — single centered column, no badge, no mockup, one CTA */}
-        <div className="relative z-10 mx-auto max-w-4xl px-4 py-28 text-center sm:px-6">
+        <div className="mx-auto max-w-5xl px-4 text-center sm:px-6">
           <h1
-            className="text-6xl font-semibold leading-[1.02] tracking-tight sm:text-7xl lg:text-8xl"
-            style={{ color: "#FFFFFF" }}
+            className="mt-16 text-6xl font-semibold leading-[1.02] tracking-tight sm:text-7xl lg:text-8xl"
+            style={{ color: "#333333" }}
           >
             Say it once.
             <br />
@@ -143,11 +166,11 @@ export default function HomePage() {
           </h1>
           <p
             className="mx-auto mt-6 max-w-xl text-lg leading-relaxed sm:text-xl"
-            style={{ color: "rgba(255,255,255,0.75)" }}
+            style={{ color: "rgba(51,51,51,0.7)" }}
           >
             One AI avatar. Every language, every channel.
           </p>
-          <div className="mt-10 flex justify-center">
+          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button
               asChild
               className="h-12 px-8 text-base font-medium"
@@ -159,6 +182,15 @@ export default function HomePage() {
             >
               <Link href="/signup">Get started free</Link>
             </Button>
+            {/* Secondary link — mirrors the Wix reference's "Contact Sales"
+                link sitting alongside its hero CTA */}
+            <Link
+              href="/contact#book-demo"
+              className="text-sm font-medium underline-offset-4 hover:underline"
+              style={{ color: "#333333" }}
+            >
+              Contact Sales
+            </Link>
           </div>
         </div>
       </section>
@@ -210,8 +242,37 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── How it works ─────────────────────────────────────────────────── */}
+      {/* ── Modules: Speak / Read / Write ────────────────────────────────── */}
       <section className="bg-muted py-24 sm:py-32">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="mb-16 text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+              Speak. Read. Write.
+            </h2>
+            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
+              Course modules your avatar can lead, end to end.
+            </p>
+          </div>
+          <div className="grid gap-10 sm:grid-cols-3">
+            {modules.map(({ icon: Icon, title, body }) => (
+              <div key={title} className="text-center">
+                <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-accent/10">
+                  <Icon className="size-7 text-accent" />
+                </div>
+                <h3 className="mt-5 text-xl font-semibold text-foreground">
+                  {title}
+                </h3>
+                <p className="mt-2 leading-relaxed text-muted-foreground">
+                  {body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── How it works ─────────────────────────────────────────────────── */}
+      <section className="py-24 sm:py-32">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
@@ -301,21 +362,38 @@ export default function HomePage() {
           <Button asChild className="mt-8 h-12 px-8 text-base font-medium">
             <Link href="/contact#book-demo">Book a Meeting</Link>
           </Button>
+
+          {/* Video — scales up slightly on hover/mouse-in, back to normal
+              on mouse-out (pure CSS, no client JS needed). */}
+          <div className="mx-auto mt-12 max-w-2xl overflow-hidden rounded-[2rem] shadow-lg">
+            <video
+              className="block w-full transition-transform duration-300 ease-out hover:scale-105"
+              src="/book-meeting.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+          </div>
         </div>
       </section>
 
-      {/* ── Final CTA — dark, matches hero palette ───────────────────────── */}
+      {/* ── Final CTA — Green Teal, bookends the now-white hero with one
+          bold accent close instead of matching dark. Primary button flips
+          to white-on-teal (a teal button would vanish on a teal section);
+          the outline button stays white-on-transparent since teal, like
+          the old dark background, still contrasts against it. ─────────── */}
       <section
         className="relative overflow-hidden py-32 sm:py-40"
-        style={{ backgroundColor: "#333333" }}
+        style={{ backgroundColor: "#4C9997" }}
       >
-        {/* Subtle ambient tint */}
+        {/* Subtle depth tint */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse at 80% 50%, rgba(76,153,151,0.12) 0%, transparent 60%), " +
-              "radial-gradient(ellipse at 20% 80%, rgba(76,153,151,0.15) 0%, transparent 55%)",
+              "radial-gradient(ellipse at 80% 50%, rgba(51,51,51,0.12) 0%, transparent 60%), " +
+              "radial-gradient(ellipse at 20% 80%, rgba(51,51,51,0.10) 0%, transparent 55%)",
           }}
         />
         <div className="relative z-10 mx-auto max-w-6xl px-4 text-center sm:px-6">
@@ -327,7 +405,7 @@ export default function HomePage() {
           </h2>
           <p
             className="mx-auto mt-5 max-w-sm text-lg leading-relaxed"
-            style={{ color: "rgba(255,255,255,0.75)" }}
+            style={{ color: "rgba(255,255,255,0.85)" }}
           >
             Make professional videos without a production crew.
           </p>
@@ -336,8 +414,8 @@ export default function HomePage() {
               asChild
               className="h-12 px-8 text-base font-medium"
               style={{
-                backgroundColor: "#4C9997",
-                color: "#FFFFFF",
+                backgroundColor: "#FFFFFF",
+                color: "#4C9997",
                 borderColor: "transparent",
               }}
             >
@@ -348,7 +426,7 @@ export default function HomePage() {
               variant="ghost"
               className="h-12 px-8 text-base font-medium"
               style={{
-                border: "1px solid rgba(255,255,255,0.25)",
+                border: "1px solid rgba(255,255,255,0.5)",
                 color: "#FFFFFF",
               }}
             >
