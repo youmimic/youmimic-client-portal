@@ -17,7 +17,7 @@ export function WelcomeEmail({ name, verificationUrl }: WelcomeEmailProps) {
       actionUrl={verificationUrl}
       footerNote="If you did not create this account, you can safely ignore this email."
     >
-      <Text style={{ fontSize: "16px", lineHeight: "28px", color: "#191818" }}>
+      <Text style={{ fontSize: "16px", lineHeight: "28px", color: "#333333" }}>
         You’re one click away from getting started.
       </Text>
     </EmailLayout>

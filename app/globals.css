@@ -48,31 +48,31 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ─── Light mode — YouMimic palette ──────────────────────────────────────── */
+/* ─── Light mode — YouMimic brand palette (exact hex, not approximated) ──── */
 :root {
   /* Surfaces */
-  --background:          oklch(0.966 0.004 285);   /* #f5f4f7  white-grey        */
-  --foreground:          oklch(0 0 0);             /* #000000  black             */
-  --card:                oklch(1 0 0);             /* #ffffff  white card        */
-  --card-foreground:     oklch(0 0 0);
-  --popover:             oklch(1 0 0);
-  --popover-foreground:  oklch(0 0 0);
+  --background:          #EDEDED;                 /* White Carbon (backgrounds) */
+  --foreground:          #333333;                 /* Black                      */
+  --card:                #FFFFFF;                  /* White                      */
+  --card-foreground:     #333333;
+  --popover:             #FFFFFF;
+  --popover-foreground:  #333333;
 
-  /* Primary — YouMimic Teal Green #4c9997 */
-  --primary:             oklch(0.634 0.076 194);
-  --primary-foreground:  oklch(1 0 0);             /* white on teal              */
+  /* Primary — Green Teal */
+  --primary:             #4C9997;
+  --primary-foreground:  #FFFFFF;                  /* white on teal              */
 
-  /* Secondary — CarbonWhite #EDEDED */
-  --secondary:           oklch(0.946 0 0);
-  --secondary-foreground: oklch(0 0 0);
+  /* Secondary — White Carbon */
+  --secondary:           #EDEDED;
+  --secondary-foreground: #333333;
 
-  /* Muted — CarbonWhite #EDEDED */
-  --muted:               oklch(0.946 0 0);
+  /* Muted — White Carbon */
+  --muted:               #EDEDED;
   --muted-foreground:    oklch(0.420 0 0);         /* dark grey, ≥4.5:1 on muted */
 
-  /* Accent — teal */
-  --accent:              oklch(0.634 0.076 194);
-  --accent-foreground:   oklch(1 0 0);
+  /* Accent — Green Teal */
+  --accent:              #4C9997;
+  --accent-foreground:   #FFFFFF;
 
   /* Destructive: unchanged */
   --destructive:         oklch(0.577 0.245 27.325);
@@ -80,7 +80,7 @@
   /* Borders & inputs */
   --border:              oklch(0.878 0 0);         /* ~#d8d8d8                   */
   --input:               oklch(0.878 0 0);
-  --ring:                oklch(0.634 0.076 194);   /* teal focus ring            */
+  --ring:                #4C9997;                  /* teal focus ring            */
 
   /* Charts: unchanged */
   --chart-1: oklch(0.87 0 0);
@@ -112,8 +112,8 @@
   --popover:             oklch(0.178 0 0);
   --popover-foreground:  oklch(0.966 0.004 285);
 
-  /* Primary — teal #4c9997 (unchanged in dark) */
-  --primary:             oklch(0.634 0.076 194);
+  /* Primary — Green Teal (unchanged in dark; exact hex, not approximated) */
+  --primary:             #4C9997;
   --primary-foreground:  oklch(0 0 0);             /* black on teal (better contrast) */
 
   /* Secondary */
@@ -124,15 +124,15 @@
   --muted:               oklch(0.215 0 0);
   --muted-foreground:    oklch(0.620 0 0);
 
-  /* Accent — teal */
-  --accent:              oklch(0.634 0.076 194);
+  /* Accent — Green Teal */
+  --accent:              #4C9997;
   --accent-foreground:   oklch(0 0 0);
 
   --destructive:         oklch(0.704 0.191 22.216);
 
   --border:              oklch(1 0 0 / 10%);
   --input:               oklch(1 0 0 / 15%);
-  --ring:                oklch(0.634 0.076 194);   /* teal focus ring            */
+  --ring:                #4C9997;                  /* teal focus ring            */
 
   /* Charts: unchanged */
   --chart-1: oklch(0.87 0 0);
@@ -152,9 +152,12 @@
   --sidebar-ring:               oklch(0.556 0 0);
 }
 
-/* Unlayered — overrides any @layer theme or shadcn defaults */
+/* Unlayered — overrides any @layer theme or shadcn defaults. Montserrat is
+   the brand typeface (Bold/Regular) — do not add other font names ahead of
+   it here, that previously let 'Avenir Next'/'Avenir' silently win on any
+   device that had them installed. */
 :root {
-  --font-sans: 'Avenir Next', 'Avenir', var(--font-montserrat), sans-serif;
+  --font-sans: var(--font-montserrat), sans-serif;
   --font-heading: var(--font-montserrat);
 }
 

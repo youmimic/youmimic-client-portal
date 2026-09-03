@@ -25,7 +25,7 @@ export function VerifyEmailTemplate({
       <Preview>Verify your email address</Preview>
       <Body
         style={{
-          backgroundColor: "#ECEAE9",
+          backgroundColor: "#EDEDED",
           padding: "24px",
           fontFamily: "Arial, sans-serif",
         }}
@@ -41,7 +41,7 @@ export function VerifyEmailTemplate({
         >
           <Section
             style={{
-              background: "linear-gradient(135deg, #608982 0%, #9AB5C7 100%)",
+              backgroundColor: "#4C9997",
               padding: "40px",
             }}
           >
@@ -60,7 +60,7 @@ export function VerifyEmailTemplate({
               style={{
                 fontSize: "16px",
                 lineHeight: "28px",
-                color: "#F7F6F5",
+                color: "#EDEDED",
                 margin: "12px 0 0",
               }}
             >
@@ -70,7 +70,7 @@ export function VerifyEmailTemplate({
 
           <Section style={{ padding: "32px 40px" }}>
             <Text
-              style={{ fontSize: "16px", lineHeight: "28px", color: "#191818" }}
+              style={{ fontSize: "16px", lineHeight: "28px", color: "#333333" }}
             >
               Please verify your email address by clicking the button below.
               This link expires in 24 hours.
@@ -79,7 +79,7 @@ export function VerifyEmailTemplate({
             <Button
               href={verifyUrl}
               style={{
-                backgroundColor: "#608982",
+                backgroundColor: "#4C9997",
                 color: "#ffffff",
                 padding: "16px 28px",
                 borderRadius: "999px",
@@ -96,13 +96,13 @@ export function VerifyEmailTemplate({
               style={{
                 fontSize: "14px",
                 lineHeight: "24px",
-                color: "#5f5a5a",
+                color: "#333333",
                 marginTop: "20px",
               }}
             >
               If the button does not work, use this link:
               <br />
-              <a href={verifyUrl} style={{ color: "#608982" }}>
+              <a href={verifyUrl} style={{ color: "#4C9997" }}>
                 {verifyUrl}
               </a>
             </Text>

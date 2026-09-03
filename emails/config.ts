@@ -10,12 +10,20 @@ export const brandConfig: BrandConfig = {
   logoLightUrl: `${baseUrl}/youmimic-green-transparent.png`,
   logoDarkUrl: `${baseUrl}/youmimic-white-transparent.png`,
   colors: {
-    primary: "#608982",
-    bg: "#ECEAE9",
-    text: "#191818",
-    muted: "#5f5a5a",
-    accentSoft: "#ACC8CE",
-    secondary: "#9AB5C7",
-    brown: "#604B33",
+    // YouMimic brand palette: Black #333333, White #FFFFFF, White Carbon
+    // #EDEDED, Green Teal #4C9997. secondary/brown kept only because
+    // BrandConfig's type requires them (see emails/types.ts) — nothing
+    // reads them for a distinct hue anymore now that the header gradient
+    // in email-layout.tsx is a solid teal fill instead of a two-color
+    // gradient. accentSoft is a light tint of the teal (teal mixed toward
+    // white), used where a softer/lighter accent reads better than the
+    // full-strength teal.
+    primary: "#4C9997",
+    bg: "#EDEDED",
+    text: "#333333",
+    muted: "#333333",
+    accentSoft: "#B9D9D8",
+    secondary: "#4C9997",
+    brown: "#4C9997",
   },
 };

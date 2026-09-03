@@ -29,7 +29,7 @@ export function InviteEmail({
       </Preview>
       <Body
         style={{
-          backgroundColor: "#ECEAE9",
+          backgroundColor: "#EDEDED",
           padding: "24px",
           fontFamily: "Arial, sans-serif",
         }}
@@ -45,7 +45,7 @@ export function InviteEmail({
         >
           <Section
             style={{
-              background: "linear-gradient(135deg, #608982 0%, #9AB5C7 100%)",
+              backgroundColor: "#4C9997",
               padding: "40px",
             }}
           >
@@ -64,7 +64,7 @@ export function InviteEmail({
               style={{
                 fontSize: "16px",
                 lineHeight: "28px",
-                color: "#F7F6F5",
+                color: "#EDEDED",
                 margin: "12px 0 0",
               }}
             >
@@ -78,7 +78,7 @@ export function InviteEmail({
               style={{
                 fontSize: "16px",
                 lineHeight: "28px",
-                color: "#191818",
+                color: "#333333",
               }}
             >
               Click the button below to accept the invitation and set up your
@@ -88,7 +88,7 @@ export function InviteEmail({
             <Button
               href={acceptUrl}
               style={{
-                backgroundColor: "#608982",
+                backgroundColor: "#4C9997",
                 color: "#ffffff",
                 padding: "16px 28px",
                 borderRadius: "999px",
@@ -105,13 +105,13 @@ export function InviteEmail({
               style={{
                 fontSize: "14px",
                 lineHeight: "24px",
-                color: "#5f5a5a",
+                color: "#333333",
                 marginTop: "20px",
               }}
             >
               If the button does not work, use this link:
               <br />
-              <a href={acceptUrl} style={{ color: "#608982" }}>
+              <a href={acceptUrl} style={{ color: "#4C9997" }}>
                 {acceptUrl}
               </a>
             </Text>

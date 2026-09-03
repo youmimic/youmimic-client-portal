@@ -35,7 +35,7 @@ export function SubscriptionChangedEmail({
         style={{
           fontSize: "16px",
           lineHeight: "28px",
-          color: "#191818",
+          color: "#333333",
           margin: 0,
         }}
       >

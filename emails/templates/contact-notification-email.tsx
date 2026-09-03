@@ -29,7 +29,7 @@ export function ContactNotificationEmail({
       </Preview>
       <Body
         style={{
-          backgroundColor: "#ECEAE9",
+          backgroundColor: "#EDEDED",
           padding: "24px",
           fontFamily: "Arial, sans-serif",
         }}
@@ -45,7 +45,7 @@ export function ContactNotificationEmail({
         >
           <Section
             style={{
-              background: "linear-gradient(135deg, #608982 0%, #9AB5C7 100%)",
+              backgroundColor: "#4C9997",
               padding: "40px",
             }}
           >
@@ -64,7 +64,7 @@ export function ContactNotificationEmail({
               style={{
                 fontSize: "16px",
                 lineHeight: "28px",
-                color: "#F7F6F5",
+                color: "#EDEDED",
                 margin: "12px 0 0",
               }}
             >
@@ -77,7 +77,7 @@ export function ContactNotificationEmail({
               style={{
                 fontSize: "14px",
                 lineHeight: "24px",
-                color: "#5f5a5a",
+                color: "#333333",
                 margin: "0 0 4px",
               }}
             >
@@ -87,7 +87,7 @@ export function ContactNotificationEmail({
               style={{
                 fontSize: "14px",
                 lineHeight: "24px",
-                color: "#5f5a5a",
+                color: "#333333",
                 margin: "0 0 4px",
               }}
             >
@@ -97,7 +97,7 @@ export function ContactNotificationEmail({
               style={{
                 fontSize: "14px",
                 lineHeight: "24px",
-                color: "#5f5a5a",
+                color: "#333333",
                 margin: "0 0 24px",
               }}
             >
@@ -107,7 +107,7 @@ export function ContactNotificationEmail({
               style={{
                 fontSize: "14px",
                 lineHeight: "24px",
-                color: "#5f5a5a",
+                color: "#333333",
                 margin: "0 0 8px",
                 fontWeight: "600",
               }}
@@ -118,8 +118,8 @@ export function ContactNotificationEmail({
               style={{
                 fontSize: "15px",
                 lineHeight: "26px",
-                color: "#191818",
-                backgroundColor: "#f4f3f2",
+                color: "#333333",
+                backgroundColor: "#EDEDED",
                 padding: "16px 20px",
                 borderRadius: "12px",
                 margin: 0,

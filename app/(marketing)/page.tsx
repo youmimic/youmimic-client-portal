@@ -126,16 +126,16 @@ function ProductMockup() {
     <div
       className="relative w-full max-w-105 overflow-hidden rounded-2xl shadow-2xl"
       style={{
-        backgroundColor: "#ECEAE9",
-        border: "1px solid rgba(25,24,24,0.12)",
+        backgroundColor: "#EDEDED",
+        border: "1px solid rgba(51,51,51,0.12)",
       }}
     >
       {/* Window chrome */}
       <div
         className="flex items-center gap-3 px-4 py-3"
         style={{
-          backgroundColor: "rgba(25,24,24,0.05)",
-          borderBottom: "1px solid rgba(25,24,24,0.09)",
+          backgroundColor: "rgba(51,51,51,0.05)",
+          borderBottom: "1px solid rgba(51,51,51,0.09)",
         }}
       >
         <div className="flex gap-1.5">
@@ -143,13 +143,13 @@ function ProductMockup() {
             <div
               key={i}
               className="size-2.25 rounded-full"
-              style={{ backgroundColor: "#604B33", opacity: 0.4 }}
+              style={{ backgroundColor: "#4C9997", opacity: 0.4 }}
             />
           ))}
         </div>
         <span
           className="flex-1 text-center text-xs font-medium tracking-wide"
-          style={{ color: "#604B33" }}
+          style={{ color: "#333333" }}
         >
           YouMimic Studio
         </span>
@@ -164,8 +164,8 @@ function ProductMockup() {
           <div
             className="relative flex-1 overflow-hidden rounded-xl"
             style={{
-              backgroundColor: "rgba(25,24,24,0.07)",
-              border: "1px solid rgba(25,24,24,0.09)",
+              backgroundColor: "rgba(51,51,51,0.07)",
+              border: "1px solid rgba(51,51,51,0.09)",
               backgroundImage: "url('/hero-bg.jpg')",
               backgroundSize: "cover",
             }}
@@ -174,9 +174,9 @@ function ProductMockup() {
               <div
                 className="flex size-14 items-center justify-center rounded-full text-base font-semibold"
                 style={{
-                  backgroundColor: "rgba(96,145,140,0.15)",
-                  color: "#60918C",
-                  boxShadow: "0 0 0 2px rgba(96,145,140,0.20)",
+                  backgroundColor: "rgba(76,153,151,0.15)",
+                  color: "#4C9997",
+                  boxShadow: "0 0 0 2px rgba(76,153,151,0.20)",
                 }}
               >
                 SC
@@ -186,17 +186,17 @@ function ProductMockup() {
             <div className="absolute inset-0 flex items-center justify-center">
               <span
                 className="flex size-9 items-center justify-center rounded-full"
-                style={{ backgroundColor: "rgba(25,24,24,0.10)" }}
+                style={{ backgroundColor: "rgba(51,51,51,0.10)" }}
               >
-                <Play className="ml-0.5 size-4" style={{ color: "#604B33" }} />
+                <Play className="ml-0.5 size-4" style={{ color: "#333333" }} />
               </span>
             </div>
             <div
               className="absolute bottom-2 left-2 rounded-md px-2 py-0.5 text-[10px] font-medium"
               style={{
-                backgroundColor: "rgba(236,234,233,0.85)",
-                color: "#604B33",
-                border: "1px solid rgba(96,75,51,0.15)",
+                backgroundColor: "rgba(237,237,237,0.85)",
+                color: "#333333",
+                border: "1px solid rgba(76,153,151,0.15)",
               }}
             >
               Preview
@@ -208,24 +208,24 @@ function ProductMockup() {
             <div
               className="rounded-lg p-2.5"
               style={{
-                backgroundColor: "rgba(25,24,24,0.04)",
-                border: "1px solid rgba(25,24,24,0.09)",
+                backgroundColor: "rgba(51,51,51,0.04)",
+                border: "1px solid rgba(51,51,51,0.09)",
               }}
             >
               <p
                 className="mb-1 text-[9px] font-medium uppercase tracking-wider"
-                style={{ color: "#604B33" }}
+                style={{ color: "#333333" }}
               >
                 Status
               </p>
               <div className="flex items-center gap-1.5">
                 <span
                   className="size-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: "#60918C" }}
+                  style={{ backgroundColor: "#4C9997" }}
                 />
                 <span
                   className="text-xs font-medium"
-                  style={{ color: "#191818" }}
+                  style={{ color: "#333333" }}
                 >
                   Ready
                 </span>
@@ -234,13 +234,13 @@ function ProductMockup() {
             <div
               className="rounded-lg p-2.5"
               style={{
-                backgroundColor: "rgba(25,24,24,0.04)",
-                border: "1px solid rgba(25,24,24,0.09)",
+                backgroundColor: "rgba(51,51,51,0.04)",
+                border: "1px solid rgba(51,51,51,0.09)",
               }}
             >
               <p
                 className="mb-1.5 text-[9px] font-medium uppercase tracking-wider"
-                style={{ color: "#604B33" }}
+                style={{ color: "#333333" }}
               >
                 Languages
               </p>
@@ -250,9 +250,9 @@ function ProductMockup() {
                     key={l}
                     className="rounded font-mono text-[9px]"
                     style={{
-                      backgroundColor: "rgba(154,181,199,0.25)",
-                      color: "#191818",
-                      border: "1px solid rgba(154,181,199,0.45)",
+                      backgroundColor: "rgba(76,153,151,0.25)",
+                      color: "#333333",
+                      border: "1px solid rgba(76,153,151,0.45)",
                       padding: "1px 4px",
                     }}
                   >
@@ -268,13 +268,13 @@ function ProductMockup() {
         <div
           className="rounded-xl p-3"
           style={{
-            backgroundColor: "rgba(25,24,24,0.04)",
-            border: "1px solid rgba(25,24,24,0.09)",
+            backgroundColor: "rgba(51,51,51,0.04)",
+            border: "1px solid rgba(51,51,51,0.09)",
           }}
         >
           <p
             className="mb-2 text-[9px] font-medium uppercase tracking-wider"
-            style={{ color: "#604B33" }}
+            style={{ color: "#333333" }}
           >
             Script
           </p>
@@ -286,7 +286,7 @@ function ProductMockup() {
                 style={{
                   width: `${w * 100}%`,
                   backgroundColor:
-                    i < 3 ? "rgba(25,24,24,0.12)" : "rgba(25,24,24,0.06)",
+                    i < 3 ? "rgba(51,51,51,0.12)" : "rgba(51,51,51,0.06)",
                 }}
               />
             ))}
@@ -297,11 +297,11 @@ function ProductMockup() {
         <div className="flex items-center justify-between gap-2 pt-0.5">
           <div
             className="flex items-center gap-2 text-[11px]"
-            style={{ color: "#604B33", opacity: 0.7 }}
+            style={{ color: "#333333", opacity: 0.7 }}
           >
             <span
               className="size-1.5 shrink-0 rounded-full"
-              style={{ backgroundColor: "#60918C" }}
+              style={{ backgroundColor: "#4C9997" }}
             />
             Sarah Chen · Active
           </div>
@@ -309,16 +309,16 @@ function ProductMockup() {
             <span
               className="rounded-md px-3 py-1 text-[11px] font-medium"
               style={{
-                backgroundColor: "rgba(25,24,24,0.06)",
-                color: "#191818",
-                border: "1px solid rgba(25,24,24,0.10)",
+                backgroundColor: "rgba(51,51,51,0.06)",
+                color: "#333333",
+                border: "1px solid rgba(51,51,51,0.10)",
               }}
             >
               Preview
             </span>
             <span
               className="rounded-md px-3 py-1 text-[11px] font-medium"
-              style={{ backgroundColor: "#604B33", color: "#ECEAE9" }}
+              style={{ backgroundColor: "#4C9997", color: "#FFFFFF" }}
             >
               Generate
             </span>
@@ -340,21 +340,21 @@ export default function HomePage() {
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundColor: "#191818",
+            backgroundColor: "#333333",
             backgroundImage: "url('/hero-bg.jpg')",
           }}
         />
 
         {/* Layer 2: Directional gradient — text side opaque, image side open */}
-        <div className="absolute inset-0 bg-linear-to-r from-[#191818]/95 via-[#191818]/78 to-[#191818]/42" />
+        <div className="absolute inset-0 bg-linear-to-r from-[#333333]/95 via-[#333333]/78 to-[#333333]/42" />
 
         {/* Layer 3: Ambient palette tint for atmosphere */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse at 15% 85%, rgba(96,75,51,0.28) 0%, transparent 52%), " +
-              "radial-gradient(ellipse at 78% 18%, rgba(96,145,140,0.20) 0%, transparent 48%)",
+              "radial-gradient(ellipse at 15% 85%, rgba(76,153,151,0.28) 0%, transparent 52%), " +
+              "radial-gradient(ellipse at 78% 18%, rgba(76,153,151,0.20) 0%, transparent 48%)",
           }}
         />
 
@@ -365,16 +365,16 @@ export default function HomePage() {
             <div
               className="mb-6 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs"
               style={{
-                border: "1px solid rgba(154,181,199,0.30)",
-                backgroundColor: "rgba(154,181,199,0.10)",
-                color: "#9AB5C7",
+                border: "1px solid rgba(76,153,151,0.30)",
+                backgroundColor: "rgba(76,153,151,0.10)",
+                color: "#4C9997",
               }}
             >
               AI-powered video avatars for business
             </div>
             <h1
               className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl"
-              style={{ color: "#ECEAE9" }}
+              style={{ color: "#FFFFFF" }}
             >
               Say it once.
               <br />
@@ -382,33 +382,33 @@ export default function HomePage() {
             </h1>
             <p
               className="mt-6 max-w-lg text-lg leading-relaxed"
-              style={{ color: "#9AB5C7" }}
+              style={{ color: "rgba(255,255,255,0.75)" }}
             >
               YouMimic creates a professional AI avatar from a single recorded
               session. Deploy consistent, on-brand video communication across
               every language, market, and channel—without a camera crew.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              {/* Primary CTA — warm brown */}
+              {/* Primary CTA — Green Teal */}
               <Button
                 asChild
                 className="h-11 px-6 text-sm font-medium"
                 style={{
-                  backgroundColor: "#604B33",
-                  color: "#ECEAE9",
+                  backgroundColor: "#4C9997",
+                  color: "#FFFFFF",
                   borderColor: "transparent",
                 }}
               >
                 <Link href="/signup">Get started free</Link>
               </Button>
-              {/* Secondary CTA — cream outline */}
+              {/* Secondary CTA — white outline */}
               <Button
                 asChild
                 variant="ghost"
                 className="h-11 px-6 text-sm font-medium"
                 style={{
-                  border: "1px solid rgba(236,234,233,0.30)",
-                  color: "#ECEAE9",
+                  border: "1px solid rgba(255,255,255,0.30)",
+                  color: "#FFFFFF",
                 }}
               >
                 <Link href="/login">Sign in to portal</Link>
@@ -492,7 +492,7 @@ export default function HomePage() {
                 className="relative rounded-xl border border-border bg-card p-6"
               >
                 <div className="mb-5 flex items-start justify-between">
-                  {/* Step badge — warm brown primary */}
+                  {/* Step badge — teal primary */}
                   <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
                     {n}
                   </span>
@@ -618,27 +618,27 @@ export default function HomePage() {
       {/* ── Final CTA — dark, matches hero palette ───────────────────────── */}
       <section
         className="relative overflow-hidden py-24 sm:py-32"
-        style={{ backgroundColor: "#191818" }}
+        style={{ backgroundColor: "#333333" }}
       >
         {/* Subtle ambient tint */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse at 80% 50%, rgba(96,145,140,0.12) 0%, transparent 60%), " +
-              "radial-gradient(ellipse at 20% 80%, rgba(96,75,51,0.15) 0%, transparent 55%)",
+              "radial-gradient(ellipse at 80% 50%, rgba(76,153,151,0.12) 0%, transparent 60%), " +
+              "radial-gradient(ellipse at 20% 80%, rgba(76,153,151,0.15) 0%, transparent 55%)",
           }}
         />
         <div className="relative z-10 mx-auto max-w-6xl px-4 text-center sm:px-6">
           <h2
             className="text-2xl font-semibold tracking-tight sm:text-3xl"
-            style={{ color: "#ECEAE9" }}
+            style={{ color: "#FFFFFF" }}
           >
             Ready to deploy your first AI avatar?
           </h2>
           <p
             className="mx-auto mt-4 max-w-sm text-sm leading-relaxed"
-            style={{ color: "#9AB5C7" }}
+            style={{ color: "rgba(255,255,255,0.75)" }}
           >
             Join teams already using YouMimic to scale professional video
             communication without additional production overhead.
@@ -648,8 +648,8 @@ export default function HomePage() {
               asChild
               className="h-11 px-6 text-sm font-medium"
               style={{
-                backgroundColor: "#604B33",
-                color: "#ECEAE9",
+                backgroundColor: "#4C9997",
+                color: "#FFFFFF",
                 borderColor: "transparent",
               }}
             >
@@ -660,8 +660,8 @@ export default function HomePage() {
               variant="ghost"
               className="h-11 px-6 text-sm font-medium"
               style={{
-                border: "1px solid rgba(236,234,233,0.25)",
-                color: "#ECEAE9",
+                border: "1px solid rgba(255,255,255,0.25)",
+                color: "#FFFFFF",
               }}
             >
               <Link href="/login">Sign in</Link>

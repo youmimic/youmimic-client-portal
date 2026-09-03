@@ -138,9 +138,9 @@ export default function SolutionsPage() {
             <div
               className="mb-6 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium"
               style={{
-                border: "1px solid rgba(96,145,140,0.30)",
-                backgroundColor: "rgba(96,145,140,0.08)",
-                color: "#60918C",
+                border: "1px solid rgba(76,153,151,0.30)",
+                backgroundColor: "rgba(76,153,151,0.08)",
+                color: "#4C9997",
               }}
             >
               Solutions
@@ -240,26 +240,26 @@ export default function SolutionsPage() {
       {/* ── Final CTA — dark, matches homepage palette ───────────────────── */}
       <section
         className="relative overflow-hidden py-24 sm:py-32"
-        style={{ backgroundColor: "#191818" }}
+        style={{ backgroundColor: "#333333" }}
       >
         <div
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse at 80% 50%, rgba(96,145,140,0.12) 0%, transparent 60%), " +
-              "radial-gradient(ellipse at 20% 80%, rgba(96,75,51,0.15) 0%, transparent 55%)",
+              "radial-gradient(ellipse at 80% 50%, rgba(76,153,151,0.12) 0%, transparent 60%), " +
+              "radial-gradient(ellipse at 20% 80%, rgba(76,153,151,0.15) 0%, transparent 55%)",
           }}
         />
         <div className="relative z-10 mx-auto max-w-6xl px-4 text-center sm:px-6">
           <h2
             className="text-2xl font-semibold tracking-tight sm:text-3xl"
-            style={{ color: "#ECEAE9" }}
+            style={{ color: "#FFFFFF" }}
           >
             Ready to elevate your video messaging?
           </h2>
           <p
             className="mx-auto mt-4 max-w-sm text-sm leading-relaxed"
-            style={{ color: "#9AB5C7" }}
+            style={{ color: "rgba(255,255,255,0.75)" }}
           >
             Talk to our team about how YouMimic can work for your industry,
             team size, and communication goals.
@@ -269,8 +269,8 @@ export default function SolutionsPage() {
               asChild
               className="h-11 px-6 text-sm font-medium"
               style={{
-                backgroundColor: "#604B33",
-                color: "#ECEAE9",
+                backgroundColor: "#4C9997",
+                color: "#FFFFFF",
                 borderColor: "transparent",
               }}
             >
@@ -281,8 +281,8 @@ export default function SolutionsPage() {
               variant="ghost"
               className="h-11 px-6 text-sm font-medium"
               style={{
-                border: "1px solid rgba(236,234,233,0.25)",
-                color: "#ECEAE9",
+                border: "1px solid rgba(255,255,255,0.25)",
+                color: "#FFFFFF",
               }}
             >
               <Link href="/pricing">See pricing</Link>

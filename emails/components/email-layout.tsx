@@ -49,7 +49,7 @@ export function EmailLayout({
         >
           <Section
             style={{
-              background: `linear-gradient(135deg, ${c.primary} 0%, ${c.secondary} 100%)`,
+              backgroundColor: c.primary,
               padding: "40px 40px 28px",
             }}
           >
@@ -65,7 +65,7 @@ export function EmailLayout({
                 fontSize: "12px",
                 letterSpacing: "2px",
                 textTransform: "uppercase",
-                color: "#ECEAE9",
+                color: "#EDEDED",
               }}
             >
               {brandConfig.brandName}
@@ -86,7 +86,7 @@ export function EmailLayout({
                 margin: "14px 0 0",
                 fontSize: "16px",
                 lineHeight: "28px",
-                color: "#F7F6F5",
+                color: "#EDEDED",
               }}
             >
               {message}
@@ -135,7 +135,7 @@ export function EmailLayout({
           </Section>
 
           <Section style={{ padding: "0 40px 32px" }}>
-            <Hr style={{ borderColor: "#e3e0de" }} />
+            <Hr style={{ borderColor: "#EDEDED" }} />
             <Text
               style={{ fontSize: "14px", lineHeight: "24px", color: c.muted }}
             >
