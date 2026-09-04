@@ -1,5 +1,54 @@
 # HANDOFF.md
 
+## Session: Wix homepage clone → real homepage; old homepage moved to /pricing — 2026-09-04
+
+Asked to visit the Wix draft site (`https://glassengine.wixstudio.com/youmimicai`)
+and clone its homepage content onto the real homepage, moving the existing
+homepage to `/pricing` "for now" (explicitly temporary). Went through
+Plan Mode given the scope (full rewrite of one marketing page, wholesale
+relocation of another) — plan saved at
+`C:\Users\milan\.claude\plans\validated-petting-honey.md`.
+
+**Inspected first**: fetched and inventoried the Wix homepage's current
+full content to separate real business content from unedited template
+filler. Two things shaped the approach: (1) the Wix draft's flat pricing
+numbers are stale versus this project's real, Stripe-linked pricing in
+`lib/pricing/plans.ts` — the new homepage reuses the existing
+`<PricingSection id="pricing" />` component rather than hand-copying Wix's
+numbers, so checkout pricing can't drift; (2) per this project's own prior
+finding (two images pulled from the Wix site earlier turned out to be
+Flickr "All rights reserved" photos despite looking site-owned), no new
+images were pulled from the Wix site — the new homepage reuses only
+already-verified `public/` assets and goes icon/text-only elsewhere,
+matching the existing `app/(marketing)/solutions/page.tsx` pattern.
+
+**What changed**: `app/(marketing)/page.tsx` fully rewritten — hero
+(single login-aware "Get Started" CTA), digital-twin intro, a real stats
+band (175+ languages, 4K output, 10 staff/day, 30 min/person), a service-
+plans teaser anchored into the real pricing section, a rewritten
+"How It Works" (in-person capture in Australia), "How It Looks", a new
+testimonials section (3 real named client quotes), a new "Our Services"
+section (Digital Twins / Interactive Avatars / Holograms), an "As featured
+at" strip, and the existing login-aware final CTA carried over unchanged.
+`app/(marketing)/pricing/page.tsx` replaced with the entire previous
+homepage verbatim, keeping its `?reason=subscription-required` banner and
+gaining its own `auth()` call for the final CTA it now carries. No changes
+to the pricing components, header/footer, schema, or Stripe routes.
+
+**Checks run**: `npm run lint` (clean, 3 pre-existing unrelated warnings),
+`npm run typecheck` (clean), `npx next build` (succeeded, both `/` and
+`/pricing` compiled), dev-server curl checks against both routes confirmed
+the new sections render and login-aware CTAs point at `/signup` logged
+out.
+
+**Unresolved**: `/pricing` is now a full homepage-shaped page under the
+`/pricing` URL — a deliberate temporary stopgap per the user's own
+"for now" framing, likely needs a real redesign once they decide what
+`/pricing` should look like long-term. The homepage's reduced media
+(no new imagery) is a deliberate deviation from "clone everything," worth
+confirming with the user. Full detail in
+`updates/2026-09-04-wix-homepage-clone.md`.
+
 ## Session: Self-serve payment flow for Mid Market / Small Business — 2026-08-31
 
 User asked for "Book Now" on the pricing plans to lead to a real payment

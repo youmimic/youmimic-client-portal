@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +60,13 @@ export function PricingPlans() {
 
       <div className="grid gap-6 sm:grid-cols-3">
         <Card className="flex flex-col">
+          <Image
+            src="/corporate.avif"
+            alt={corporate.name}
+            width={420}
+            height={420}
+            className="aspect-video w-full object-cover"
+          />
           <CardHeader>
             <CardTitle className="text-base">{corporate.name}</CardTitle>
             <CardDescription>{corporate.tagline}</CardDescription>
@@ -84,6 +92,13 @@ export function PricingPlans() {
         </Card>
 
         <Card className="flex flex-col ring-2 ring-primary">
+          <Image
+            src="/mid-market.avif"
+            alt={midMarket.name}
+            width={420}
+            height={420}
+            className="aspect-video w-full object-cover"
+          />
           <CardHeader>
             <span className="mb-2 self-start rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
               Most popular
@@ -112,6 +127,13 @@ export function PricingPlans() {
         </Card>
 
         <Card className="flex flex-col">
+          <Image
+            src="/small-business.avif"
+            alt={smallBusiness.name}
+            width={420}
+            height={420}
+            className="aspect-video w-full object-cover"
+          />
           <CardHeader>
             <CardTitle className="text-base">{smallBusiness.name}</CardTitle>
             <CardDescription>{smallBusiness.tagline}</CardDescription>
