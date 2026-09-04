@@ -31,31 +31,41 @@ export function SiteLogo({
   const { resolvedTheme } = useTheme();
   const mounted = useIsMounted();
 
-  let src: string | null;
-  if (forceVariant === "light") {
-    src = "/youmimic-green-transparent.png";
-  } else if (forceVariant === "dark") {
-    src = "/youmimic-white-transparent.png";
-  } else {
-    src = mounted
-      ? resolvedTheme === "dark"
-        ? "/youmimic-white-transparent.png"
-        : "/youmimic-green-transparent.png"
-      : null;
-  }
+  const isDark =
+    forceVariant === "dark" ||
+    (forceVariant === "auto" && mounted && resolvedTheme === "dark");
+  const isKnown = forceVariant !== "auto" || mounted;
+
+  // Favicon icon (square) and wordmark share the same light/dark switch —
+  // rendered as one tight flex lockup, not two independently-placed images,
+  // so they read as a single logo mark rather than a wordmark with a stray
+  // icon next to it.
+  const iconSrc = isDark ? "/dark favicon.png" : "/green transparent favicon.png";
+  const wordmarkSrc = isDark ? "/youmimic-white-transparent.png" : "/youmimic-green-transparent.png";
 
   return (
-    <Link href={href} onClick={onClick}>
-      {src !== null ? (
-        <Image
-          src={src}
-          alt="YouMimic"
-          width={120}
-          height={40}
-          className={className ?? "h-6 sm:h-7 md:h-8"}
-          style={{ width: "auto" }}
-          priority
-        />
+    <Link href={href} onClick={onClick} className="flex items-center gap-1.5">
+      {isKnown ? (
+        <>
+          <Image
+            src={iconSrc}
+            alt=""
+            width={40}
+            height={40}
+            className={className ?? "h-6 sm:h-7 md:h-8"}
+            style={{ width: "auto" }}
+            priority
+          />
+          <Image
+            src={wordmarkSrc}
+            alt="YouMimic"
+            width={120}
+            height={40}
+            className={className ?? "h-6 sm:h-7 md:h-8"}
+            style={{ width: "auto" }}
+            priority
+          />
+        </>
       ) : (
         <span className="sr-only">YouMimic</span>
       )}
