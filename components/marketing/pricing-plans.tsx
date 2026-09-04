@@ -26,7 +26,7 @@ function bookNowHref(planType: "MID_MARKET" | "SMALL_BUSINESS", term: BillingTer
 }
 
 export function PricingPlans() {
-  const [term, setTerm] = useState<BillingTermKey>("MONTHLY_12");
+  const [term, setTerm] = useState<BillingTermKey>("MONTHLY_24");
   const midMarketTier = midMarket.byTerm[term];
   const smallBusinessTier = smallBusiness.byTerm[term];
 

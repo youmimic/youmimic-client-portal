@@ -16,7 +16,7 @@ import {
   PenLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PricingPlans } from "@/components/marketing/pricing-plans";
+import { PricingSection } from "@/components/marketing/pricing-section";
 
 const stats = [
   { value: "3 min", label: "Average generation time" },
@@ -217,19 +217,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section id="pricing" className="scroll-mt-20 py-24 sm:py-32">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Transparent, flexible pricing
-            </h2>
-            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              Start with one avatar. Add more as you grow.
-            </p>
-          </div>
-          <PricingPlans />
-        </div>
-      </section>
+      <PricingSection id="pricing" />
 
       <section className="bg-muted py-24 sm:py-32">
         <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
