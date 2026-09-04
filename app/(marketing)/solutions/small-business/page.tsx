@@ -67,7 +67,7 @@ export default function SmallBusinessSolutionsPage() {
   return (
     <>
       <section className="border-b border-border bg-muted py-20 sm:py-28">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="max-w-2xl">
             <p className="mb-3 text-sm font-medium text-accent">Solutions / Small Business</p>
             <h1 className="text-4xl font-semibold leading-[1.15] tracking-tight text-foreground sm:text-5xl">
@@ -92,7 +92,7 @@ export default function SmallBusinessSolutionsPage() {
 
       {/* ── Six service offerings ────────────────────────────────────── */}
       <section className="border-b border-border py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-12 text-center">
             <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               What your avatar can do
@@ -120,7 +120,7 @@ export default function SmallBusinessSolutionsPage() {
 
       {/* ── Growth stats ─────────────────────────────────────────────── */}
       <section className="border-b border-border bg-muted py-16">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <h2 className="mb-10 text-center text-xl font-semibold tracking-tight text-foreground">
             Built for how small businesses actually run
           </h2>
@@ -163,7 +163,7 @@ export default function SmallBusinessSolutionsPage() {
               "radial-gradient(ellipse at 20% 80%, rgba(76,153,151,0.15) 0%, transparent 55%)",
           }}
         />
-        <div className="relative z-10 mx-auto max-w-6xl px-4 text-center sm:px-6">
+        <div className="relative z-10 mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
           <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "#FFFFFF" }}>
             Ready to get started?
           </h2>

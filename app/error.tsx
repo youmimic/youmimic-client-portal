@@ -6,7 +6,6 @@ import * as Sentry from "@sentry/nextjs";
 import { ServerCrash } from "lucide-react";
 import { SiteLogo } from "@/components/branding/site-logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { Button } from "@/components/ui/button";
 import { HEADER_HEIGHT } from "@/components/marketing/marketing-header-config";
 import { cn } from "@/lib/utils";
@@ -14,11 +13,12 @@ import { cn } from "@/lib/utils";
 // Root error.tsx — catches any runtime error thrown by a page or layout
 // below the root layout that doesn't have its own more specific error
 // boundary. Must be a Client Component (Next.js requirement), which rules
-// out reusing the real MarketingHeader — it's an async Server Component
-// that reads the session via auth(), and async Server Components can't be
-// imported into a "use client" file. This renders a simplified, static
-// header instead (logo + theme toggle, no session-aware nav) — reasonable
-// for an error state where a full nav isn't the priority anyway.
+// out reusing the real MarketingHeader or MarketingFooter — both are async
+// Server Components that read the session via auth(), and async Server
+// Components can't be imported into a "use client" file (Turbopack fails
+// the whole build rather than a clean error if you try). This renders a
+// simplified, static header/footer instead (no session-aware nav/links) —
+// reasonable for an error state where that isn't the priority anyway.
 // (global-error.tsx is the last-resort sibling to this: it only fires for
 // errors in the root layout itself, which this can't catch.)
 export default function ErrorPage({
@@ -69,7 +69,19 @@ export default function ErrorPage({
           </Button>
         </div>
       </main>
-      <MarketingFooter />
+      <footer className="border-t border-border">
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
+          <span>© 2026 YouMimic. All rights reserved.</span>
+          <div className="flex gap-6">
+            <Link href="/login" className="transition-colors hover:text-foreground">
+              Sign in
+            </Link>
+            <Link href="/signup" className="transition-colors hover:text-foreground">
+              Get started
+            </Link>
+          </div>
+        </div>
+      </footer>
     </>
   );
 }

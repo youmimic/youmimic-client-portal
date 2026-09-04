@@ -19,7 +19,7 @@ export default function ContactPage() {
     <>
       {/* Page header */}
       <section className="border-b border-border bg-muted py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="max-w-xl">
             <p className="mb-3 text-sm font-medium text-accent">Get in touch</p>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
@@ -48,7 +48,7 @@ export default function ContactPage() {
           className="absolute inset-0"
           style={{ backgroundColor: "rgba(51,51,51,0.75)" }}
         />
-        <div className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <h2 className="text-center text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "#FFFFFF" }}>
             Our offices
           </h2>
@@ -73,7 +73,7 @@ export default function ContactPage() {
 
       {/* Two-column: form + Calendly */}
       <section className="py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="flex flex-col gap-12">
             {/* Contact form */}
             <div>

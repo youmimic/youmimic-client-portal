@@ -17,7 +17,7 @@ export default async function PricingPage({
 
   return (
     <section className="border-b border-border py-20 sm:py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
         {isGated && (
           <div className="mb-10 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
             An active subscription is required to access that feature. Choose a

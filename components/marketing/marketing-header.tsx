@@ -12,7 +12,7 @@ export async function MarketingHeader() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-      <div className={cn("mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6", HEADER_HEIGHT)}>
+      <div className={cn("mx-auto w-full flex items-center justify-between px-4 sm:px-6 lg:w-[90vw] lg:px-0", HEADER_HEIGHT)}>
         <SiteLogo
           forceVariant="auto"
           className="flex items-center h-6 w-auto sm:h-7 md:h-8"

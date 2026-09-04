@@ -64,7 +64,7 @@ const pressItems = [
 export default function PressPage() {
   return (
     <section className="border-b border-border py-20 sm:py-28">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
         <div className="mb-12 max-w-2xl">
           <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
             Press

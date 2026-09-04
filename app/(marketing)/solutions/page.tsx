@@ -133,7 +133,7 @@ export default function SolutionsPage() {
     <>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className="border-b border-border bg-muted py-20 sm:py-28">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="max-w-2xl">
             <div
               className="mb-6 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium"
@@ -171,7 +171,7 @@ export default function SolutionsPage() {
 
       {/* ── What you can create ──────────────────────────────────────────── */}
       <section className="border-b border-border py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-12 text-center">
             <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               What you can create
@@ -206,7 +206,7 @@ export default function SolutionsPage() {
 
       {/* ── Industries ───────────────────────────────────────────────────── */}
       <section className="border-b border-border bg-muted py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-12 text-center">
             <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               Built for every industry
@@ -250,7 +250,7 @@ export default function SolutionsPage() {
               "radial-gradient(ellipse at 20% 80%, rgba(76,153,151,0.15) 0%, transparent 55%)",
           }}
         />
-        <div className="relative z-10 mx-auto max-w-6xl px-4 text-center sm:px-6">
+        <div className="relative z-10 mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
           <h2
             className="text-2xl font-semibold tracking-tight sm:text-3xl"
             style={{ color: "#FFFFFF" }}

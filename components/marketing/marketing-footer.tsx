@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { auth } from "@/auth";
 import { NewsletterForm } from "@/components/marketing/newsletter-form";
 
 // Only platforms with a confirmed real URL are rendered — no placeholder
@@ -36,10 +37,13 @@ const navigationLinks = [
   { label: "Connect", href: "/contact" },
 ];
 
-export function MarketingFooter() {
+export async function MarketingFooter() {
+  const session = await auth();
+  const isLoggedIn = Boolean(session?.user);
+
   return (
     <footer className="border-t border-border">
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+      <div className="mx-auto w-full px-4 py-12 sm:px-6 lg:w-[90vw] lg:px-0">
         <div className="grid gap-10 sm:grid-cols-3">
           <div>
             <h3 className="mb-3 text-sm font-semibold text-foreground">Company</h3>
@@ -101,12 +105,20 @@ export function MarketingFooter() {
             <span className="text-xs">ABN 39 695 563 627</span>
           </div>
           <div className="flex gap-6">
-            <Link href="/login" className="transition-colors hover:text-foreground">
-              Sign in
-            </Link>
-            <Link href="/signup" className="transition-colors hover:text-foreground">
-              Get started
-            </Link>
+            {isLoggedIn ? (
+              <Link href="/dashboard" className="transition-colors hover:text-foreground">
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="transition-colors hover:text-foreground">
+                  Sign in
+                </Link>
+                <Link href="/signup" className="transition-colors hover:text-foreground">
+                  Get started
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>

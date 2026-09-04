@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { auth } from "@/auth";
 import {
   Zap,
   Layers,
@@ -16,8 +17,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PricingPlans } from "@/components/marketing/pricing-plans";
-
-// ─── Data ────────────────────────────────────────────────────────────────────
 
 const stats = [
   { value: "3 min", label: "Average generation time" },
@@ -111,37 +110,30 @@ const useCases = [
   },
 ];
 
+export default async function HomePage() {
+  const session = await auth();
+  const isLoggedIn = Boolean(session?.user);
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default function HomePage() {
   return (
     <>
-      {/* ── Hero — white background (not dark), stacked composition: text
-          content first, rounded image banner below it. Same palette/font
-          as everywhere else — this section just no longer sits on the
-          dark #333333 band; text needs dark-on-light color instead of
-          light-on-dark now. ─────────────────────────────────────────── */}
-      <section className="py-24 sm:py-32" style={{ backgroundColor: "#FFFFFF" }}>
-        {/* Rounded image banner — own container, sized independently from
-            the text content below so it can grow past max-w-5xl on
-            desktop. Below lg: same aspect-ratio-based sizing as before,
-            matching the text column's width. At lg+: fixed to at least
-            80vh/80vw, matching the text column only via centering. */}
-        <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 lg:max-w-none lg:px-0">
-          <div className="relative mx-auto aspect-21/9 w-full overflow-hidden rounded-[2rem] shadow-lg sm:rounded-[2.5rem] lg:aspect-auto lg:h-[80vh] lg:w-[80vw]">
+      <section
+        className="py-10 sm:py-16"
+        style={{ backgroundColor: "#FFFFFF" }}
+      >
+        <div className="w-full px-4 sm:px-6 lg:px-0">
+          <div className="relative mx-auto aspect-21/9 w-full overflow-hidden rounded-[2rem] shadow-lg sm:rounded-[2.5rem] lg:aspect-auto lg:h-[60vh] lg:w-[90vw]">
             <div
               className="absolute inset-0 bg-cover bg-center bg-no-repeat"
               style={{
                 backgroundColor: "#333333",
-                backgroundImage: "url('/hero-bg.jpg')",
+                backgroundImage: "url('/hero-bg.avif')",
               }}
             />
             <div
               className="absolute inset-0"
               style={{
                 background:
-                  "radial-gradient(ellipse at center, rgba(51,51,51,0.35) 0%, rgba(51,51,51,0.75) 100%)",
+                  "radial-gradient(ellipse at center, rgba(51,51,51,0.35) 0%, rgba(51,51,51,0.35) 100%)",
               }}
             />
             <div
@@ -155,49 +147,63 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="mx-auto max-w-5xl px-4 text-center sm:px-6">
-          <h1
-            className="mt-16 text-6xl font-semibold leading-[1.02] tracking-tight sm:text-7xl lg:text-8xl"
-            style={{ color: "#333333" }}
-          >
-            Say it once.
-            <br />
-            Scale it everywhere.
-          </h1>
-          <p
-            className="mx-auto mt-6 max-w-xl text-lg leading-relaxed sm:text-xl"
-            style={{ color: "rgba(51,51,51,0.7)" }}
-          >
-            One AI avatar. Every language, every channel.
-          </p>
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Button
-              asChild
-              className="h-12 px-8 text-base font-medium"
-              style={{
-                backgroundColor: "#4C9997",
-                color: "#FFFFFF",
-                borderColor: "transparent",
-              }}
-            >
-              <Link href="/signup">Get started free</Link>
-            </Button>
-            {/* Secondary link — mirrors the Wix reference's "Contact Sales"
-                link sitting alongside its hero CTA */}
-            <Link
-              href="/contact#book-demo"
-              className="text-sm font-medium underline-offset-4 hover:underline"
-              style={{ color: "#333333" }}
-            >
-              Contact Sales
-            </Link>
+        <div className="mx-auto mt-8 w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <div className="text-center lg:text-left">
+              <h1
+                className="text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-6xl"
+                style={{ color: "#333333" }}
+              >
+                Say it once.
+                <br />
+                Scale it everywhere.
+              </h1>
+              <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row lg:justify-start">
+                <Button
+                  asChild
+                  className="h-12 px-8 text-base font-medium"
+                  style={{
+                    backgroundColor: "#4C9997",
+                    color: "#FFFFFF",
+                    borderColor: "transparent",
+                  }}
+                >
+                  <a href="#pricing">See Pricing</a>
+                </Button>
+                <Link
+                  href="/contact#book-demo"
+                  className="text-sm font-medium underline-offset-4 hover:underline"
+                  style={{ color: "#333333" }}
+                >
+                  Contact Sales
+                </Link>
+              </div>
+            </div>
+
+            <div className="text-center lg:text-left">
+              <p
+                className="text-lg leading-relaxed sm:text-xl"
+                style={{ color: "rgba(51,51,51,0.7)" }}
+              >
+                YouMimic turns a single recording session into a
+                professional AI avatar that speaks for you — in any
+                language, whenever you need it.
+              </p>
+              <p
+                className="mt-4 text-lg leading-relaxed sm:text-xl"
+                style={{ color: "rgba(51,51,51,0.7)" }}
+              >
+                No camera crew, no reshoots, no waiting around for your
+                next video. Write a script, and your avatar takes it from
+                there.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── Stats ────────────────────────────────────────────────────────── */}
       <section className="bg-muted py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <dl className="grid grid-cols-2 gap-10 sm:grid-cols-4">
             {stats.map(({ value, label }) => (
               <div key={label} className="text-center">
@@ -211,9 +217,76 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Features ─────────────────────────────────────────────────────── */}
+      <section id="pricing" className="scroll-mt-20 py-24 sm:py-32">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+          <div className="mb-16 text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+              Transparent, flexible pricing
+            </h2>
+            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
+              Start with one avatar. Add more as you grow.
+            </p>
+          </div>
+          <PricingPlans />
+        </div>
+      </section>
+
+      <section className="bg-muted py-24 sm:py-32">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <div className="text-center lg:text-left">
+              <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+                Not sure which plan fits your business?
+              </h2>
+              <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground lg:mx-0">
+                Book a quick meeting and we&apos;ll help you find the right
+                one.
+              </p>
+              <div className="mt-8 flex justify-center lg:justify-start">
+                <Button asChild className="h-12 px-8 text-base font-medium">
+                  <Link href="/contact#book-demo">Book a Meeting</Link>
+                </Button>
+              </div>
+            </div>
+
+            <div className="mx-auto w-full max-w-2xl">
+              <div className="overflow-hidden rounded-[2rem] shadow-lg">
+                <video
+                  className="block w-full transition-transform duration-300 ease-out hover:scale-105"
+                  src="/book-meeting.mp4"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                />
+              </div>
+
+              <div className="mt-8 grid grid-cols-3 gap-3">
+                {modules.map(({ icon: Icon, title, body }) => (
+                  <div
+                    key={title}
+                    className="rounded-xl bg-card p-3 text-center"
+                    style={{ border: "1px solid #FFFFFF" }}
+                  >
+                    <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-accent/10">
+                      <Icon className="size-5 text-accent" />
+                    </div>
+                    <h4 className="mt-3 text-sm font-semibold text-foreground">
+                      {title}
+                    </h4>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      {body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
               Made for how you actually communicate
@@ -242,38 +315,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Modules: Speak / Read / Write ────────────────────────────────── */}
       <section className="bg-muted py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Speak. Read. Write.
-            </h2>
-            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              Course modules your avatar can lead, end to end.
-            </p>
-          </div>
-          <div className="grid gap-10 sm:grid-cols-3">
-            {modules.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="text-center">
-                <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-accent/10">
-                  <Icon className="size-7 text-accent" />
-                </div>
-                <h3 className="mt-5 text-xl font-semibold text-foreground">
-                  {title}
-                </h3>
-                <p className="mt-2 leading-relaxed text-muted-foreground">
-                  {body}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── How it works ─────────────────────────────────────────────────── */}
-      <section className="py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
               One session. Unlimited output.
@@ -286,7 +329,6 @@ export default function HomePage() {
             {steps.map(({ n, icon: Icon, title, body }) => (
               <div key={n} className="relative">
                 <div className="mb-6 flex items-center justify-between">
-                  {/* Step number — teal primary */}
                   <span className="text-5xl font-semibold tracking-tight text-primary">
                     {n}
                   </span>
@@ -295,18 +337,15 @@ export default function HomePage() {
                 <h3 className="mb-2 text-base font-semibold text-foreground">
                   {title}
                 </h3>
-                <p className="leading-relaxed text-muted-foreground">
-                  {body}
-                </p>
+                <p className="leading-relaxed text-muted-foreground">{body}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Use cases ────────────────────────────────────────────────────── */}
-      <section className="bg-muted py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <section className="py-24 sm:py-32">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
               Where teams use YouMimic
@@ -335,59 +374,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Pricing ──────────────────────────────────────────────────────── */}
-      <section className="py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Transparent, flexible pricing
-            </h2>
-            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              Start with one avatar. Add more as you grow.
-            </p>
-          </div>
-          <PricingPlans />
-        </div>
-      </section>
-
-      {/* ── Book a demo ──────────────────────────────────────────────────── */}
-      <section className="bg-muted py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-4 text-center sm:px-6">
-          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-            Not sure which plan fits your business?
-          </h2>
-          <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-            Book a quick meeting and we&apos;ll help you find the right one.
-          </p>
-          <Button asChild className="mt-8 h-12 px-8 text-base font-medium">
-            <Link href="/contact#book-demo">Book a Meeting</Link>
-          </Button>
-
-          {/* Video — scales up slightly on hover/mouse-in, back to normal
-              on mouse-out (pure CSS, no client JS needed). */}
-          <div className="mx-auto mt-12 max-w-2xl overflow-hidden rounded-[2rem] shadow-lg">
-            <video
-              className="block w-full transition-transform duration-300 ease-out hover:scale-105"
-              src="/book-meeting.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* ── Final CTA — Green Teal, bookends the now-white hero with one
-          bold accent close instead of matching dark. Primary button flips
-          to white-on-teal (a teal button would vanish on a teal section);
-          the outline button stays white-on-transparent since teal, like
-          the old dark background, still contrasts against it. ─────────── */}
       <section
         className="relative overflow-hidden py-32 sm:py-40"
         style={{ backgroundColor: "#4C9997" }}
       >
-        {/* Subtle depth tint */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -396,42 +386,62 @@ export default function HomePage() {
               "radial-gradient(ellipse at 20% 80%, rgba(51,51,51,0.10) 0%, transparent 55%)",
           }}
         />
-        <div className="relative z-10 mx-auto max-w-6xl px-4 text-center sm:px-6">
+        <div className="relative z-10 mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
           <h2
             className="text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl"
             style={{ color: "#FFFFFF" }}
           >
-            Ready to create your first AI avatar?
+            {isLoggedIn
+              ? "Ready to make your next AI avatar video?"
+              : "Ready to create your first AI avatar?"}
           </h2>
           <p
             className="mx-auto mt-5 max-w-sm text-lg leading-relaxed"
             style={{ color: "rgba(255,255,255,0.85)" }}
           >
-            Make professional videos without a production crew.
+            {isLoggedIn
+              ? "Jump back into your dashboard and keep going."
+              : "Make professional videos without a production crew."}
           </p>
           <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
-            <Button
-              asChild
-              className="h-12 px-8 text-base font-medium"
-              style={{
-                backgroundColor: "#FFFFFF",
-                color: "#4C9997",
-                borderColor: "transparent",
-              }}
-            >
-              <Link href="/signup">Create your account</Link>
-            </Button>
-            <Button
-              asChild
-              variant="ghost"
-              className="h-12 px-8 text-base font-medium"
-              style={{
-                border: "1px solid rgba(255,255,255,0.5)",
-                color: "#FFFFFF",
-              }}
-            >
-              <Link href="/login">Sign in</Link>
-            </Button>
+            {isLoggedIn ? (
+              <Button
+                asChild
+                className="h-12 px-8 text-base font-medium"
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  color: "#4C9997",
+                  borderColor: "transparent",
+                }}
+              >
+                <Link href="/dashboard">Go to Dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Button
+                  asChild
+                  className="h-12 px-8 text-base font-medium"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    color: "#4C9997",
+                    borderColor: "transparent",
+                  }}
+                >
+                  <Link href="/signup">Create your account</Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="h-12 px-8 text-base font-medium"
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.5)",
+                    color: "#FFFFFF",
+                  }}
+                >
+                  <Link href="/login">Sign in</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </section>
