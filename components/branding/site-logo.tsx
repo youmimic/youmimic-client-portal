@@ -43,6 +43,14 @@ export function SiteLogo({
   const iconSrc = isDark ? "/dark favicon.png" : "/green transparent favicon.png";
   const wordmarkSrc = isDark ? "/youmimic-white-transparent.png" : "/youmimic-green-transparent.png";
 
+  // "dark favicon.png" is a solid black mark on a transparent background —
+  // meant for light surfaces, not an actual dark-mode (white) variant. On a
+  // dark background it's invisible, so it's flipped to white with a CSS
+  // filter here rather than needing a separately-exported white asset.
+  const iconStyle = isDark
+    ? { width: "auto", filter: "brightness(0) invert(1)" }
+    : { width: "auto" };
+
   return (
     <Link href={href} onClick={onClick} className="flex items-center gap-1.5">
       {isKnown ? (
@@ -53,7 +61,7 @@ export function SiteLogo({
             width={40}
             height={40}
             className={className ?? "h-6 sm:h-7 md:h-8"}
-            style={{ width: "auto" }}
+            style={iconStyle}
             priority
           />
           <Image
