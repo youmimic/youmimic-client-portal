@@ -1,5 +1,29 @@
 # HANDOFF.md
 
+## Session: Fix logged-in visitors redirected to /signup on "Book Now" — 2026-09-05
+
+Bug reported on production (youmimic.com.au): a logged-in user clicking
+"Book Now" on Mid Market/Small Business still landed on
+`/signup?callbackUrl=...` instead of going straight to
+`/dashboard/checkout`. Root cause: `bookNowHref()` in
+`components/marketing/pricing-plans.tsx` (a client component with no
+session context) always built the signup-detour URL, with no login-state
+branch at all.
+
+**Fix**: threaded `isLoggedIn` (already computed via `auth()` in both
+`app/(marketing)/page.tsx` and `app/(marketing)/pricing/page.tsx`) down
+through `PricingSection` → `PricingPlans` → `bookNowHref()`, which now
+returns the plain `/dashboard/checkout?plan=...&term=...` path directly
+for a logged-in visitor and only wraps it in `/signup?callbackUrl=...` for
+a logged-out one. `/dashboard/checkout` itself needed no changes — already
+generically auth-gated by `proxy.ts`.
+
+**Checks**: `npm run lint`, `npm run typecheck`, `npx next build` all
+clean; confirmed live that the logged-out path is unchanged. Did not
+exercise the logged-in path against a real authenticated session in this
+pass — recommend a manual click-through on a real logged-in account after
+deploy. Full detail in `updates/2026-09-05-book-now-logged-in-fix.md`.
+
 ## Session: Wix homepage clone → real homepage; old homepage moved to /pricing — 2026-09-04
 
 Asked to visit the Wix draft site (`https://glassengine.wixstudio.com/youmimicai`)

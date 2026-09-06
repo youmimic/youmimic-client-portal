@@ -10,9 +10,11 @@ import { PricingPlans } from "@/components/marketing/pricing-plans";
 export function PricingSection({
   id,
   banner,
+  isLoggedIn = false,
 }: {
   id?: string;
   banner?: ReactNode;
+  isLoggedIn?: boolean;
 } = {}) {
   return (
     <section id={id} className={id ? "scroll-mt-20 py-24 sm:py-32" : "py-24 sm:py-32"}>
@@ -26,7 +28,7 @@ export function PricingSection({
             Start with one avatar. Add more as you grow.
           </p>
         </div>
-        <PricingPlans />
+        <PricingPlans isLoggedIn={isLoggedIn} />
       </div>
     </section>
   );

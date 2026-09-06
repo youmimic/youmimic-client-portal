@@ -21,12 +21,19 @@ import {
   type BillingTermKey,
 } from "@/lib/pricing/plans";
 
-function bookNowHref(planType: "MID_MARKET" | "SMALL_BUSINESS", term: BillingTermKey): string {
+function bookNowHref(
+  planType: "MID_MARKET" | "SMALL_BUSINESS",
+  term: BillingTermKey,
+  isLoggedIn: boolean,
+): string {
   const checkoutPath = `/dashboard/checkout?plan=${planType}&term=${term}`;
-  return `/signup?callbackUrl=${encodeURIComponent(checkoutPath)}`;
+  // An already-authenticated visitor should go straight to checkout — only
+  // a logged-out visitor needs the /signup detour (with callbackUrl bringing
+  // them back here afterwards).
+  return isLoggedIn ? checkoutPath : `/signup?callbackUrl=${encodeURIComponent(checkoutPath)}`;
 }
 
-export function PricingPlans() {
+export function PricingPlans({ isLoggedIn = false }: { isLoggedIn?: boolean } = {}) {
   const [term, setTerm] = useState<BillingTermKey>("MONTHLY_24");
   const midMarketTier = midMarket.byTerm[term];
   const smallBusinessTier = smallBusiness.byTerm[term];
@@ -121,7 +128,7 @@ export function PricingPlans() {
           </CardContent>
           <CardFooter>
             <Button asChild className="w-full">
-              <Link href={bookNowHref("MID_MARKET", term)}>Book Now</Link>
+              <Link href={bookNowHref("MID_MARKET", term, isLoggedIn)}>Book Now</Link>
             </Button>
           </CardFooter>
         </Card>
@@ -153,7 +160,7 @@ export function PricingPlans() {
           </CardContent>
           <CardFooter>
             <Button asChild variant="outline" className="w-full">
-              <Link href={bookNowHref("SMALL_BUSINESS", term)}>Book Now</Link>
+              <Link href={bookNowHref("SMALL_BUSINESS", term, isLoggedIn)}>Book Now</Link>
             </Button>
           </CardFooter>
         </Card>

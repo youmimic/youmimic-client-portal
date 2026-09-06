@@ -292,7 +292,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <PricingSection id="pricing" />
+      <PricingSection id="pricing" isLoggedIn={isLoggedIn} />
 
       <section className="bg-muted py-24 sm:py-32">
         <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
