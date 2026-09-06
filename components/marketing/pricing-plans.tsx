@@ -30,10 +30,14 @@ function bookNowHref(
   // An already-authenticated visitor should go straight to checkout — only
   // a logged-out visitor needs the /signup detour (with callbackUrl bringing
   // them back here afterwards).
-  return isLoggedIn ? checkoutPath : `/signup?callbackUrl=${encodeURIComponent(checkoutPath)}`;
+  return isLoggedIn
+    ? checkoutPath
+    : `/signup?callbackUrl=${encodeURIComponent(checkoutPath)}`;
 }
 
-export function PricingPlans({ isLoggedIn = false }: { isLoggedIn?: boolean } = {}) {
+export function PricingPlans({
+  isLoggedIn = false,
+}: { isLoggedIn?: boolean } = {}) {
   const [term, setTerm] = useState<BillingTermKey>("MONTHLY_24");
   const midMarketTier = midMarket.byTerm[term];
   const smallBusinessTier = smallBusiness.byTerm[term];
@@ -44,10 +48,10 @@ export function PricingPlans({ isLoggedIn = false }: { isLoggedIn?: boolean } = 
           counts change with commitment length; Corporate is a flat rate. */}
       <div className="flex justify-center">
         <div className="inline-flex rounded-lg border border-border bg-muted p-1">
-          {([
+          {[
             { value: "MONTHLY_12" as const, label: "12 months" },
             { value: "MONTHLY_24" as const, label: "24 months" },
-          ]).map(({ value, label }) => (
+          ].map(({ value, label }) => (
             <button
               key={value}
               type="button"
@@ -72,17 +76,22 @@ export function PricingPlans({ isLoggedIn = false }: { isLoggedIn?: boolean } = 
             alt={corporate.name}
             width={420}
             height={420}
-            className="aspect-video w-full object-cover"
+            className="aspect-video w-full object-cover object-top"
           />
           <CardHeader>
             <CardTitle className="text-base">{corporate.name}</CardTitle>
             <CardDescription>{corporate.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <p className="mb-4 text-lg font-semibold text-foreground">{corporate.priceDisplay}</p>
+            <p className="mb-4 text-lg font-semibold text-foreground">
+              {corporate.priceDisplay}
+            </p>
             <ul className="space-y-2">
               {corporate.features.map((feature) => (
-                <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
+                <li
+                  key={feature}
+                  className="flex items-start gap-2 text-sm text-muted-foreground"
+                >
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
                   {feature}
                 </li>
@@ -114,21 +123,31 @@ export function PricingPlans({ isLoggedIn = false }: { isLoggedIn?: boolean } = 
             <CardDescription>{midMarket.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <p className="mb-4 text-lg font-semibold text-foreground">{midMarketTier.priceDisplay}</p>
+            <p className="mb-4 text-lg font-semibold text-foreground">
+              {midMarketTier.priceDisplay}
+            </p>
             <ul className="space-y-2">
-              {[midMarketTier.avatars, "Priority video processing", "Multilingual generation", "Email + chat support"].map(
-                (feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
-                    {feature}
-                  </li>
-                ),
-              )}
+              {[
+                midMarketTier.avatars,
+                "Priority video processing",
+                "Multilingual generation",
+                "Email + chat support",
+              ].map((feature) => (
+                <li
+                  key={feature}
+                  className="flex items-start gap-2 text-sm text-muted-foreground"
+                >
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
+                  {feature}
+                </li>
+              ))}
             </ul>
           </CardContent>
           <CardFooter>
             <Button asChild className="w-full">
-              <Link href={bookNowHref("MID_MARKET", term, isLoggedIn)}>Book Now</Link>
+              <Link href={bookNowHref("MID_MARKET", term, isLoggedIn)}>
+                Book Now
+              </Link>
             </Button>
           </CardFooter>
         </Card>
@@ -146,21 +165,31 @@ export function PricingPlans({ isLoggedIn = false }: { isLoggedIn?: boolean } = 
             <CardDescription>{smallBusiness.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <p className="mb-4 text-lg font-semibold text-foreground">{smallBusinessTier.priceDisplay}</p>
+            <p className="mb-4 text-lg font-semibold text-foreground">
+              {smallBusinessTier.priceDisplay}
+            </p>
             <ul className="space-y-2">
-              {[smallBusinessTier.avatars, "Core video generation", "Standard processing queue", "Email support"].map(
-                (feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
-                    {feature}
-                  </li>
-                ),
-              )}
+              {[
+                smallBusinessTier.avatars,
+                "Core video generation",
+                "Standard processing queue",
+                "Email support",
+              ].map((feature) => (
+                <li
+                  key={feature}
+                  className="flex items-start gap-2 text-sm text-muted-foreground"
+                >
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
+                  {feature}
+                </li>
+              ))}
             </ul>
           </CardContent>
           <CardFooter>
             <Button asChild variant="outline" className="w-full">
-              <Link href={bookNowHref("SMALL_BUSINESS", term, isLoggedIn)}>Book Now</Link>
+              <Link href={bookNowHref("SMALL_BUSINESS", term, isLoggedIn)}>
+                Book Now
+              </Link>
             </Button>
           </CardFooter>
         </Card>
