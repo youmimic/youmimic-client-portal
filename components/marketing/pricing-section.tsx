@@ -17,12 +17,31 @@ export function PricingSection({
   isLoggedIn?: boolean;
 } = {}) {
   return (
-    <section id={id} className={id ? "scroll-mt-20 py-24 sm:py-32" : "py-24 sm:py-32"}>
-      <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+    <section
+      id={id}
+      className={
+        id
+          ? "relative overflow-hidden scroll-mt-20 py-24 sm:py-32"
+          : "relative overflow-hidden py-24 sm:py-32"
+      }
+    >
+      {/* Soft top-center "spotlight" glow — distinct shape/position from
+          the corner-pair and single-circle glows used elsewhere on the
+          page, so the recurring teal accent reads as varied rather than
+          one effect copy-pasted everywhere. */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden="true"
+        style={{
+          background:
+            "radial-gradient(ellipse at 50% 0%, rgba(76,153,151,0.12) 0%, transparent 50%)",
+        }}
+      />
+      <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
         {banner}
         <div className="mb-16 text-center">
-          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-            Transparent, flexible pricing
+          <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
+            Transparent, <span style={{ color: "#4C9997" }}>flexible pricing</span>
           </h2>
           <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
             Start with one avatar. Add more as you grow.

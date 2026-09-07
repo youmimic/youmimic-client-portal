@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { ContactForm } from "@/components/marketing/contact-form";
+import { CalendlyInlineWidget } from "@/components/marketing/calendly-widget";
 
 export const metadata: Metadata = {
   title: "Contact Sales — YouMimic",
@@ -91,22 +92,15 @@ export default function ContactPage() {
                 Book a demo
               </h2>
               <div className="h-125 overflow-hidden rounded-xl border border-border sm:h-150 lg:h-175">
-                <div
-                  className="calendly-inline-widget h-full"
-                  data-url="https://calendly.com/youmimic-sales/new-meeting?primary_color=4c9997"
-                  style={{ minWidth: "320px" }}
+                <CalendlyInlineWidget
+                  url="https://calendly.com/youmimic-sales/new-meeting?primary_color=4c9997"
+                  className="h-full min-w-80"
                 />
               </div>
             </div>
           </div>
         </div>
       </section>
-
-      {/* Calendly script — lazyOnload so it doesn't block page render */}
-      <Script
-        src="https://assets.calendly.com/assets/external/widget.js"
-        strategy="lazyOnload"
-      />
 
       {/* Brevo Conversations chat widget — contact page only (not site-wide).
           Renders as an iframe from conversations-widget.brevo.com once

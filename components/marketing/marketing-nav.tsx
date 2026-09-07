@@ -82,27 +82,35 @@ export function MarketingNav() {
       <nav className="hidden items-center gap-6 sm:flex">
         {navLinks.map((link) =>
           link.children ? (
-            <DropdownMenu key={link.href}>
-              <DropdownMenuTrigger
+            <div key={link.href} className="flex items-center gap-0.5">
+              <Link
+                href={link.href}
                 className={cn(
-                  "flex items-center gap-1 rounded-sm text-sm font-medium outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "text-sm font-medium transition-colors hover:text-foreground",
                   isActive(link) ? "text-foreground" : "text-muted-foreground",
                 )}
               >
                 {link.label}
-                <ChevronDown className="size-3.5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem render={<Link href={link.href} />}>
-                  {link.label} overview
-                </DropdownMenuItem>
-                {link.children.map((child) => (
-                  <DropdownMenuItem key={child.href} render={<Link href={child.href} />}>
-                    {child.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-label={`${link.label} submenu`}
+                  className={cn(
+                    "flex items-center rounded-sm p-0.5 outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+                    isActive(link) ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  <ChevronDown className="size-3.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {link.children.map((child) => (
+                    <DropdownMenuItem key={child.href} render={<Link href={child.href} />}>
+                      {child.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           ) : (
             <Link
               key={link.href}

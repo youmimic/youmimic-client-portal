@@ -51,19 +51,22 @@ const testimonials = [
     quote:
       "You Mimic AI are amazing! From capture session to onboarding and support. The quality of my avatar is mind blowing!",
     name: "Patrick Lang",
-    title: "Realtor, Belle Property Australia",
+    role: "Realtor",
+    company: "Belle Property Australia",
   },
   {
     quote:
       "You Mimic AI is a truly forward-thinking partner for us. Hyper-realistic avatars that power our Sales Kick-offs, Town Halls and Customer Presentations. It saves us time.",
     name: "Joel Starkey",
-    title: "Sales Enablement, DXC Technology",
+    role: "Sales Enablement",
+    company: "DXC Technology",
   },
   {
     quote:
       "You Mimic AI are the gold standard in avatar captures and set the benchmark for quality, ethics and responsible AI.",
     name: "Dr. Catherine Ball",
-    title: "Corporate Speaker, Xprize Board Member",
+    role: "Corporate Speaker",
+    company: "Xprize Board Member",
   },
 ];
 
@@ -203,22 +206,22 @@ export default async function HomePage() {
 
             <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 lg:p-14">
               <h1
-                className="max-w-2xl text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl"
+                className="max-w-3xl text-5xl font-bold leading-[0.98] tracking-tighter sm:text-6xl lg:text-8xl"
                 style={{ color: "#FFFFFF" }}
               >
                 The future of business communication.
               </h1>
               <p
-                className="mt-4 max-w-xl text-base leading-relaxed sm:text-lg lg:text-xl"
+                className="mt-5 max-w-xl text-base leading-relaxed sm:text-lg lg:text-xl"
                 style={{ color: "rgba(255,255,255,0.85)" }}
               >
                 One capture becomes infinite communication — an AI avatar
                 that speaks, looks, and sounds exactly like you.
               </p>
-              <div className="mt-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                 <Button
                   asChild
-                  className="h-12 px-8 text-base font-medium"
+                  className="h-14 px-10 text-base font-semibold sm:text-lg"
                   style={{
                     backgroundColor: "#4C9997",
                     color: "#FFFFFF",
@@ -240,8 +243,32 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="py-24 sm:py-32">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="py-20 sm:py-28" style={{ backgroundColor: "#333333" }}>
+        <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
+          <p
+            className="mx-auto max-w-4xl text-3xl font-bold leading-[1.1] tracking-tighter sm:text-5xl lg:text-6xl"
+            style={{ color: "#FFFFFF" }}
+          >
+            One person. One session.
+            <br />
+            <span style={{ color: "#4C9997" }}>Infinite reach.</span>
+          </p>
+        </div>
+      </section>
+
+      <section className="relative overflow-hidden py-24 sm:py-32">
+        {/* Single soft circular glow behind the image side — a distinct
+            shape/position from the corner-pair glow used elsewhere, so the
+            teal accent reads as varied rather than one effect repeated. */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(circle at 75% 50%, rgba(76,153,151,0.14) 0%, transparent 55%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div className="text-center lg:text-left">
               <div
@@ -255,8 +282,8 @@ export default async function HomePage() {
                 <Fingerprint className="size-3.5" />
                 Built for business
               </div>
-              <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-                We create your digital twin.
+              <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
+                We create your <span style={{ color: "#4C9997" }}>digital twin</span>.
               </h2>
               <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground lg:mx-0">
                 One capture. Infinite communication. It speaks, looks, and
@@ -271,23 +298,37 @@ export default async function HomePage() {
               </div>
             </div>
 
+            {/* digital-twin-photo.avif is the YouMimic wordmark (teal on
+                solid black), not a photo. bg-cover previously stretched it
+                edge-to-edge into a stark, hard-edged black rectangle;
+                bg-contain with a matching background color lets it sit at
+                its natural size with no cropping or seam, reading as a
+                clean framed logo instead. */}
             <div
-              className="aspect-21/9 w-full overflow-hidden rounded-xl bg-cover bg-center shadow-lg"
-              style={{ backgroundImage: "url('/digital-twin-photo.avif')" }}
+              className="aspect-21/9 w-full overflow-hidden rounded-xl bg-contain bg-center bg-no-repeat shadow-md"
+              style={{ backgroundColor: "#333333", backgroundImage: "url('/digital-twin-photo.avif')" }}
             />
           </div>
         </div>
       </section>
 
-      <section className="bg-muted py-16 sm:py-20">
+      <section className="py-20 sm:py-28" style={{ backgroundColor: "#333333" }}>
         <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <dl className="grid grid-cols-2 gap-10 sm:grid-cols-4">
             {stats.map(({ value, label }) => (
               <div key={label} className="text-center">
-                <dd className="text-5xl font-semibold tracking-tight text-primary sm:text-6xl">
+                <dd
+                  className="text-6xl font-bold tracking-tighter sm:text-7xl"
+                  style={{ color: "#4C9997" }}
+                >
                   {value}
                 </dd>
-                <dt className="mt-2 text-sm text-muted-foreground">{label}</dt>
+                <dt
+                  className="mt-3 text-sm"
+                  style={{ color: "rgba(255,255,255,0.7)" }}
+                >
+                  {label}
+                </dt>
               </div>
             ))}
           </dl>
@@ -296,11 +337,24 @@ export default async function HomePage() {
 
       <PricingSection id="pricing" isLoggedIn={isLoggedIn} />
 
-      <section className="bg-muted py-24 sm:py-32">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden bg-muted py-24 sm:py-32">
+        {/* Decorative background — a soft teal glow, matching the same
+            treatment used on the hero, final CTA, and testimonials
+            sections. Purely decorative: pointer-events-none + aria-hidden. */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(ellipse at 12% 15%, rgba(76,153,151,0.14) 0%, transparent 50%), " +
+              "radial-gradient(ellipse at 90% 85%, rgba(76,153,151,0.12) 0%, transparent 48%)",
+          }}
+        />
+
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              How It Works
+            <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
+              How It <span style={{ color: "#4C9997" }}>Works</span>
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
               We create a photorealistic digital twin of your staff.
@@ -310,7 +364,7 @@ export default async function HomePage() {
             {howItWorks.map(({ n, icon: Icon, title, body }) => (
               <div key={n} className="relative">
                 <div className="mb-6 flex items-center justify-between">
-                  <span className="text-5xl font-semibold tracking-tight text-primary">
+                  <span className="text-5xl font-bold tracking-tighter text-primary">
                     {n}
                   </span>
                   <Icon className="size-6 text-accent" />
@@ -332,8 +386,8 @@ export default async function HomePage() {
 
       <section className="py-16 sm:py-20">
         <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-            How It Looks
+          <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
+            How It <span style={{ color: "#4C9997" }}>Looks</span>
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted-foreground">
             We create a photorealistic digital twin of your team, capable of
@@ -377,8 +431,8 @@ export default async function HomePage() {
         />
         <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Trusted by Our Clients
+            <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
+              Trusted by <span style={{ color: "#4C9997" }}>Our Clients</span>
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
               Real feedback from the teams already using their digital
@@ -386,22 +440,36 @@ export default async function HomePage() {
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {testimonials.map(({ quote, name, title }) => (
+            {testimonials.map(({ quote, name, role, company }) => (
               <div
                 key={name}
-                className="flex flex-col rounded-xl border border-border bg-card p-6"
+                className="relative flex flex-col overflow-hidden rounded-xl bg-card/60 p-6 backdrop-blur-sm transition-all duration-300 shadow-[0_1px_2px_rgba(51,51,51,0.06),0_8px_16px_-4px_rgba(51,51,51,0.10),0_20px_32px_-8px_rgba(76,153,151,0.12)] hover:-translate-y-1.5 hover:shadow-[0_2px_4px_rgba(51,51,51,0.08),0_16px_28px_-6px_rgba(51,51,51,0.16),0_28px_44px_-10px_rgba(76,153,151,0.22)]"
               >
-                <Quote className="size-6 text-accent" />
-                <p className="mt-4 flex-1 text-sm leading-relaxed text-foreground">
+                {/* Each card gets its own small glow, echoing the
+                    section's ambient one at a smaller scale, while the
+                    semi-transparent card background lets the section's
+                    glow bleed through underneath. */}
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  aria-hidden="true"
+                  style={{
+                    background:
+                      "radial-gradient(ellipse at 100% 0%, rgba(76,153,151,0.14) 0%, transparent 55%)",
+                  }}
+                />
+                <Quote className="relative z-10 size-6 text-accent" />
+                <p className="relative z-10 mt-4 flex-1 text-sm leading-relaxed text-foreground">
                   {quote}
                 </p>
-                <div className="mt-6 flex items-center gap-3">
+                <div className="relative z-10 mt-6 flex items-center gap-3">
                   <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted">
                     <User className="size-4 text-muted-foreground" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">{name}</p>
-                    <p className="text-xs text-muted-foreground">{title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {role}, <span style={{ color: "#4C9997" }}>{company}</span>
+                    </p>
                   </div>
                 </div>
               </div>
@@ -452,10 +520,22 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="py-24 sm:py-32">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden py-24 sm:py-32">
+        {/* Subtle bottom-left ellipse glow — kept low-opacity since this
+            section's own service-card images already carry visual weight;
+            a third distinct shape/position after the circle (Digital Twin
+            intro) and top spotlight (Pricing), completing the varied set. */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(ellipse at 15% 100%, rgba(76,153,151,0.10) 0%, transparent 45%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+            <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
               Our Services
             </h2>
             <p className="mx-auto mt-4 max-w-lg text-lg text-muted-foreground">
