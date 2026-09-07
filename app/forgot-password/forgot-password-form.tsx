@@ -74,7 +74,7 @@ export default function ForgotPasswordForm() {
         <CardContent className="space-y-4">
           {submitted ? (
             <div className="space-y-4">
-              <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400">
                 If an account exists for that email, we&apos;ve sent a link to
                 reset your password. Check your inbox.
               </div>
@@ -85,7 +85,7 @@ export default function ForgotPasswordForm() {
           ) : (
             <>
               {formError && (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400">
                   {formError}
                 </div>
               )}

@@ -11,6 +11,7 @@ export default function AiEthicsPage() {
     <ComingSoonPage
       title="AI Ethics"
       body="We're preparing a full statement on our approach to responsible AI avatar generation, consent, and likeness usage. Have a question in the meantime? Reach out to our team."
+      secondaryCta={{ href: "/contact", label: "Get in touch" }}
     />
   );
 }

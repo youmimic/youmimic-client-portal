@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { PricingSection } from "@/components/marketing/pricing-section";
 import { HowItLooksVideo } from "@/components/marketing/how-it-looks-video";
+import { ScrollReveal } from "@/components/marketing/scroll-reveal";
+import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 
 const stats = [
   { value: "175+", label: "Languages supported" },
@@ -67,18 +69,21 @@ const testimonials = [
 
 const services = [
   {
+    n: "01",
     icon: UserSquare2,
     title: "Digital Twins",
     image: "/digital-twins.avif",
     body: "Photorealistic digital twins of your people — from executives and subject-matter experts to entire teams. Generate training, sales, internal communications, and customer content on demand.",
   },
   {
+    n: "02",
     icon: Bot,
     title: "Interactive Avatars",
     image: "/interactive avatars.avif",
     body: "Turn your digital twins into interactive AI employees, trained on your approved business knowledge. They can answer questions, onboard staff, support customers, and deliver information around the clock in most languages.",
   },
   {
+    n: "03",
     icon: Presentation,
     title: "Holograms",
     image: "/holograms.avif",
@@ -89,20 +94,21 @@ const services = [
 // Every file in the "Where you've seen us / Featured At" folder — skipping
 // blob.png, which is a duplicate of images.jpg's Australian Computer
 // Society mark (icon-only vs. icon+wordmark) rather than a distinct logo.
+// "Rotary Australia" and "Tasmanian Business Conference" were dropped —
+// their source files were deleted from the Featured At folder with no
+// replacement uploaded. EdCAT now points at edcat.png (edcat.jpg was
+// deleted and replaced with a cleaner logo-only export). `dark` flips
+// TEDx Hobart to a dark chip since its wordmark is red-and-white ink on
+// a transparent background — the white half disappears on a white card.
 const featuredAt = [
   { name: "SXSW Sydney", src: "/Where you've seen us/Featured At/SXSW_Sydney_2023_Hero.jpg" },
-  { name: "TEDx Hobart", src: "/Where you've seen us/Featured At/tedxHobart.png" },
-  {
-    name: "Tasmanian Business Conference",
-    src: "/Where you've seen us/Featured At/Tasmanian-Business-Conference---Logo.svg",
-  },
-  { name: "Rotary Australia", src: "/Where you've seen us/Featured At/Rotary Australia.jpg" },
+  { name: "TEDx Hobart", src: "/Where you've seen us/Featured At/tedxHobart.png", dark: true },
   {
     name: "Governance Institute of Australia",
     src: "/Where you've seen us/Featured At/Govenerae Instiatute of Australia.jpg",
   },
   { name: "Australian Computer Society", src: "/Where you've seen us/Featured At/images.jpg" },
-  { name: "EdCAT 2026", src: "/Where you've seen us/Featured At/edcat.jpg" },
+  { name: "EdCAT 2026", src: "/Where you've seen us/Featured At/edcat.png" },
 ];
 
 // Every file in the Client Logos folder — matched to its actual company
@@ -136,10 +142,6 @@ const clientLogos = [
   },
   { name: "APM", src: "/Client Logos/apm-logo-126.png" },
   { name: "ette Sydney", src: "/Client Logos/ette+Logo+Yellow.webp" },
-  {
-    name: "Client logo",
-    src: "/Client Logos/i5V58GCaGh_2jatit.avif",
-  },
   { name: "Course Rebel", src: "/Client Logos/images.jpg" },
   { name: "BNAA", src: "/Client Logos/images.png" },
   {
@@ -330,7 +332,7 @@ export default async function HomePage() {
 
       <section className="py-16 sm:py-20">
         <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
             How It Looks
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted-foreground">
@@ -360,8 +362,20 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="bg-muted py-24 sm:py-32">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden bg-muted py-24 sm:py-32">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at 85% 10%, rgba(76,153,151,0.14) 0%, transparent 50%), " +
+              "radial-gradient(ellipse at 10% 90%, rgba(76,153,151,0.10) 0%, transparent 45%)",
+          }}
+        />
+        <Quote
+          className="pointer-events-none absolute -left-10 -top-10 size-64 text-primary/5 sm:size-80"
+          strokeWidth={1}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
               Trusted by Our Clients
@@ -371,7 +385,7 @@ export default async function HomePage() {
               twins.
             </p>
           </div>
-          <div className="grid gap-6 sm:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {testimonials.map(({ quote, name, title }) => (
               <div
                 key={name}
@@ -382,7 +396,7 @@ export default async function HomePage() {
                   {quote}
                 </p>
                 <div className="mt-6 flex items-center gap-3">
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border bg-muted">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted">
                     <User className="size-4 text-muted-foreground" />
                   </div>
                   <div>
@@ -397,24 +411,41 @@ export default async function HomePage() {
       </section>
 
       <section className="py-16 sm:py-20">
-        <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+          <p className="text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
             Trusted by teams at
           </p>
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
-            {clientLogos.map(({ name, src, dark }) => (
-              <div
-                key={src}
-                className="relative flex h-20 items-center justify-center rounded-xl border border-border p-4"
-                style={{ backgroundColor: dark ? "#333333" : "#FFFFFF" }}
-              >
-                <NextImage
-                  src={src}
-                  alt={name}
-                  fill
-                  sizes="(min-width: 640px) 20vw, 50vw"
-                  className="object-contain p-2"
-                />
+          <div className="mt-8 space-y-4">
+            {[clientLogos.slice(0, 9), clientLogos.slice(9)].map((row, rowIndex) => (
+              <div key={rowIndex} className="overflow-hidden">
+                <div
+                  className="animate-marquee-ltr flex w-max gap-4"
+                  style={{ "--marquee-duration": rowIndex === 0 ? "36s" : "44s" } as React.CSSProperties}
+                >
+                  {[...row, ...row].map(({ name, src, dark }, i) => {
+                    // Second half is a duplicate of the first, rendered
+                    // only so the CSS loop has something to scroll into —
+                    // hidden from assistive tech so each logo is announced
+                    // once, not twice per row.
+                    const isDuplicate = i >= row.length;
+                    return (
+                      <div
+                        key={`${src}-${i}`}
+                        aria-hidden={isDuplicate || undefined}
+                        className="relative flex h-20 w-40 shrink-0 items-center justify-center rounded-xl border border-border p-4"
+                        style={{ backgroundColor: dark ? "#333333" : "#FFFFFF" }}
+                      >
+                        <NextImage
+                          src={src}
+                          alt={isDuplicate ? "" : name}
+                          fill
+                          sizes="160px"
+                          className="object-contain p-3"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ))}
           </div>
@@ -428,33 +459,37 @@ export default async function HomePage() {
               Our Services
             </h2>
             <p className="mx-auto mt-4 max-w-lg text-lg text-muted-foreground">
-              We capture your digital twin at your office, train it, and
-              deploy it. Your team can then create 4K content from a simple
-              text prompt, in almost any language, on demand.
+              We capture your digital twin at your office, train and deploy
+              it. Your team can create 4K content with a simple text
+              prompt, in any language, on demand.
             </p>
           </div>
-          <div className="grid gap-6 sm:grid-cols-3">
-            {services.map(({ icon: Icon, title, image, body }) => (
-              <div
-                key={title}
-                className="overflow-hidden rounded-xl border border-border bg-card"
-              >
-                <div
-                  className="aspect-video w-full bg-cover bg-center"
-                  style={{ backgroundImage: `url('${image}')` }}
-                />
-                <div className="p-6">
-                  <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
-                    <Icon className="size-5 text-accent" />
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {services.map(({ n, icon: Icon, title, image, body }, i) => (
+              <ScrollReveal key={title} delay={i * 100}>
+                <div className="group overflow-hidden rounded-xl border border-border bg-card transition-shadow duration-300 hover:shadow-lg">
+                  <div className="relative aspect-video w-full overflow-hidden">
+                    <div
+                      className="h-full w-full bg-cover bg-center transition-transform duration-500 ease-out group-hover:scale-105"
+                      style={{ backgroundImage: `url('${image}')` }}
+                    />
+                    <span className="absolute left-4 top-4 flex size-9 items-center justify-center rounded-full bg-black/50 text-sm font-semibold text-white backdrop-blur-sm">
+                      {n}
+                    </span>
                   </div>
-                  <h3 className="mb-2 text-sm font-semibold text-foreground">
-                    {title}
-                  </h3>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    {body}
-                  </p>
+                  <div className="p-6">
+                    <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
+                      <Icon className="size-5 text-accent" />
+                    </div>
+                    <h3 className="mb-2 text-sm font-semibold text-foreground">
+                      {title}
+                    </h3>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      {body}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              </ScrollReveal>
             ))}
           </div>
           <div className="mt-10 flex justify-center">
@@ -470,19 +505,19 @@ export default async function HomePage() {
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             As featured at
           </p>
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {featuredAt.map(({ name, src }) => (
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
+            {featuredAt.map(({ name, src, dark }) => (
               <div
                 key={src}
-                className="relative flex h-20 items-center justify-center rounded-xl border border-border p-4"
-                style={{ backgroundColor: "#FFFFFF" }}
+                className="relative flex h-20 items-center justify-center rounded-xl border border-border p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+                style={{ backgroundColor: dark ? "#333333" : "#FFFFFF" }}
               >
                 <NextImage
                   src={src}
                   alt={name}
                   fill
-                  sizes="(min-width: 640px) 25vw, 50vw"
-                  className="object-contain p-2"
+                  sizes="(min-width: 640px) 20vw, 50vw"
+                  className="object-contain p-3"
                 />
               </div>
             ))}
@@ -490,77 +525,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section
-        className="relative overflow-hidden py-32 sm:py-40"
-        style={{ backgroundColor: "#4C9997" }}
-      >
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(ellipse at 80% 50%, rgba(51,51,51,0.12) 0%, transparent 60%), " +
-              "radial-gradient(ellipse at 20% 80%, rgba(51,51,51,0.10) 0%, transparent 55%)",
-          }}
-        />
-        <div className="relative z-10 mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-          <h2
-            className="text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl"
-            style={{ color: "#FFFFFF" }}
-          >
-            {isLoggedIn
-              ? "Ready to make your next AI avatar video?"
-              : "Ready to create your first AI avatar?"}
-          </h2>
-          <p
-            className="mx-auto mt-5 max-w-sm text-lg leading-relaxed"
-            style={{ color: "rgba(255,255,255,0.85)" }}
-          >
-            {isLoggedIn
-              ? "Jump back into your dashboard and keep going."
-              : "Make professional videos without a production crew."}
-          </p>
-          <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
-            {isLoggedIn ? (
-              <Button
-                asChild
-                className="h-12 px-8 text-base font-medium"
-                style={{
-                  backgroundColor: "#FFFFFF",
-                  color: "#4C9997",
-                  borderColor: "transparent",
-                }}
-              >
-                <Link href="/dashboard">Go to Dashboard</Link>
-              </Button>
-            ) : (
-              <>
-                <Button
-                  asChild
-                  className="h-12 px-8 text-base font-medium"
-                  style={{
-                    backgroundColor: "#FFFFFF",
-                    color: "#4C9997",
-                    borderColor: "transparent",
-                  }}
-                >
-                  <Link href="/signup">Create your account</Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="ghost"
-                  className="h-12 px-8 text-base font-medium"
-                  style={{
-                    border: "1px solid rgba(255,255,255,0.5)",
-                    color: "#FFFFFF",
-                  }}
-                >
-                  <Link href="/login">Sign in</Link>
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </section>
+      <FinalCtaSection isLoggedIn={isLoggedIn} />
     </>
   );
 }

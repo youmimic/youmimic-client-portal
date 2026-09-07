@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Award, Rocket, Trophy, Newspaper, Building2, Star } from "lucide-react";
+import { DarkCtaBand } from "@/components/marketing/dark-cta-band";
 
 export const metadata: Metadata = {
   title: "Press — YouMimic",
@@ -63,31 +65,45 @@ const pressItems = [
 
 export default function PressPage() {
   return (
-    <section className="border-b border-border py-20 sm:py-28">
-      <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-        <div className="mb-12 max-w-2xl">
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Press
-          </h1>
-          <p className="mt-4 leading-relaxed text-muted-foreground">
-            Recognition and coverage for YouMimic. For media inquiries, get
-            in touch with our team.
-          </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {pressItems.map(({ icon: Icon, title, body }) => (
-            <div key={title} className="flex gap-4 rounded-xl border border-border bg-card p-6">
-              <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
-                <Icon className="size-5 text-accent" />
+    <>
+      <section className="border-b border-border py-20 sm:py-28">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+          <div className="mb-12 max-w-2xl">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Press
+            </h1>
+            <p className="mt-4 leading-relaxed text-muted-foreground">
+              Recognition and coverage for YouMimic. For media inquiries,{" "}
+              <Link href="/contact" className="text-foreground underline-offset-4 hover:underline">
+                get in touch
+              </Link>{" "}
+              with our team.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {pressItems.map(({ icon: Icon, title, body }) => (
+              <div key={title} className="flex gap-4 rounded-xl border border-border bg-card p-6">
+                <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
+                  <Icon className="size-5 text-accent" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <DarkCtaBand
+        heading="Media inquiries"
+        body="Working on a story about YouMimic? Reach out and we'll get you what you need."
+        primaryHref="/contact"
+        primaryLabel="Contact Us"
+        secondaryHref="/media-center"
+        secondaryLabel="Media Center"
+      />
+    </>
   );
 }

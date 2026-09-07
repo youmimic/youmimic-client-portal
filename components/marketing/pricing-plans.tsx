@@ -69,7 +69,7 @@ export function PricingPlans({
         </div>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="flex flex-col">
           <Image
             src="/corporate.avif"
@@ -100,9 +100,11 @@ export function PricingPlans({
           </CardContent>
           <CardFooter>
             {/* Corporate deliberately stays "Contact Sales" only — no
-                self-serve payment flow, per the product owner's decision. */}
+                self-serve payment flow, per the product owner's decision.
+                Labeled to match: "Book Now" here would imply the same
+                self-serve checkout the other two plans use. */}
             <Button asChild variant="outline" className="w-full">
-              <Link href="/contact#book-demo">Book Now</Link>
+              <Link href="/contact#book-demo">Contact Sales</Link>
             </Button>
           </CardFooter>
         </Card>

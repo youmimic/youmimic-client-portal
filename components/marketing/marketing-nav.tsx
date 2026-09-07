@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, X } from "lucide-react";
@@ -32,14 +32,49 @@ const navLinks: NavLink[] = [
   { href: "/contact", label: "Connect" },
 ];
 
+const MOBILE_NAV_PANEL_ID = "mobile-nav-panel";
+
 export function MarketingNav() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [openMobileSection, setOpenMobileSection] = useState<string | null>(null);
+  const toggleButtonRef = useRef<HTMLButtonElement>(null);
 
   function isActive(link: NavLink) {
     return pathname === link.href || (link.children?.some((c) => pathname === c.href) ?? false);
   }
+
+  // Close the mobile panel on any route change — covers back/forward and
+  // programmatic navigation, not just a direct click on a rendered Link.
+  // Adjusting state during render (React's documented pattern for "reset
+  // state when a prop changes") rather than in an effect, since an
+  // unconditional setState in an effect body triggers an extra render
+  // every time regardless of whether anything actually changed.
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
+    setIsOpen(false);
+  }
+
+  // While the mobile panel is open: lock body scroll and let Escape close
+  // it (returning focus to the toggle button, since it's the thing that
+  // opened the panel).
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        toggleButtonRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
 
   return (
     <>
@@ -50,7 +85,7 @@ export function MarketingNav() {
             <DropdownMenu key={link.href}>
               <DropdownMenuTrigger
                 className={cn(
-                  "flex items-center gap-1 text-sm font-medium outline-none transition-colors hover:text-foreground",
+                  "flex items-center gap-1 rounded-sm text-sm font-medium outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
                   isActive(link) ? "text-foreground" : "text-muted-foreground",
                 )}
               >
@@ -85,11 +120,13 @@ export function MarketingNav() {
 
       {/* ── Mobile hamburger toggle (< sm) ───────────────────────────── */}
       <button
+        ref={toggleButtonRef}
         type="button"
         className="flex items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground sm:hidden"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-label={isOpen ? "Close menu" : "Open menu"}
         aria-expanded={isOpen}
+        aria-controls={MOBILE_NAV_PANEL_ID}
       >
         {isOpen ? <X className="size-5" /> : <Menu className="size-5" />}
       </button>
@@ -104,7 +141,10 @@ export function MarketingNav() {
             aria-hidden="true"
           />
           {/* Nav panel — sits immediately below the sticky header */}
-          <div className={cn("fixed left-0 right-0 z-40 border-b border-border bg-background px-4 pb-4 pt-2 sm:hidden", HEADER_OFFSET)}>
+          <div
+            id={MOBILE_NAV_PANEL_ID}
+            className={cn("fixed left-0 right-0 z-40 border-b border-border bg-background px-4 pb-4 pt-2 sm:hidden", HEADER_OFFSET)}
+          >
             <nav className="flex flex-col gap-1">
               {navLinks.map((link) =>
                 link.children ? (

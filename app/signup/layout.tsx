@@ -1,4 +1,5 @@
 import { MarketingHeader } from "@/components/marketing/marketing-header";
+import { MarketingFooter } from "@/components/marketing/marketing-footer";
 
 export default function SignupLayout({
   children,
@@ -8,7 +9,8 @@ export default function SignupLayout({
   return (
     <>
       <MarketingHeader />
-      {children}
+      <main className="flex-1">{children}</main>
+      <MarketingFooter />
     </>
   );
 }

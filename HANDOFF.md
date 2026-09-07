@@ -1,5 +1,68 @@
 # HANDOFF.md
 
+## Session: Public site UI/UX audit and fix pass — 2026-09-07
+
+Asked to act as a senior UI/UX engineer and fix the UI/UX of the whole
+public site. Given the scope, ran three parallel Explore agents (homepage
++ pricing; the other 8 marketing pages; shared chrome/theme/auth pages)
+to audit before touching code, then a written plan (Milestones A/B/C)
+approved before implementing — same Plan Mode discipline as prior
+large-restructure sessions.
+
+**What the audit actually found** (not just cosmetic nitpicks): a live
+pricing contradiction ($899 vs $499 for the same "starting price" on
+`/solutions/small-business`), a stale "12+ languages" stat that disagreed
+with the homepage's "175+" in two places, 5 dead-end pages that invite
+contact with no working link, WCAG AA contrast failures on both pages'
+primary conversion CTA (~2.9:1, needs 4.5:1), a systemic dark-mode gap
+across every public-facing form's status banners, and several real
+keyboard/screen-reader gaps in the nav and marquee carousel.
+
+**Fixed, milestone by milestone** (full detail in
+`updates/2026-09-07-public-site-uiux-pass.md`):
+- **Correctness**: pricing/stat contradictions resolved; Corporate's
+  mislabeled "Book Now" → "Contact Sales"; 4 coming-soon pages and Press
+  given real "get in touch" links/CTAs; Contact page's actually-stacked
+  "two-column" layout fixed to a real grid; one unidentifiable
+  `alt="Client logo"` placeholder dropped.
+- **Accessibility**: contrast-fixed both final CTA sections (computed the
+  ratio, ~4.9:1 after fix, not eyeballed); fixed a skipped h2→h4 heading;
+  the client-logo marquee's duplicated-for-looping row no longer
+  double-announces to screen readers; nav dropdown focus-visible ring
+  added; mobile nav gained Escape-to-close, body-scroll lock,
+  `aria-controls`, and close-on-route-change (the last one uses React's
+  "adjust state during render" pattern, not a bare effect, since an
+  unconditional `setState` in `useEffect` trips this repo's
+  `react-hooks/set-state-in-effect` build-blocking lint rule); the same
+  light-only red/green banner colors across 5 public forms (login,
+  signup, forgot-password, reset-password, contact) got the dark-mode
+  pairing already established and used in ~10 dashboard/admin files;
+  newsletter form + shared `FormMessage` gained `aria-live`; `/login` and
+  `/signup` were missing the site footer entirely — added.
+- **Consistency/polish**: standardized "Book a Demo"/"See Pricing" CTA
+  labels site-wide; extracted `final-cta-section.tsx` and
+  `dark-cta-band.tsx` to kill duplicated CTA-band JSX (same DRY rationale
+  as the existing `PricingSection`); testimonial dashed-border placeholder
+  softened to a plain circle; added `md:` grid breakpoints to stop 3
+  grids cramming at tablet width; Contact's Calendly embed is now
+  responsive height; dropped `bg-fixed` (silently broken on iOS) from
+  Contact's parallax band; decoupled footer's newsletter form from an
+  unrelated conditional; `error.tsx`'s width aligned to the real
+  header/footer's convention.
+
+**Deferred** (needs real content from the user or is a bigger design
+call, not a code fix): Press page's thin content, video captions, a full
+Tab-cycling focus trap for the mobile nav, the 13-item `/solutions`
+industries grid's unavoidable orphan card, dashboard-only chart-token
+theming, and Small Business's testimonial-styled example section (flagged
+separately rather than silently changed).
+
+**Checks**: `npm run lint`, `npm run typecheck`, `npx next build` clean
+after every milestone; live dev-server checks across all 13 affected
+routes plus targeted verification of each specific fix, including
+triggering `/login?registered=1` to confirm the dark-mode banner classes
+actually render, not just exist in source.
+
 ## Session: Fix logged-in visitors redirected to /signup on "Book Now" — 2026-09-05
 
 Bug reported on production (youmimic.com.au): a logged-in user clicking

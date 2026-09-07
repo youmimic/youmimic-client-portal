@@ -40,7 +40,7 @@ export function LegalAcceptanceField({
     <div className="rounded-md border p-4" data-invalid={!!error}>
       {accepted ? (
         <div className="flex items-center gap-2 text-sm">
-          <Check className="h-4 w-4 text-green-600" aria-hidden="true" />
+          <Check className="h-4 w-4 text-green-600 dark:text-green-400" aria-hidden="true" />
           <span className="font-medium">{label} accepted</span>
           <button
             type="button"

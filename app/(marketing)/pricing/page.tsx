@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PricingSection } from "@/components/marketing/pricing-section";
+import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 
 export const metadata: Metadata = {
   title: "Pricing — YouMimic",
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
 
 const stats = [
   { value: "3 min", label: "Average generation time" },
-  { value: "12+", label: "Supported languages" },
+  { value: "175+", label: "Supported languages" },
   { value: "500+", label: "Videos generated" },
   { value: "99.9%", label: "Platform uptime" },
 ];
@@ -279,9 +280,9 @@ export default async function PricingPage({
                     <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-accent/10">
                       <Icon className="size-5 text-accent" />
                     </div>
-                    <h4 className="mt-3 text-sm font-semibold text-foreground">
+                    <h3 className="mt-3 text-sm font-semibold text-foreground">
                       {title}
-                    </h4>
+                    </h3>
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                       {body}
                     </p>
@@ -382,77 +383,7 @@ export default async function PricingPage({
         </div>
       </section>
 
-      <section
-        className="relative overflow-hidden py-32 sm:py-40"
-        style={{ backgroundColor: "#4C9997" }}
-      >
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(ellipse at 80% 50%, rgba(51,51,51,0.12) 0%, transparent 60%), " +
-              "radial-gradient(ellipse at 20% 80%, rgba(51,51,51,0.10) 0%, transparent 55%)",
-          }}
-        />
-        <div className="relative z-10 mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-          <h2
-            className="text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl"
-            style={{ color: "#FFFFFF" }}
-          >
-            {isLoggedIn
-              ? "Ready to make your next AI avatar video?"
-              : "Ready to create your first AI avatar?"}
-          </h2>
-          <p
-            className="mx-auto mt-5 max-w-sm text-lg leading-relaxed"
-            style={{ color: "rgba(255,255,255,0.85)" }}
-          >
-            {isLoggedIn
-              ? "Jump back into your dashboard and keep going."
-              : "Make professional videos without a production crew."}
-          </p>
-          <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
-            {isLoggedIn ? (
-              <Button
-                asChild
-                className="h-12 px-8 text-base font-medium"
-                style={{
-                  backgroundColor: "#FFFFFF",
-                  color: "#4C9997",
-                  borderColor: "transparent",
-                }}
-              >
-                <Link href="/dashboard">Go to Dashboard</Link>
-              </Button>
-            ) : (
-              <>
-                <Button
-                  asChild
-                  className="h-12 px-8 text-base font-medium"
-                  style={{
-                    backgroundColor: "#FFFFFF",
-                    color: "#4C9997",
-                    borderColor: "transparent",
-                  }}
-                >
-                  <Link href="/signup">Create your account</Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="ghost"
-                  className="h-12 px-8 text-base font-medium"
-                  style={{
-                    border: "1px solid rgba(255,255,255,0.5)",
-                    color: "#FFFFFF",
-                  }}
-                >
-                  <Link href="/login">Sign in</Link>
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </section>
+      <FinalCtaSection isLoggedIn={isLoggedIn} />
     </>
   );
 }

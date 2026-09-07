@@ -48,7 +48,11 @@ export function NewsletterForm() {
 
   if (status === "success") {
     return (
-      <div className="flex items-start gap-2 text-sm text-foreground">
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-start gap-2 text-sm text-foreground"
+      >
         <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
         <span>Subscription successful</span>
       </div>
@@ -88,7 +92,9 @@ export function NewsletterForm() {
         </button>
       </div>
       {status === "error" && error && (
-        <p className="mt-2 text-xs text-destructive">{error}</p>
+        <p role="alert" aria-live="polite" className="mt-2 text-xs text-destructive">
+          {error}
+        </p>
       )}
     </form>
   );

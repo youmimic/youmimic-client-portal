@@ -11,6 +11,7 @@ export default function CareersPage() {
     <ComingSoonPage
       title="Careers"
       body="We're not hiring publicly yet, but we're always open to hearing from people who want to build the future of AI video communication. Reach out and introduce yourself."
+      secondaryCta={{ href: "/contact", label: "Get in touch" }}
     />
   );
 }

@@ -95,13 +95,13 @@ export function ContactForm() {
   return (
     <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
       {formError && showFormError && (
-        <div className="mb-6 flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="mb-6 flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400">
           <p>{formError}</p>
           <button
             type="button"
             onClick={() => setShowFormError(false)}
             aria-label="Dismiss error message"
-            className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100"
+            className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>

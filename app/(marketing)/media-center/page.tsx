@@ -11,6 +11,7 @@ export default function MediaCenterPage() {
     <ComingSoonPage
       title="Media Center"
       body="Brand assets, logos, and media resources are on the way. Need something sooner? Get in touch and we'll send it over."
+      secondaryCta={{ href: "/contact", label: "Get in touch" }}
     />
   );
 }

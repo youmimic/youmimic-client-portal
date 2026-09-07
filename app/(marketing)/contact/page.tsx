@@ -34,14 +34,16 @@ export default function ContactPage() {
         </div>
       </section>
 
-      {/* Our offices — parallax background band (bg-fixed keeps the image
-          in place while the page scrolls over it, a plain-CSS effect, no
-          JS needed). Image is a properly licensed Pexels photo (Pexels
+      {/* Our offices — background band. Previously used bg-fixed for a
+          parallax effect, but background-attachment: fixed silently
+          degrades on iOS Safari/mobile browsers, so it was dropped in
+          favor of consistent behavior everywhere over a desktop-only
+          nicety. Image is a properly licensed Pexels photo (Pexels
           License, "Free to use") — not the Wix reference's own photo,
           which turned out to be a Flickr image marked "All rights
           reserved" and wasn't safe to use. */}
       <section
-        className="relative bg-fixed bg-cover bg-center py-24 sm:py-32"
+        className="relative bg-cover bg-center py-24 sm:py-32"
         style={{ backgroundImage: "url('/contact-bg.avif')" }}
       >
         <div
@@ -74,7 +76,7 @@ export default function ContactPage() {
       {/* Two-column: form + Calendly */}
       <section className="py-16 sm:py-20">
         <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-          <div className="flex flex-col gap-12">
+          <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
             {/* Contact form */}
             <div>
               <h2 className="mb-6 text-xl font-semibold text-foreground">
@@ -88,11 +90,11 @@ export default function ContactPage() {
               <h2 className="mb-6 text-xl font-semibold text-foreground">
                 Book a demo
               </h2>
-              <div className="overflow-hidden rounded-xl border border-border">
+              <div className="h-125 overflow-hidden rounded-xl border border-border sm:h-150 lg:h-175">
                 <div
-                  className="calendly-inline-widget"
+                  className="calendly-inline-widget h-full"
                   data-url="https://calendly.com/youmimic-sales/new-meeting?primary_color=4c9997"
-                  style={{ minWidth: "320px", height: "700px" }}
+                  style={{ minWidth: "320px" }}
                 />
               </div>
             </div>

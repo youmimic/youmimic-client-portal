@@ -37,7 +37,7 @@ export default function ErrorPage({
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
         <div
           className={cn(
-            "mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6",
+            "mx-auto flex w-full items-center justify-between px-4 sm:px-6 lg:w-[90vw] lg:px-0",
             HEADER_HEIGHT,
           )}
         >
@@ -70,7 +70,7 @@ export default function ErrorPage({
         </div>
       </main>
       <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
+        <div className="mx-auto flex w-full flex-col items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6 lg:w-[90vw] lg:px-0">
           <span>© 2026 YouMimic. All rights reserved.</span>
           <div className="flex gap-6">
             <Link href="/login" className="transition-colors hover:text-foreground">

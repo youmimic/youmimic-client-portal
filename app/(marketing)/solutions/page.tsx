@@ -21,6 +21,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DarkCtaBand } from "@/components/marketing/dark-cta-band";
 
 export const metadata: Metadata = {
   title: "Solutions — YouMimic",
@@ -155,14 +156,14 @@ export default function SolutionsPage() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild className="h-11 px-6 text-sm font-medium">
-                <Link href="/contact">Book a demo</Link>
+                <Link href="/contact#book-demo">Book a Demo</Link>
               </Button>
               <Button
                 asChild
                 variant="outline"
                 className="h-11 px-6 text-sm font-medium"
               >
-                <Link href="/pricing">View pricing</Link>
+                <Link href="/pricing">See Pricing</Link>
               </Button>
             </div>
           </div>
@@ -237,59 +238,14 @@ export default function SolutionsPage() {
         </div>
       </section>
 
-      {/* ── Final CTA — dark, matches homepage palette ───────────────────── */}
-      <section
-        className="relative overflow-hidden py-24 sm:py-32"
-        style={{ backgroundColor: "#333333" }}
-      >
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse at 80% 50%, rgba(76,153,151,0.12) 0%, transparent 60%), " +
-              "radial-gradient(ellipse at 20% 80%, rgba(76,153,151,0.15) 0%, transparent 55%)",
-          }}
-        />
-        <div className="relative z-10 mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-          <h2
-            className="text-2xl font-semibold tracking-tight sm:text-3xl"
-            style={{ color: "#FFFFFF" }}
-          >
-            Ready to elevate your video messaging?
-          </h2>
-          <p
-            className="mx-auto mt-4 max-w-sm text-sm leading-relaxed"
-            style={{ color: "rgba(255,255,255,0.75)" }}
-          >
-            Talk to our team about how YouMimic can work for your industry,
-            team size, and communication goals.
-          </p>
-          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Button
-              asChild
-              className="h-11 px-6 text-sm font-medium"
-              style={{
-                backgroundColor: "#4C9997",
-                color: "#FFFFFF",
-                borderColor: "transparent",
-              }}
-            >
-              <Link href="/contact">Book a demo</Link>
-            </Button>
-            <Button
-              asChild
-              variant="ghost"
-              className="h-11 px-6 text-sm font-medium"
-              style={{
-                border: "1px solid rgba(255,255,255,0.25)",
-                color: "#FFFFFF",
-              }}
-            >
-              <Link href="/pricing">See pricing</Link>
-            </Button>
-          </div>
-        </div>
-      </section>
+      <DarkCtaBand
+        heading="Ready to elevate your video messaging?"
+        body="Talk to our team about how YouMimic can work for your industry, team size, and communication goals."
+        primaryHref="/contact#book-demo"
+        primaryLabel="Book a Demo"
+        secondaryHref="/pricing"
+        secondaryLabel="See Pricing"
+      />
     </>
   );
 }

@@ -71,9 +71,9 @@ export async function MarketingFooter() {
             </ul>
           </div>
 
-          {socialLinks.length > 0 && (
-            <div>
-              <h3 className="mb-3 text-sm font-semibold text-foreground">Social</h3>
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-foreground">Social</h3>
+            {socialLinks.length > 0 && (
               <ul className="space-y-2">
                 {socialLinks.map(({ label, href }) => (
                   <li key={label}>
@@ -89,14 +89,16 @@ export async function MarketingFooter() {
                   </li>
                 ))}
               </ul>
+            )}
 
-              {/* Newsletter signup — same column as Social, directly below
-                  the social links. */}
-              <div className="mt-6">
-                <NewsletterForm />
-              </div>
+            {/* Newsletter signup — same column as Social, directly below
+                the social links. Intentionally not gated on socialLinks
+                being non-empty; the two are unrelated features that
+                happen to share a column. */}
+            <div className={socialLinks.length > 0 ? "mt-6" : undefined}>
+              <NewsletterForm />
             </div>
-          )}
+          </div>
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-sm text-muted-foreground sm:flex-row">
