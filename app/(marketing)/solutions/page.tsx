@@ -35,7 +35,7 @@ const capabilities = [
   {
     icon: Shield,
     title: "Safety & training videos",
-    body: "Produce consistent, compliance-ready training and safety briefings from a single recording — distributed at scale.",
+    body: "Produce consistent, compliance-ready training and safety briefings from a single recording, distributed at scale.",
   },
   {
     icon: Globe,
@@ -45,12 +45,12 @@ const capabilities = [
   {
     icon: Users,
     title: "User generated content",
-    body: "Empower teams, customers, and partners to generate on-brand video content using your avatar at scale.",
+    body: "Let teams, customers, and partners generate on-brand video content using your avatar at scale.",
   },
   {
     icon: TrendingUp,
     title: "Investor pitches & market reports",
-    body: "Present data, strategy, and forecasts with a polished, professional delivery — every time, without studio time.",
+    body: "Present data, strategy, and forecasts with a polished, professional delivery, every time, without studio time.",
   },
   {
     icon: Radio,
@@ -88,12 +88,12 @@ const industries = [
   {
     icon: Rocket,
     name: "Entrepreneurs & Startups",
-    body: "Build a professional video presence from day one — investor pitches, product demos, and launch announcements without a production budget.",
+    body: "Build a professional video presence from day one: investor pitches, product demos, and launch announcements without a production budget.",
   },
   {
     icon: ShoppingBag,
     name: "Small Business",
-    body: "Produce polished customer-facing videos — promotions, how-to guides, and service updates — with the presence of a much larger team.",
+    body: "Produce polished customer-facing videos (promotions, how-to guides, and service updates) with the presence of a much larger team.",
   },
   {
     icon: Building2,
@@ -159,7 +159,7 @@ export default function SolutionsPage() {
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
               CEOs, executives, educators, creators, and digital communicators
-              are scaling their video presence with YouMimic — one recorded
+              are scaling their video presence with YouMimic: one recorded
               session, unlimited deployment.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -263,7 +263,7 @@ export default function SolutionsPage() {
       </section>
 
       <DarkCtaBand
-        heading="Ready to elevate your video messaging?"
+        heading="Ready to talk about your video messaging?"
         body="Talk to our team about how YouMimic can work for your industry, team size, and communication goals."
         primaryHref="/contact#book-demo"
         primaryLabel="Book a Demo"

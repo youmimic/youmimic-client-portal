@@ -194,6 +194,18 @@
   animation: badge-text-sweep 4s ease-in-out infinite;
 }
 
+/* Stacked-shadow "3D" effect for hero headings across the public site.
+   Uses the brand teal for the stepped offset layers (reads as an
+   extruded block regardless of whether the heading itself is white-on-
+   photo or dark-on-light) plus a soft ambient shadow for lift. */
+.hero-text-3d {
+  text-shadow:
+    1px 1px 0 rgba(76,153,151,0.85),
+    2px 2px 0 rgba(76,153,151,0.65),
+    3px 3px 0 rgba(76,153,151,0.45),
+    4px 4px 10px rgba(51,51,51,0.30);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

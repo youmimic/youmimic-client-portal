@@ -53,7 +53,7 @@ export function DarkCtaBand({
             style={{
               backgroundColor: "#4C9997",
               color: "#FFFFFF",
-              borderColor: "transparent",
+              borderColor: "#4C9997",
             }}
           >
             <Link href={primaryHref}>{primaryLabel}</Link>

@@ -47,7 +47,7 @@ const features = [
   {
     icon: Globe,
     title: "Speaks every language",
-    body: "Say it once and it comes out in any language you need—no re-recording, no translators.",
+    body: "Say it once and it comes out in any language you need, no re-recording, no translators.",
   },
   {
     icon: Building2,
@@ -60,7 +60,7 @@ const modules = [
   {
     icon: MessageCircle,
     title: "Speak",
-    body: "Conversation courses your avatar can lead — practice, roleplay, and everyday dialogue, in any language.",
+    body: "Conversation courses your avatar can lead: practice, roleplay, and everyday dialogue, in any language.",
   },
   {
     icon: BookOpen,
@@ -70,7 +70,7 @@ const modules = [
   {
     icon: PenLine,
     title: "Write",
-    body: "Writing courses delivered as video walkthroughs — clear guidance, without a wall of text.",
+    body: "Writing courses delivered as video walkthroughs, clear guidance without a wall of text.",
   },
 ];
 
@@ -79,7 +79,7 @@ const steps = [
     n: "01",
     icon: Video,
     title: "Record your session",
-    body: "Attend a short, guided recording session. We capture your likeness, voice, and professional presence—once.",
+    body: "Attend a short, guided recording session. We capture your likeness, voice, and professional presence, once.",
   },
   {
     n: "02",
@@ -99,7 +99,7 @@ const useCases = [
   {
     icon: Users,
     title: "Employee training",
-    body: "Give every team the same clear onboarding, compliance training, and skill-building — wherever they are.",
+    body: "Give every team the same clear onboarding, compliance training, and skill-building, wherever they are.",
   },
   {
     icon: Radio,
@@ -114,7 +114,7 @@ const useCases = [
   {
     icon: BookOpen,
     title: "Internal updates",
-    body: "Replace written memos with professional video messages from leadership—without booking a camera crew.",
+    body: "Replace written memos with professional video messages from leadership, without booking a camera crew.",
   },
 ];
 
@@ -186,18 +186,11 @@ export default async function PricingPage({
                   style={{
                     backgroundColor: "#4C9997",
                     color: "#FFFFFF",
-                    borderColor: "transparent",
+                    borderColor: "#4C9997",
                   }}
                 >
                   <a href="#pricing">See Pricing</a>
                 </Button>
-                <Link
-                  href="/contact#book-demo"
-                  className="text-sm font-medium underline-offset-4 hover:underline"
-                  style={{ color: "#333333" }}
-                >
-                  Contact Sales
-                </Link>
               </div>
             </div>
 
@@ -207,7 +200,7 @@ export default async function PricingPage({
                 style={{ color: "rgba(51,51,51,0.7)" }}
               >
                 YouMimic turns a single recording session into a
-                professional AI avatar that speaks for you — in any
+                professional AI avatar that speaks for you in any
                 language, whenever you need it.
               </p>
               <p

@@ -61,7 +61,7 @@ const services = [
     icon: UserSquare2,
     title: "Digital Twins",
     image: "/digital-twins.avif",
-    body: "Photorealistic digital twins of your people — from executives and subject-matter experts to entire teams. Generate training, sales, internal communications, and customer content on demand.",
+    body: "Photorealistic digital twins of your people, from executives and subject-matter experts to entire teams. Generate training, sales, internal communications, and customer content on demand.",
   },
   {
     n: "02",
@@ -75,7 +75,7 @@ const services = [
     icon: Presentation,
     title: "Holograms",
     image: "/holograms.avif",
-    body: "Life-size digital presenters for malls, airports, terminals, retail, and events — delivering branded content, advertising, and customer engagement.",
+    body: "Life-size digital presenters for malls, airports, terminals, retail, and events, delivering branded content, advertising, and customer engagement.",
   },
 ];
 
@@ -200,7 +200,7 @@ export default async function HomePage() {
 
             <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 lg:p-14">
               <h1
-                className="max-w-3xl text-5xl font-bold leading-[0.98] tracking-tighter sm:text-6xl lg:text-8xl"
+                className="hero-text-3d max-w-3xl text-5xl font-bold leading-[0.98] tracking-tighter sm:text-6xl lg:text-8xl"
                 style={{ color: "#FFFFFF" }}
               >
                 The future of business communication.
@@ -212,7 +212,7 @@ export default async function HomePage() {
                   style={{
                     backgroundColor: "#4C9997",
                     color: "#FFFFFF",
-                    borderColor: "transparent",
+                    borderColor: "#4C9997",
                   }}
                 >
                   <Link href={getStartedHref}>Get Started</Link>
@@ -244,7 +244,7 @@ export default async function HomePage() {
               </h2>
               <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground lg:mx-0">
                 One capture. Infinite communication. It speaks, looks, and
-                sounds exactly like you — training teams, updating clients, and
+                sounds exactly like you, training teams, updating clients, and
                 pitching investors in 175+ languages, at 4K quality, anywhere,
                 anytime.
               </p>
@@ -444,8 +444,21 @@ export default async function HomePage() {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {services.map(({ n, icon: Icon, title, image, body }, i) => (
               <ScrollReveal key={title} delay={i * 100}>
-                <div className="group overflow-hidden rounded-xl border border-border bg-card transition-shadow duration-300 hover:shadow-lg">
-                  <div className="relative aspect-video w-full overflow-hidden">
+                <div className="group relative overflow-hidden rounded-xl border border-border bg-card/60 backdrop-blur-sm transition-shadow duration-300 hover:shadow-lg">
+                  {/* Per-card glow, echoing the section's own ambient
+                      radial gradient at a smaller scale, same technique
+                      used for the testimonial cards. Visible through the
+                      card's translucent background in the content area
+                      below the (opaque) image. */}
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    aria-hidden="true"
+                    style={{
+                      background:
+                        "radial-gradient(ellipse at 100% 0%, rgba(76,153,151,0.14) 0%, transparent 55%)",
+                    }}
+                  />
+                  <div className="relative z-10 aspect-video w-full overflow-hidden">
                     <div
                       className="h-full w-full bg-cover bg-center transition-transform duration-500 ease-out group-hover:scale-105"
                       style={{ backgroundImage: `url('${image}')` }}
@@ -454,7 +467,7 @@ export default async function HomePage() {
                       {n}
                     </span>
                   </div>
-                  <div className="p-6">
+                  <div className="relative z-10 p-6">
                     <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
                       <Icon className="size-5 text-accent" />
                     </div>

@@ -53,7 +53,7 @@ export function FinalCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
               style={{
                 backgroundColor: "#FFFFFF",
                 color: "#4C9997",
-                borderColor: "transparent",
+                borderColor: "#FFFFFF",
               }}
             >
               <Link href="/dashboard">Go to Dashboard</Link>
@@ -66,7 +66,7 @@ export function FinalCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
                 style={{
                   backgroundColor: "#FFFFFF",
                   color: "#4C9997",
-                  borderColor: "transparent",
+                  borderColor: "#FFFFFF",
                 }}
               >
                 <Link href="/signup">Create your account</Link>

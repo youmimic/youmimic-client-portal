@@ -32,15 +32,15 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground [--invert-bg:var(--primary-foreground)] [--invert-fg:var(--primary)]",
+          "border-primary bg-primary text-primary-foreground [--invert-bg:var(--primary-foreground)] [--invert-fg:var(--primary)]",
         outline:
           "border-border bg-background text-foreground [--invert-bg:var(--foreground)] [--invert-fg:var(--background)] aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30",
         secondary:
-          "bg-secondary text-secondary-foreground [--invert-bg:var(--secondary-foreground)] [--invert-fg:var(--secondary)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "border-secondary bg-secondary text-secondary-foreground [--invert-bg:var(--secondary-foreground)] [--invert-fg:var(--secondary)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
           "text-foreground [--invert-bg:var(--foreground)] [--invert-fg:var(--background)] aria-expanded:bg-muted aria-expanded:text-foreground",
         destructive:
-          "bg-destructive/10 text-destructive [--invert-bg:var(--destructive)] [--invert-fg:var(--background)] focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40",
+          "border-destructive/10 bg-destructive/10 text-destructive [--invert-bg:var(--destructive)] [--invert-fg:var(--background)] focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:border-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40",
         // Plain text link, not a boxed button — the sweep/invert would
         // look like a stray highlight box behind inline text, so it's
         // switched off here via before:content-none (no pseudo-element

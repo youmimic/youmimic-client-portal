@@ -15,7 +15,7 @@ import { DarkCtaBand } from "@/components/marketing/dark-cta-band";
 export const metadata: Metadata = {
   title: "Small Business Solutions — YouMimic",
   description:
-    "AI avatar video for small businesses — social content, proposals, outreach, and sales, without a production team.",
+    "AI avatar video for small businesses: social content, proposals, outreach, and sales, without a production team.",
 };
 
 const offerings = [
@@ -23,7 +23,7 @@ const offerings = [
     n: "01",
     icon: Share2,
     title: "Social Media",
-    body: "Turn a single script into a week of on-brand social video — no camera, no editor, no reshoots when the message changes.",
+    body: "Turn a single script into a week of on-brand social video, no camera, no editor, no reshoots when the message changes.",
   },
   {
     n: "02",
@@ -35,7 +35,7 @@ const offerings = [
     n: "03",
     icon: MessageSquare,
     title: "Personalised Outreach",
-    body: "Send prospects and leads a video that uses their name and context — recorded once, personalized at scale.",
+    body: "Send prospects and leads a video that uses their name and context, recorded once, personalized at scale.",
   },
   {
     n: "04",
@@ -47,7 +47,7 @@ const offerings = [
     n: "05",
     icon: TrendingUp,
     title: "Sales",
-    body: "Equip every rep with consistent, on-brand video for demos and follow-ups — the same polish regardless of who's presenting.",
+    body: "Equip every rep with consistent, on-brand video for demos and follow-ups, the same polish regardless of who's presenting.",
   },
   {
     n: "06",
@@ -177,9 +177,8 @@ export default function SmallBusinessSolutionsPage() {
           <p className="mt-4 leading-relaxed text-muted-foreground">
             A two-person consultancy records one session for its founder, then
             uses that avatar for weekly LinkedIn updates, personalised
-            proposal intros, and follow-up videos for warm leads — all
-            without booking a camera crew or re-recording when the offer
-            changes.
+            proposal intros, and follow-up videos for warm leads, all without
+            booking a camera crew or re-recording when the offer changes.
           </p>
         </div>
       </section>
