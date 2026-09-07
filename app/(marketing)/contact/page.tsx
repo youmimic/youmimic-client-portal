@@ -19,11 +19,19 @@ export default function ContactPage() {
   return (
     <>
       {/* Page header */}
-      <section className="border-b border-border bg-muted py-16 sm:py-20">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden border-b border-border bg-muted py-16 sm:py-20">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(ellipse at 85% 20%, rgba(76,153,151,0.14) 0%, transparent 50%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="max-w-xl">
             <p className="mb-3 text-sm font-medium text-accent">Get in touch</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h1 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl">
               We&apos;d love to hear from you
             </h1>
             <p className="mt-4 leading-relaxed text-muted-foreground">
@@ -52,7 +60,7 @@ export default function ContactPage() {
           style={{ backgroundColor: "rgba(51,51,51,0.75)" }}
         />
         <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-          <h2 className="text-center text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "#FFFFFF" }}>
+          <h2 className="text-center text-3xl font-bold tracking-tighter sm:text-4xl" style={{ color: "#FFFFFF" }}>
             Our offices
           </h2>
           <div className="mt-12 grid gap-6 sm:grid-cols-3">
@@ -75,12 +83,20 @@ export default function ContactPage() {
       </section>
 
       {/* Two-column: form + Calendly */}
-      <section className="py-16 sm:py-20">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden py-16 sm:py-20">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(circle at 50% 100%, rgba(76,153,151,0.10) 0%, transparent 45%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
             {/* Contact form */}
             <div>
-              <h2 className="mb-6 text-xl font-semibold text-foreground">
+              <h2 className="mb-6 text-xl font-bold tracking-tight text-foreground">
                 Send us a message
               </h2>
               <ContactForm />
@@ -88,7 +104,7 @@ export default function ContactPage() {
 
             {/* Calendly inline widget */}
             <div id="book-demo" className="scroll-mt-20">
-              <h2 className="mb-6 text-xl font-semibold text-foreground">
+              <h2 className="mb-6 text-xl font-bold tracking-tight text-foreground">
                 Book a demo
               </h2>
               <div className="h-125 overflow-hidden rounded-xl border border-border sm:h-150 lg:h-175">

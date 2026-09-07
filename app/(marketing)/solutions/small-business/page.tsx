@@ -67,12 +67,20 @@ const stats = [
 export default function SmallBusinessSolutionsPage() {
   return (
     <>
-      <section className="border-b border-border bg-muted py-20 sm:py-28">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden border-b border-border bg-muted py-20 sm:py-28">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(ellipse at 90% 15%, rgba(76,153,151,0.14) 0%, transparent 50%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="max-w-2xl">
             <p className="mb-3 text-sm font-medium text-accent">Solutions / Small Business</p>
-            <h1 className="text-4xl font-semibold leading-[1.15] tracking-tight text-foreground sm:text-5xl">
-              Small Business Solutions
+            <h1 className="text-4xl font-bold leading-[1.05] tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
+              <span style={{ color: "#4C9997" }}>Small Business</span> Solutions
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
               A professional video presence, without a production team. Record
@@ -92,11 +100,19 @@ export default function SmallBusinessSolutionsPage() {
       </section>
 
       {/* ── Six service offerings ────────────────────────────────────── */}
-      <section className="border-b border-border py-20 sm:py-24">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden border-b border-border py-20 sm:py-24">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(circle at 10% 85%, rgba(76,153,151,0.12) 0%, transparent 50%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-12 text-center">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              What your avatar can do
+            <h2 className="text-3xl font-bold tracking-tighter text-foreground sm:text-4xl">
+              What your <span style={{ color: "#4C9997" }}>avatar</span> can do
             </h2>
             <p className="mx-auto mt-3 max-w-md text-muted-foreground">
               Six ways small businesses put YouMimic to work, day to day.
@@ -104,7 +120,10 @@ export default function SmallBusinessSolutionsPage() {
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {offerings.map(({ n, icon: Icon, title, body }) => (
-              <div key={title} className="relative rounded-xl border border-border bg-card p-6">
+              <div
+                key={title}
+                className="relative rounded-xl bg-card p-6 shadow-[0_1px_2px_rgba(51,51,51,0.06),0_8px_16px_-4px_rgba(51,51,51,0.10),0_20px_32px_-8px_rgba(76,153,151,0.12)] transition-all duration-300 hover:-translate-y-1"
+              >
                 <div className="mb-5 flex items-start justify-between">
                   <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
                     {n}
@@ -120,16 +139,26 @@ export default function SmallBusinessSolutionsPage() {
       </section>
 
       {/* ── Growth stats ─────────────────────────────────────────────── */}
-      <section className="border-b border-border bg-muted py-16">
+      <section className="py-16 sm:py-20" style={{ backgroundColor: "#333333" }}>
         <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-          <h2 className="mb-10 text-center text-xl font-semibold tracking-tight text-foreground">
-            Built for how small businesses actually run
+          <h2
+            className="mb-10 text-center text-2xl font-bold tracking-tighter sm:text-3xl"
+            style={{ color: "#FFFFFF" }}
+          >
+            Built for how <span style={{ color: "#4C9997" }}>small businesses</span> actually run
           </h2>
           <dl className="grid grid-cols-2 gap-8 sm:grid-cols-4">
             {stats.map(({ value, label }) => (
               <div key={label} className="text-center">
-                <dd className="text-3xl font-semibold tracking-tight text-primary">{value}</dd>
-                <dt className="mt-1 text-sm text-muted-foreground">{label}</dt>
+                <dd
+                  className="text-5xl font-bold tracking-tighter sm:text-6xl"
+                  style={{ color: "#4C9997" }}
+                >
+                  {value}
+                </dd>
+                <dt className="mt-2 text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>
+                  {label}
+                </dt>
               </div>
             ))}
           </dl>
@@ -142,7 +171,7 @@ export default function SmallBusinessSolutionsPage() {
       <section className="border-b border-border py-20 sm:py-24">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
           <Quote className="mx-auto mb-6 size-8 text-accent" />
-          <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          <h2 className="text-2xl font-bold tracking-tighter text-foreground sm:text-3xl">
             A typical small-business setup
           </h2>
           <p className="mt-4 leading-relaxed text-muted-foreground">

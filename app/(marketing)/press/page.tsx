@@ -66,10 +66,18 @@ const pressItems = [
 export default function PressPage() {
   return (
     <>
-      <section className="border-b border-border py-20 sm:py-28">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden border-b border-border py-20 sm:py-28">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(ellipse at 90% 10%, rgba(76,153,151,0.14) 0%, transparent 50%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-12 max-w-2xl">
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h1 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl">
               Press
             </h1>
             <p className="mt-4 leading-relaxed text-muted-foreground">
@@ -82,7 +90,10 @@ export default function PressPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {pressItems.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="flex gap-4 rounded-xl border border-border bg-card p-6">
+              <div
+                key={title}
+                className="flex gap-4 rounded-xl bg-card p-6 shadow-[0_1px_2px_rgba(51,51,51,0.06),0_8px_16px_-4px_rgba(51,51,51,0.10),0_20px_32px_-8px_rgba(76,153,151,0.12)] transition-all duration-300 hover:-translate-y-1"
+              >
                 <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
                   <Icon className="size-5 text-accent" />
                 </div>

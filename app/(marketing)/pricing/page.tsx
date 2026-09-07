@@ -172,7 +172,7 @@ export default async function PricingPage({
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div className="text-center lg:text-left">
               <h1
-                className="text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-6xl"
+                className="text-5xl font-bold leading-[1.05] tracking-tighter sm:text-6xl lg:text-7xl"
                 style={{ color: "#333333" }}
               >
                 Say it once.
@@ -223,15 +223,23 @@ export default async function PricingPage({
         </div>
       </section>
 
-      <section className="bg-muted py-16 sm:py-20">
+      <section className="py-20 sm:py-28" style={{ backgroundColor: "#333333" }}>
         <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <dl className="grid grid-cols-2 gap-10 sm:grid-cols-4">
             {stats.map(({ value, label }) => (
               <div key={label} className="text-center">
-                <dd className="text-5xl font-semibold tracking-tight text-primary sm:text-6xl">
+                <dd
+                  className="text-6xl font-bold tracking-tighter sm:text-7xl"
+                  style={{ color: "#4C9997" }}
+                >
                   {value}
                 </dd>
-                <dt className="mt-2 text-sm text-muted-foreground">{label}</dt>
+                <dt
+                  className="mt-3 text-sm"
+                  style={{ color: "rgba(255,255,255,0.7)" }}
+                >
+                  {label}
+                </dt>
               </div>
             ))}
           </dl>
@@ -244,7 +252,7 @@ export default async function PricingPage({
         <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div className="text-center lg:text-left">
-              <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+              <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
                 Not sure which plan fits your business?
               </h2>
               <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground lg:mx-0">
@@ -294,10 +302,18 @@ export default async function PricingPage({
         </div>
       </section>
 
-      <section className="py-24 sm:py-32">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden py-24 sm:py-32">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(circle at 90% 20%, rgba(76,153,151,0.12) 0%, transparent 50%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+            <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
               Made for how you actually communicate
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
@@ -327,7 +343,7 @@ export default async function PricingPage({
       <section className="bg-muted py-24 sm:py-32">
         <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+            <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
               One session. Unlimited output.
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
@@ -338,7 +354,7 @@ export default async function PricingPage({
             {steps.map(({ n, icon: Icon, title, body }) => (
               <div key={n} className="relative">
                 <div className="mb-6 flex items-center justify-between">
-                  <span className="text-5xl font-semibold tracking-tight text-primary">
+                  <span className="text-5xl font-bold tracking-tighter text-primary">
                     {n}
                   </span>
                   <Icon className="size-6 text-accent" />
@@ -353,10 +369,18 @@ export default async function PricingPage({
         </div>
       </section>
 
-      <section className="py-24 sm:py-32">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden py-24 sm:py-32">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(ellipse at 10% 100%, rgba(76,153,151,0.10) 0%, transparent 45%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+            <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
               Where teams use YouMimic
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">

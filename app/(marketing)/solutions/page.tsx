@@ -133,8 +133,16 @@ export default function SolutionsPage() {
   return (
     <>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="border-b border-border bg-muted py-20 sm:py-28">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden border-b border-border bg-muted py-20 sm:py-28">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(ellipse at 90% 10%, rgba(76,153,151,0.14) 0%, transparent 50%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="max-w-2xl">
             <div
               className="mb-6 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium"
@@ -146,8 +154,8 @@ export default function SolutionsPage() {
             >
               Solutions
             </div>
-            <h1 className="text-4xl font-semibold leading-[1.15] tracking-tight text-foreground sm:text-5xl">
-              How our clients are using their avatars
+            <h1 className="text-4xl font-bold leading-[1.05] tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
+              How our clients are using their <span style={{ color: "#4C9997" }}>avatars</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
               CEOs, executives, educators, creators, and digital communicators
@@ -171,10 +179,18 @@ export default function SolutionsPage() {
       </section>
 
       {/* ── What you can create ──────────────────────────────────────────── */}
-      <section className="border-b border-border py-20 sm:py-24">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden border-b border-border py-20 sm:py-24">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(circle at 8% 90%, rgba(76,153,151,0.12) 0%, transparent 50%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-12 text-center">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            <h2 className="text-3xl font-bold tracking-tighter text-foreground sm:text-4xl">
               What you can create
             </h2>
             <p className="mx-auto mt-3 max-w-md text-muted-foreground">
@@ -186,7 +202,7 @@ export default function SolutionsPage() {
             {capabilities.map(({ icon: Icon, title, body }) => (
               <div
                 key={title}
-                className="flex gap-5 rounded-xl border border-border bg-card p-6"
+                className="flex gap-5 rounded-xl bg-card p-6 shadow-[0_1px_2px_rgba(51,51,51,0.06),0_8px_16px_-4px_rgba(51,51,51,0.10),0_20px_32px_-8px_rgba(76,153,151,0.12)] transition-all duration-300 hover:-translate-y-1"
               >
                 <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
                   <Icon className="size-5 text-accent" />
@@ -206,11 +222,19 @@ export default function SolutionsPage() {
       </section>
 
       {/* ── Industries ───────────────────────────────────────────────────── */}
-      <section className="border-b border-border bg-muted py-20 sm:py-24">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+      <section className="relative overflow-hidden border-b border-border bg-muted py-20 sm:py-24">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background:
+              "radial-gradient(ellipse at 95% 95%, rgba(76,153,151,0.13) 0%, transparent 48%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-12 text-center">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              Built for every industry
+            <h2 className="text-3xl font-bold tracking-tighter text-foreground sm:text-4xl">
+              Built for <span style={{ color: "#4C9997" }}>every industry</span>
             </h2>
             <p className="mx-auto mt-3 max-w-md text-muted-foreground">
               From government to retail, YouMimic is already helping teams
@@ -221,7 +245,7 @@ export default function SolutionsPage() {
             {industries.map(({ icon: Icon, name, body }) => (
               <div
                 key={name}
-                className="rounded-xl border border-border bg-card p-6"
+                className="rounded-xl bg-card p-6 shadow-[0_1px_2px_rgba(51,51,51,0.06),0_8px_16px_-4px_rgba(51,51,51,0.10),0_20px_32px_-8px_rgba(76,153,151,0.12)] transition-all duration-300 hover:-translate-y-1"
               >
                 <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
                   <Icon className="size-5 text-accent" />
