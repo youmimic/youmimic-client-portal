@@ -49,8 +49,8 @@ export function PricingPlans({
       <div className="flex justify-center">
         <div className="inline-flex rounded-lg border border-border bg-muted p-1">
           {[
-            { value: "MONTHLY_12" as const, label: "12 months" },
             { value: "MONTHLY_24" as const, label: "24 months" },
+            { value: "MONTHLY_12" as const, label: "12 months" },
           ].map(({ value, label }) => (
             <button
               key={value}
@@ -79,7 +79,7 @@ export function PricingPlans({
             className="aspect-video w-full object-cover object-top"
           />
           <CardHeader>
-            <CardTitle className="text-base">{corporate.name}</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight">{corporate.name}</CardTitle>
             <CardDescription>{corporate.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
@@ -121,7 +121,7 @@ export function PricingPlans({
             <span className="mb-2 self-start rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
               Most popular
             </span>
-            <CardTitle className="text-base">{midMarket.name}</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight">{midMarket.name}</CardTitle>
             <CardDescription>{midMarket.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
@@ -163,7 +163,7 @@ export function PricingPlans({
             className="aspect-video w-full object-cover"
           />
           <CardHeader>
-            <CardTitle className="text-base">{smallBusiness.name}</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight">{smallBusiness.name}</CardTitle>
             <CardDescription>{smallBusiness.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">

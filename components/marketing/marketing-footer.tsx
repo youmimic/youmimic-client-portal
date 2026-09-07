@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { auth } from "@/auth";
+import { SiteLogo } from "@/components/branding/site-logo";
 import { NewsletterForm } from "@/components/marketing/newsletter-form";
 
 // Only platforms with a confirmed real URL are rendered — no placeholder
@@ -12,7 +12,6 @@ import { NewsletterForm } from "@/components/marketing/newsletter-form";
 const allSocialLinks = [
   { label: "LinkedIn", href: "https://www.linkedin.com/company/you-mimic/posts/?feedView=all" },
   { label: "Twitter", href: null },
-  { label: "Facebook", href: "https://www.facebook.com/youmimicai" },
   { label: "YouTube", href: null },
 ];
 const socialLinks = allSocialLinks.filter(
@@ -37,20 +36,38 @@ const navigationLinks = [
   { label: "Connect", href: "/contact" },
 ];
 
-export async function MarketingFooter() {
-  const session = await auth();
-  const isLoggedIn = Boolean(session?.user);
+// Footer link style — explicit light-on-dark colors rather than theme
+// tokens, since this footer is permanently dark (#333333) regardless of
+// the site's light/dark theme setting. `hover:!text-white` uses Tailwind's
+// important modifier since a plain hover class can't override the inline
+// `style.color` below (inline style always wins over a stylesheet rule
+// unless that rule is !important) — same technique used for the button
+// hover-invert.
+const linkClassName = "text-sm transition-colors hover:!text-white";
+const linkStyle = { color: "rgba(255,255,255,0.7)" };
 
+export function MarketingFooter() {
   return (
-    <footer className="border-t border-border">
+    <footer style={{ backgroundColor: "#333333" }}>
       <div className="mx-auto w-full px-4 py-12 sm:px-6 lg:w-[90vw] lg:px-0">
-        <div className="grid gap-10 sm:grid-cols-3">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <h3 className="mb-3 text-sm font-semibold text-foreground">Company</h3>
+            <SiteLogo forceVariant="dark" />
+            <p className="mt-4 text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>
+              You Mimic Pty Ltd
+              <br />
+              ABN: 39 695 563 627
+            </p>
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-sm font-semibold" style={{ color: "#FFFFFF" }}>
+              Company
+            </h3>
             <ul className="space-y-2">
               {companyLinks.map(({ label, href }) => (
                 <li key={label}>
-                  <Link href={href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                  <Link href={href} className={linkClassName} style={linkStyle}>
                     {label}
                   </Link>
                 </li>
@@ -59,11 +76,13 @@ export async function MarketingFooter() {
           </div>
 
           <div>
-            <h3 className="mb-3 text-sm font-semibold text-foreground">Navigation</h3>
+            <h3 className="mb-3 text-sm font-semibold" style={{ color: "#FFFFFF" }}>
+              Navigation
+            </h3>
             <ul className="space-y-2">
               {navigationLinks.map(({ label, href }) => (
                 <li key={label}>
-                  <Link href={href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                  <Link href={href} className={linkClassName} style={linkStyle}>
                     {label}
                   </Link>
                 </li>
@@ -72,7 +91,9 @@ export async function MarketingFooter() {
           </div>
 
           <div>
-            <h3 className="mb-3 text-sm font-semibold text-foreground">Social</h3>
+            <h3 className="mb-3 text-sm font-semibold" style={{ color: "#FFFFFF" }}>
+              Social
+            </h3>
             {socialLinks.length > 0 && (
               <ul className="space-y-2">
                 {socialLinks.map(({ label, href }) => (
@@ -81,7 +102,8 @@ export async function MarketingFooter() {
                       href={href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      className={`flex items-center gap-2 ${linkClassName}`}
+                      style={linkStyle}
                     >
                       <ArrowUpRight className="size-4" />
                       {label}
@@ -98,29 +120,6 @@ export async function MarketingFooter() {
             <div className={socialLinks.length > 0 ? "mt-6" : undefined}>
               <NewsletterForm />
             </div>
-          </div>
-        </div>
-
-        <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-sm text-muted-foreground sm:flex-row">
-          <div className="flex flex-col items-center gap-1 sm:items-start">
-            <span>© 2026 YouMimic. All rights reserved.</span>
-            <span className="text-xs">ABN 39 695 563 627</span>
-          </div>
-          <div className="flex gap-6">
-            {isLoggedIn ? (
-              <Link href="/dashboard" className="transition-colors hover:text-foreground">
-                Dashboard
-              </Link>
-            ) : (
-              <>
-                <Link href="/login" className="transition-colors hover:text-foreground">
-                  Sign in
-                </Link>
-                <Link href="/signup" className="transition-colors hover:text-foreground">
-                  Get started
-                </Link>
-              </>
-            )}
           </div>
         </div>
       </div>

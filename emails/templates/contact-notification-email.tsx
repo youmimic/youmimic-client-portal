@@ -12,6 +12,7 @@ type ContactNotificationEmailProps = {
   name: string;
   email: string;
   companyName: string;
+  phone: string;
   message: string;
 };
 
@@ -19,6 +20,7 @@ export function ContactNotificationEmail({
   name,
   email,
   companyName,
+  phone,
   message,
 }: ContactNotificationEmailProps) {
   return (
@@ -98,10 +100,20 @@ export function ContactNotificationEmail({
                 fontSize: "14px",
                 lineHeight: "24px",
                 color: "#333333",
-                margin: "0 0 24px",
+                margin: "0 0 4px",
               }}
             >
               <strong>Company:</strong> {companyName}
+            </Text>
+            <Text
+              style={{
+                fontSize: "14px",
+                lineHeight: "24px",
+                color: "#333333",
+                margin: "0 0 24px",
+              }}
+            >
+              <strong>Phone:</strong> {phone}
             </Text>
             <Text
               style={{

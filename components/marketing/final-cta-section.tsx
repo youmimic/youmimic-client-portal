@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 export function FinalCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
     <section
-      className="relative overflow-hidden py-32 sm:py-40"
+      className="relative overflow-hidden py-16 sm:py-20"
       style={{ backgroundColor: "#4C9997" }}
     >
       {/* Uniform darkening layer — the flat #4C9997 background alone
@@ -30,7 +30,7 @@ export function FinalCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
       />
       <div className="relative z-10 mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
         <h2
-          className="text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl"
+          className="text-2xl font-semibold tracking-tight sm:text-3xl"
           style={{ color: "#FFFFFF" }}
         >
           {isLoggedIn
@@ -38,14 +38,14 @@ export function FinalCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
             : "Ready to create your first AI avatar?"}
         </h2>
         <p
-          className="mx-auto mt-5 max-w-sm text-lg leading-relaxed"
+          className="mx-auto mt-3 max-w-sm text-base leading-relaxed"
           style={{ color: "#FFFFFF" }}
         >
           {isLoggedIn
             ? "Jump back into your dashboard and keep going."
             : "Make professional videos without a production crew."}
         </p>
-        <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
+        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
           {isLoggedIn ? (
             <Button
               asChild

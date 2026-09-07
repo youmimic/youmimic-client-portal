@@ -33,6 +33,7 @@ export function ContactForm() {
       name: "",
       email: "",
       companyName: "",
+      phone: "",
       message: "",
     },
     mode: "onBlur",
@@ -58,6 +59,7 @@ export function ContactForm() {
             key === "name" ||
             key === "email" ||
             key === "companyName" ||
+            key === "phone" ||
             key === "message"
           ) {
             form.setError(key as keyof ContactInput, {
@@ -163,6 +165,25 @@ export function ContactForm() {
                     type="text"
                     autoComplete="organization"
                     placeholder="Your company"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Phone number</FormLabel>
+                <FormControl>
+                  <Input
+                    type="tel"
+                    autoComplete="tel"
+                    placeholder="+61 4XX XXX XXX"
                     {...field}
                   />
                 </FormControl>

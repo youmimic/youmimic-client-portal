@@ -32,6 +32,22 @@ export const contactSchema = z.object({
     .min(1, "Company name is required")
     .max(200, "Company name must be 200 characters or less"),
 
+  phone: z
+    .string()
+    .transform((value) => value.trim())
+    .refine((value) => value.length > 0, {
+      message: "Phone number is required",
+    })
+    .refine((value) => value.startsWith("+"), {
+      message: "Include your country code (e.g. +61 4XX XXX XXX)",
+    })
+    .refine((value) => /^\+[0-9\s\-().]{6,20}$/.test(value), {
+      message: "Enter a valid phone number",
+    })
+    .refine((value) => value.replace(/\D/g, "").length >= 8, {
+      message: "Phone number is too short",
+    }),
+
   message: z
     .string()
     .min(10, "Message must be at least 10 characters")

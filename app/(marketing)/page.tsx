@@ -1,48 +1,33 @@
 import Link from "next/link";
 import NextImage from "next/image";
 import { auth } from "@/auth";
-import {
-  Fingerprint,
-  Calendar,
-  Cpu,
-  Rocket,
-  Quote,
-  UserSquare2,
-  Bot,
-  Presentation,
-  User,
-} from "lucide-react";
+import { Quote, UserSquare2, Bot, Presentation, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PricingSection } from "@/components/marketing/pricing-section";
 import { HowItLooksVideo } from "@/components/marketing/how-it-looks-video";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 
-const stats = [
-  { value: "175+", label: "Languages supported" },
-  { value: "4K", label: "Output quality" },
-  { value: "10", label: "Staff captured per day" },
-  { value: "30 min", label: "Capture time per person" },
-];
-
 const howItWorks = [
   {
     n: "01",
-    icon: Calendar,
     title: "Book Your Session",
-    body: "Choose your plan and we'll come to you — our team travels anywhere in Australia. Each capture takes about 30 minutes per person, with up to 10 staff captured in a single day.",
+    body: "We come to you, anywhere in Australia.",
   },
   {
     n: "02",
-    icon: Cpu,
     title: "Your Avatar Setup",
-    body: "We create and train your avatar from the capture. No technical setup required from your team.",
+    body: "We build and train your avatar.",
   },
   {
     n: "03",
-    icon: Rocket,
     title: "Your Avatar Is Ready",
-    body: "We deploy your avatar and give you access to our platform. Your team can create business content on demand in over 175 languages.",
+    body: "Create content on demand, in 175+ languages.",
+  },
+  {
+    n: "04",
+    title: "Make Videos",
+    body: "Type a script, and your avatar turns it into a video.",
   },
 ];
 
@@ -104,13 +89,19 @@ const services = [
 // TEDx Hobart to a dark chip since its wordmark is red-and-white ink on
 // a transparent background — the white half disappears on a white card.
 const featuredAt = [
-  { name: "SXSW Sydney", src: "/Where you've seen us/Featured At/SXSW_Sydney_2023_Hero.jpg" },
-  { name: "TEDx Hobart", src: "/Where you've seen us/Featured At/tedxHobart.png", dark: true },
+  {
+    name: "SXSW Sydney",
+    src: "/Where you've seen us/Featured At/SXSW_Sydney_2023_Hero.jpg",
+  },
+  {
+    name: "TEDx Hobart",
+    src: "/Where you've seen us/Featured At/tedxHobart.png",
+    dark: true,
+  },
   {
     name: "Governance Institute of Australia",
     src: "/Where you've seen us/Featured At/Govenerae Instiatute of Australia.jpg",
   },
-  { name: "Australian Computer Society", src: "/Where you've seen us/Featured At/images.jpg" },
   { name: "EdCAT 2026", src: "/Where you've seen us/Featured At/edcat.png" },
 ];
 
@@ -121,7 +112,10 @@ const featuredAt = [
 // its own background or reads fine on white.
 const clientLogos = [
   { name: "4Front", src: "/Client Logos/13224_4Front logo hi-res.jpg" },
-  { name: "Adam Spencer", src: "/Client Logos/Adam Spencer - Corporate Speaker.jpg" },
+  {
+    name: "Adam Spencer",
+    src: "/Client Logos/Adam Spencer - Corporate Speaker.jpg",
+  },
   {
     name: "Dr. Catherine Ball",
     src: "/Client Logos/Ball Dr Catherine PHD Logo - White_ 72dp.avif",
@@ -211,13 +205,6 @@ export default async function HomePage() {
               >
                 The future of business communication.
               </h1>
-              <p
-                className="mt-5 max-w-xl text-base leading-relaxed sm:text-lg lg:text-xl"
-                style={{ color: "rgba(255,255,255,0.85)" }}
-              >
-                One capture becomes infinite communication — an AI avatar
-                that speaks, looks, and sounds exactly like you.
-              </p>
               <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                 <Button
                   asChild
@@ -230,29 +217,9 @@ export default async function HomePage() {
                 >
                   <Link href={getStartedHref}>Get Started</Link>
                 </Button>
-                <Link
-                  href="/contact#book-demo"
-                  className="text-sm font-medium underline-offset-4 hover:underline"
-                  style={{ color: "#FFFFFF" }}
-                >
-                  Contact Sales
-                </Link>
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className="py-20 sm:py-28" style={{ backgroundColor: "#333333" }}>
-        <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-          <p
-            className="mx-auto max-w-4xl text-3xl font-bold leading-[1.1] tracking-tighter sm:text-5xl lg:text-6xl"
-            style={{ color: "#FFFFFF" }}
-          >
-            One person. One session.
-            <br />
-            <span style={{ color: "#4C9997" }}>Infinite reach.</span>
-          </p>
         </div>
       </section>
 
@@ -271,67 +238,32 @@ export default async function HomePage() {
         <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div className="text-center lg:text-left">
-              <div
-                className="mb-6 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-                style={{
-                  border: "1px solid rgba(76,153,151,0.30)",
-                  backgroundColor: "rgba(76,153,151,0.08)",
-                  color: "#4C9997",
-                }}
-              >
-                <Fingerprint className="size-3.5" />
-                Built for business
-              </div>
               <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
-                We create your <span style={{ color: "#4C9997" }}>digital twin</span>.
+                We create your{" "}
+                <span style={{ color: "#4C9997" }}>digital twin</span>.
               </h2>
               <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground lg:mx-0">
                 One capture. Infinite communication. It speaks, looks, and
-                sounds exactly like you — training teams, updating clients,
-                and pitching investors in 175+ languages, at 4K quality,
-                anywhere, anytime.
+                sounds exactly like you — training teams, updating clients, and
+                pitching investors in 175+ languages, at 4K quality, anywhere,
+                anytime.
               </p>
               <div className="mt-8 flex justify-center lg:justify-start">
-                <Button asChild variant="outline" className="h-11 px-6 text-sm font-medium">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="h-11 px-6 text-sm font-medium"
+                >
                   <Link href="/solutions">Learn More</Link>
                 </Button>
               </div>
             </div>
 
-            {/* digital-twin-photo.avif is the YouMimic wordmark (teal on
-                solid black), not a photo. bg-cover previously stretched it
-                edge-to-edge into a stark, hard-edged black rectangle;
-                bg-contain with a matching background color lets it sit at
-                its natural size with no cropping or seam, reading as a
-                clean framed logo instead. */}
             <div
-              className="aspect-21/9 w-full overflow-hidden rounded-xl bg-contain bg-center bg-no-repeat shadow-md"
-              style={{ backgroundColor: "#333333", backgroundImage: "url('/digital-twin-photo.avif')" }}
+              className="aspect-21/9 w-full overflow-hidden rounded-xl bg-cover bg-center"
+              style={{ backgroundImage: "url('/digital-twin-photo.avif')" }}
             />
           </div>
-        </div>
-      </section>
-
-      <section className="py-20 sm:py-28" style={{ backgroundColor: "#333333" }}>
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-          <dl className="grid grid-cols-2 gap-10 sm:grid-cols-4">
-            {stats.map(({ value, label }) => (
-              <div key={label} className="text-center">
-                <dd
-                  className="text-6xl font-bold tracking-tighter sm:text-7xl"
-                  style={{ color: "#4C9997" }}
-                >
-                  {value}
-                </dd>
-                <dt
-                  className="mt-3 text-sm"
-                  style={{ color: "rgba(255,255,255,0.7)" }}
-                >
-                  {label}
-                </dt>
-              </div>
-            ))}
-          </dl>
         </div>
       </section>
 
@@ -360,15 +292,12 @@ export default async function HomePage() {
               We create a photorealistic digital twin of your staff.
             </p>
           </div>
-          <div className="grid gap-10 sm:grid-cols-3">
-            {howItWorks.map(({ n, icon: Icon, title, body }) => (
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+            {howItWorks.map(({ n, title, body }) => (
               <div key={n} className="relative">
-                <div className="mb-6 flex items-center justify-between">
-                  <span className="text-5xl font-bold tracking-tighter text-primary">
-                    {n}
-                  </span>
-                  <Icon className="size-6 text-accent" />
-                </div>
+                <span className="mb-4 block text-5xl font-bold tracking-tighter text-primary">
+                  {n}
+                </span>
                 <h3 className="mb-2 text-base font-semibold text-foreground">
                   {title}
                 </h3>
@@ -391,28 +320,13 @@ export default async function HomePage() {
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted-foreground">
             We create a photorealistic digital twin of your team, capable of
-            producing 4K-quality video content from a simple text prompt —
-            no camera, no studio, no reshoots.
+            producing 4K-quality video content from a simple text prompt, no
+            camera, no studio, no reshoots.
           </p>
           <HowItLooksVideo
             src="/how-it-looks.mp4"
             className="mx-auto mt-8 aspect-video w-full max-w-5xl"
           />
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            {["Photorealistic", "4K output", "Text-to-video"].map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full px-3 py-1 text-xs font-medium"
-                style={{
-                  border: "1px solid rgba(76,153,151,0.30)",
-                  backgroundColor: "rgba(76,153,151,0.08)",
-                  color: "#4C9997",
-                }}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -435,8 +349,7 @@ export default async function HomePage() {
               Trusted by <span style={{ color: "#4C9997" }}>Our Clients</span>
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              Real feedback from the teams already using their digital
-              twins.
+              Real feedback from the teams already using their digital twins.
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -466,56 +379,40 @@ export default async function HomePage() {
                     <User className="size-4 text-muted-foreground" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-foreground">{name}</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {name}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {role}, <span style={{ color: "#4C9997" }}>{company}</span>
+                      {role},{" "}
+                      <span style={{ color: "#4C9997" }}>{company}</span>
                     </p>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
 
-      <section className="py-16 sm:py-20">
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-          <p className="text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Trusted by teams at
-          </p>
-          <div className="mt-8 space-y-4">
-            {[clientLogos.slice(0, 9), clientLogos.slice(9)].map((row, rowIndex) => (
-              <div key={rowIndex} className="overflow-hidden">
+          <div className="mt-20">
+            <p className="text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              Trusted by teams at
+            </p>
+            <div className="mt-8 grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+              {clientLogos.map(({ name, src, dark }) => (
                 <div
-                  className="animate-marquee-ltr flex w-max gap-4"
-                  style={{ "--marquee-duration": rowIndex === 0 ? "36s" : "44s" } as React.CSSProperties}
+                  key={src}
+                  className="group relative flex h-20 items-center justify-center rounded-xl shadow-sm transition-shadow duration-300 hover:shadow-md"
+                  style={{ backgroundColor: dark ? "#333333" : "#FFFFFF" }}
                 >
-                  {[...row, ...row].map(({ name, src, dark }, i) => {
-                    // Second half is a duplicate of the first, rendered
-                    // only so the CSS loop has something to scroll into —
-                    // hidden from assistive tech so each logo is announced
-                    // once, not twice per row.
-                    const isDuplicate = i >= row.length;
-                    return (
-                      <div
-                        key={`${src}-${i}`}
-                        aria-hidden={isDuplicate || undefined}
-                        className="relative flex h-20 w-40 shrink-0 items-center justify-center rounded-xl border border-border p-4"
-                        style={{ backgroundColor: dark ? "#333333" : "#FFFFFF" }}
-                      >
-                        <NextImage
-                          src={src}
-                          alt={isDuplicate ? "" : name}
-                          fill
-                          sizes="160px"
-                          className="object-contain p-3"
-                        />
-                      </div>
-                    );
-                  })}
+                  <NextImage
+                    src={src}
+                    alt={name}
+                    fill
+                    sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 33vw"
+                    className="object-contain p-5 grayscale opacity-60 transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100"
+                  />
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -539,9 +436,9 @@ export default async function HomePage() {
               Our Services
             </h2>
             <p className="mx-auto mt-4 max-w-lg text-lg text-muted-foreground">
-              We capture your digital twin at your office, train and deploy
-              it. Your team can create 4K content with a simple text
-              prompt, in any language, on demand.
+              We capture your digital twin at your office, train and deploy it.
+              Your team can create 4K content with a simple text prompt, in any
+              language, on demand.
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -585,11 +482,11 @@ export default async function HomePage() {
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             As featured at
           </p>
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
             {featuredAt.map(({ name, src, dark }) => (
               <div
                 key={src}
-                className="relative flex h-20 items-center justify-center rounded-xl border border-border p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+                className="group relative flex h-20 items-center justify-center rounded-xl p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
                 style={{ backgroundColor: dark ? "#333333" : "#FFFFFF" }}
               >
                 <NextImage
@@ -597,7 +494,7 @@ export default async function HomePage() {
                   alt={name}
                   fill
                   sizes="(min-width: 640px) 20vw, 50vw"
-                  className="object-contain p-3"
+                  className="object-contain p-5 grayscale opacity-60 transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100"
                 />
               </div>
             ))}

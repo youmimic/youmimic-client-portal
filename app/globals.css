@@ -214,19 +214,3 @@
     scroll-behavior: smooth;
   }
 }
-
-/* Left-to-right infinite logo marquee (client logos strip). The track
-   renders its logo list twice back-to-back at `w-max`; -50% is exactly
-   one copy's width, so animating from -50% to 0% shifts a full copy
-   into view and loops seamlessly. Static (no shift) for users who've
-   asked for reduced motion — still shows the first copy of the row. */
-@keyframes marquee-ltr {
-  from { transform: translateX(-50%); }
-  to { transform: translateX(0%); }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .animate-marquee-ltr {
-    animation: marquee-ltr var(--marquee-duration, 32s) linear infinite;
-  }
-}
