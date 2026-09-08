@@ -24,11 +24,6 @@ const howItWorks = [
     title: "Your Avatar Is Ready",
     body: "Create content on demand, in 175+ languages.",
   },
-  {
-    n: "04",
-    title: "Make Videos",
-    body: "Type a script, and your avatar turns it into a video.",
-  },
 ];
 
 const testimonials = [
@@ -292,7 +287,7 @@ export default async function HomePage() {
               We create a photorealistic digital twin of your staff.
             </p>
           </div>
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-10 sm:grid-cols-3">
             {howItWorks.map(({ n, title, body }) => (
               <div key={n} className="relative">
                 <span className="mb-4 block text-5xl font-bold tracking-tighter text-primary">
