@@ -10,19 +10,19 @@ import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 
 const howItWorks = [
   {
-    n: "01",
+    n: "1",
     title: "Book Your Session",
-    body: "We come to you, anywhere in Australia.",
+    body: "Choose your plan. Our team visits your workplace, anywhere in Australia. 30 minutes per person, up to 10 staff in one day.",
   },
   {
-    n: "02",
+    n: "2",
     title: "Your Avatar Setup",
-    body: "We build and train your avatar.",
+    body: "We create and train your avatar. No technical setup required from your team.",
   },
   {
-    n: "03",
+    n: "3",
     title: "Your Avatar Is Ready",
-    body: "Create content on demand, in 175+ languages.",
+    body: "We deploy your avatar and give you access to our platform. Your team can create business content on demand, in 175+ languages.",
   },
 ];
 
@@ -187,8 +187,11 @@ export default async function HomePage() {
 
             <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 lg:p-14">
               <h1
-                className="hero-text-3d max-w-3xl text-5xl font-bold leading-[0.98] tracking-tighter sm:text-6xl lg:text-8xl"
-                style={{ color: "#FFFFFF" }}
+                className="max-w-3xl text-5xl font-bold leading-[0.98] tracking-tighter sm:text-6xl lg:text-8xl"
+                style={{
+                  color: "#FFFFFF",
+                  textShadow: "0 2px 10px rgba(0,0,0,0.35)",
+                }}
               >
                 Your Business. Future Ready.
               </h1>
@@ -282,16 +285,21 @@ export default async function HomePage() {
             </p>
           </div>
           <div className="grid gap-10 sm:grid-cols-3">
-            {howItWorks.map(({ n, title, body }) => (
-              <div key={n} className="relative">
-                <span className="mb-4 block text-5xl font-bold tracking-tighter text-primary">
-                  {n}
-                </span>
-                <h3 className="mb-2 text-base font-semibold text-foreground">
-                  {title}
-                </h3>
-                <p className="leading-relaxed text-muted-foreground">{body}</p>
-              </div>
+            {howItWorks.map(({ n, title, body }, i) => (
+              <ScrollReveal key={n} delay={i * 200}>
+                <div className="relative">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Step {n}
+                  </p>
+                  <h3
+                    className="mt-1 mb-2 text-xl font-bold tracking-tight"
+                    style={{ color: "#4C9997" }}
+                  >
+                    {title}
+                  </h3>
+                  <p className="leading-relaxed text-muted-foreground">{body}</p>
+                </div>
+              </ScrollReveal>
             ))}
           </div>
           <div className="mt-12 flex justify-center">

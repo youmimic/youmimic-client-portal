@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-// Fades/slides content up once it scrolls into view — a Client Component
-// wrapper so Server Component pages (which can't hold hooks/IntersectionObserver
+// Fades/slides content up every time it scrolls into view (and back out
+// when it leaves), rather than just once — a Client Component wrapper so
+// Server Component pages (which can't hold hooks/IntersectionObserver
 // themselves) can still get a scroll-triggered reveal per section/card.
 export function ScrollReveal({
   children,
@@ -23,10 +24,7 @@ export function ScrollReveal({
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true);
-          observer.disconnect();
-        }
+        setVisible(entry.isIntersecting);
       },
       { threshold: 0.15 },
     );
