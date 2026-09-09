@@ -58,8 +58,8 @@ export function SiteLogo({
           <Image
             src={iconSrc}
             alt=""
-            width={40}
-            height={40}
+            width={810}
+            height={1030}
             className={className ?? "h-6 sm:h-7 md:h-8"}
             style={iconStyle}
             priority

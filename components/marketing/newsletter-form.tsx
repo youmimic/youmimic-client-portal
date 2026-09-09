@@ -94,7 +94,7 @@ export function NewsletterForm() {
         <button
           type="submit"
           disabled={status === "submitting"}
-          className="relative isolate h-10 w-full overflow-hidden rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors before:absolute before:inset-0 before:-z-10 before:origin-left before:scale-x-0 before:bg-black/10 before:transition-transform before:duration-500 before:ease-out hover:bg-primary/80 hover:before:scale-x-100 disabled:opacity-60 motion-reduce:before:transition-none dark:before:bg-white/10"
+          className="h-10 w-full rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground transition-[filter] duration-150 hover:brightness-95 disabled:opacity-60 motion-reduce:hover:brightness-100"
         >
           {status === "submitting" ? "Subscribing…" : "Subscribe"}
         </button>

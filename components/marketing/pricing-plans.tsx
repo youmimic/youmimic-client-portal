@@ -59,16 +59,20 @@ export function PricingPlans({
               className={cn(
                 "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
                 term === value
-                  ? "bg-card text-foreground shadow-sm"
+                  ? "shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
               )}
+              style={
+                term === value
+                  ? { backgroundColor: "#333333", color: "#FFFFFF" }
+                  : undefined
+              }
             >
               {label}
             </button>
           ))}
         </div>
       </div>
-
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="flex flex-col">
           <Image
@@ -101,7 +105,7 @@ export function PricingPlans({
           <CardFooter>
             {/* Corporate deliberately stays "Contact Sales" only — no
                 self-serve payment flow, per the product owner's decision.
-                Labeled to match: "Book Now" here would imply the same
+                Labeled to match: "Get Started" here would imply the same
                 self-serve checkout the other two plans use. */}
             <Button asChild variant="outline" className="w-full">
               <Link href="/contact#book-demo">Contact Sales</Link>
@@ -148,7 +152,7 @@ export function PricingPlans({
           <CardFooter>
             <Button asChild className="w-full">
               <Link href={bookNowHref("MID_MARKET", term, isLoggedIn)}>
-                Book Now
+                Get Started
               </Link>
             </Button>
           </CardFooter>
@@ -190,7 +194,7 @@ export function PricingPlans({
           <CardFooter>
             <Button asChild variant="outline" className="w-full">
               <Link href={bookNowHref("SMALL_BUSINESS", term, isLoggedIn)}>
-                Book Now
+                Get Started
               </Link>
             </Button>
           </CardFooter>

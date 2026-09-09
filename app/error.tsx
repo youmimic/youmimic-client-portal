@@ -77,7 +77,7 @@ export default function ErrorPage({
               Sign in
             </Link>
             <Link href="/signup" className="transition-colors hover:text-foreground">
-              Get started
+              Get Started
             </Link>
           </div>
         </div>

@@ -63,17 +63,17 @@ export default function ContactPage() {
           <h2 className="text-center text-3xl font-bold tracking-tighter sm:text-4xl" style={{ color: "#FFFFFF" }}>
             Our offices
           </h2>
-          <div className="mt-12 grid gap-6 sm:grid-cols-3">
+          <div className="mt-12 grid gap-10 sm:grid-cols-3">
             {offices.map(({ city, address }) => (
-              <div
-                key={city}
-                className="rounded-xl p-6 text-center"
-                style={{ backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)" }}
-              >
+              <div key={city} className="text-center">
                 <p className="text-lg font-semibold" style={{ color: "#FFFFFF" }}>
                   {city}
                 </p>
-                <p className="mt-2 text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>
+                <div
+                  className="mx-auto mt-3 h-px w-8"
+                  style={{ backgroundColor: "#4C9997" }}
+                />
+                <p className="mt-3 text-sm" style={{ color: "rgba(255,255,255,0.8)" }}>
                   {address}
                 </p>
               </div>

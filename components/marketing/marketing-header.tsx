@@ -11,32 +11,42 @@ export async function MarketingHeader() {
   const session = await auth();
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
+    <header
+      className="sticky top-0 z-50 border-b border-white/10 backdrop-blur"
+      style={{ backgroundColor: "rgba(51,51,51,0.95)" }}
+    >
       <div className={cn("mx-auto w-full flex items-center justify-between px-4 sm:px-6 lg:w-[90vw] lg:px-0", HEADER_HEIGHT)}>
         <SiteLogo
-          forceVariant="auto"
+          forceVariant="dark"
           className="flex items-center h-6 w-auto sm:h-7 md:h-8"
         />
 
-        <MarketingNav />
+        <MarketingNav isLoggedIn={Boolean(session?.user)} />
 
         <div className="flex items-center gap-1">
-          <ThemeToggle />
+          <div className="hidden items-center gap-1 sm:flex">
+            <ThemeToggle className="text-white hover:!text-white hover:bg-white/10" />
 
-          {session?.user ? (
-            <Button size="sm" asChild>
-              <Link href="/dashboard">Dashboard</Link>
-            </Button>
-          ) : (
-            <>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/login">Sign in</Link>
-              </Button>
+            {session?.user ? (
               <Button size="sm" asChild>
-                <Link href="/signup">Get started</Link>
+                <Link href="/dashboard">Dashboard</Link>
               </Button>
-            </>
-          )}
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  asChild
+                  className="text-white hover:!text-white hover:bg-white/10"
+                >
+                  <Link href="/login">Sign in</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link href="/signup">Get Started</Link>
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </header>

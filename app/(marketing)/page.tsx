@@ -56,7 +56,7 @@ const services = [
     icon: UserSquare2,
     title: "Digital Twins",
     image: "/digital-twins.avif",
-    body: "Photorealistic digital twins of your people, from executives and subject-matter experts to entire teams. Generate training, sales, internal communications, and customer content on demand.",
+    body: "Photorealistic digital twins of your people, from executives and subject-matter experts to entire teams. Generate training, sales, internal communications, and customer content on demand, refreshed anytime without booking a new recording session.",
   },
   {
     n: "02",
@@ -70,7 +70,7 @@ const services = [
     icon: Presentation,
     title: "Holograms",
     image: "/holograms.avif",
-    body: "Life-size digital presenters for malls, airports, terminals, retail, and events, delivering branded content, advertising, and customer engagement.",
+    body: "Life-size digital presenters for malls, airports, terminals, retail, and events, delivering branded content, advertising, and customer engagement around the clock, without needing on-site staff to keep them running.",
   },
 ];
 
@@ -181,14 +181,6 @@ export default async function HomePage() {
               className="absolute inset-0 pointer-events-none"
               style={{
                 background:
-                  "radial-gradient(ellipse at 15% 85%, rgba(76,153,151,0.28) 0%, transparent 52%), " +
-                  "radial-gradient(ellipse at 78% 18%, rgba(76,153,151,0.20) 0%, transparent 48%)",
-              }}
-            />
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background:
                   "linear-gradient(to top, rgba(0,0,0,0.70) 0%, rgba(0,0,0,0.35) 35%, transparent 65%)",
               }}
             />
@@ -198,7 +190,7 @@ export default async function HomePage() {
                 className="hero-text-3d max-w-3xl text-5xl font-bold leading-[0.98] tracking-tighter sm:text-6xl lg:text-8xl"
                 style={{ color: "#FFFFFF" }}
               >
-                The future of business communication.
+                Your Business. Future Ready.
               </h1>
               <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                 <Button
@@ -254,10 +246,12 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div
-              className="aspect-21/9 w-full overflow-hidden rounded-xl bg-cover bg-center"
-              style={{ backgroundImage: "url('/digital-twin-photo.avif')" }}
-            />
+            <div className="mx-auto w-full max-w-sm lg:max-w-md">
+              <div
+                className="aspect-21/9 w-full overflow-hidden rounded-xl bg-cover bg-center"
+                style={{ backgroundImage: "url('/digital-twin-photo.avif')" }}
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -388,10 +382,7 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-20">
-            <p className="text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              Trusted by teams at
-            </p>
-            <div className="mt-8 grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-6">
               {clientLogos.map(({ name, src, dark }) => (
                 <div
                   key={src}
@@ -488,7 +479,7 @@ export default async function HomePage() {
       <section className="bg-muted py-12 sm:py-16">
         <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            As featured at
+            Featured At
           </p>
           <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
             {featuredAt.map(({ name, src, dark }) => (

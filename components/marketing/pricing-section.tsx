@@ -41,7 +41,7 @@ export function PricingSection({
         {banner}
         <div className="mb-16 text-center">
           <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
-            Transparent, <span style={{ color: "#4C9997" }}>flexible pricing</span>
+            Simple pricing. <span style={{ color: "#4C9997" }}>Built to scale.</span>
           </h2>
           <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
             Start with one avatar. Add more as you grow.

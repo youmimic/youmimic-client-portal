@@ -3,12 +3,20 @@ import { ArrowUpRight } from "lucide-react";
 import { SiteLogo } from "@/components/branding/site-logo";
 import { NewsletterForm } from "@/components/marketing/newsletter-form";
 
+// lucide-react no longer ships brand/logo icons (Facebook, LinkedIn,
+// Twitter, YouTube were removed from the package over trademark concerns),
+// so the real LinkedIn glyph is hand-coded here; platforms without a
+// dedicated icon fall back to the generic external-link arrow below.
+function LinkedInIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 1 1 0-4.124 2.062 2.062 0 0 1 0 4.124zM7.114 20.452H3.558V9h3.556v11.452z" />
+    </svg>
+  );
+}
+
 // Only platforms with a confirmed real URL are rendered — no placeholder
 // or guessed social links. Add more here as real URLs are confirmed.
-// Note: lucide-react no longer ships brand/logo icons (Facebook, LinkedIn,
-// Twitter, YouTube were removed from the package over trademark concerns),
-// so every entry uses the same generic external-link glyph rather than
-// pulling in a separate icon package for this alone.
 const allSocialLinks = [
   { label: "LinkedIn", href: "https://www.linkedin.com/company/you-mimic/posts/?feedView=all" },
   { label: "Twitter", href: null },
@@ -18,20 +26,17 @@ const socialLinks = allSocialLinks.filter(
   (social): social is (typeof allSocialLinks)[number] & { href: string } => social.href !== null,
 );
 
+// Trimmed to just these three for now, per the checklist ("other pages
+// we'll add back in later") — Press, Contact, Business Terms, Media
+// Center, and Careers are intentionally left out of this column.
 const companyLinks = [
-  { label: "Press", href: "/press" },
-  { label: "Dataroom", href: "/dataroom" },
-  { label: "Contact", href: "/contact" },
   { label: "Privacy Policy", href: "/privacy-policy.pdf" },
-  { label: "Business Terms", href: "/terms-of-business.pdf" },
   { label: "AI Ethics", href: "/ai-ethics" },
-  { label: "Media Center", href: "/media-center" },
-  { label: "Careers", href: "/careers" },
+  { label: "Dataroom", href: "/contact" },
 ];
 
 const navigationLinks = [
   { label: "Solutions", href: "/solutions" },
-  { label: "Small Business", href: "/solutions/small-business" },
   { label: "Plans", href: "/pricing" },
   { label: "Connect", href: "/contact" },
 ];
@@ -105,7 +110,11 @@ export function MarketingFooter() {
                       className={`flex items-center gap-2 ${linkClassName}`}
                       style={linkStyle}
                     >
-                      <ArrowUpRight className="size-4" />
+                      {label === "LinkedIn" ? (
+                        <LinkedInIcon className="size-4" />
+                      ) : (
+                        <ArrowUpRight className="size-4" />
+                      )}
                       {label}
                     </a>
                   </li>
