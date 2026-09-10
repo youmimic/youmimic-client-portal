@@ -24,12 +24,11 @@ type NavLink = {
 // Labels follow glassengine.wixstudio.com/youmimicai's nav wording (Plans,
 // Connect) — only the labels changed to match, not the URLs, so existing
 // links to /pricing and /contact keep working.
+// Solutions has no dropdown/children for now — Small Business and the
+// Solutions submenu are hidden per the client's urgent fix list, not
+// deleted, so they're easy to bring back later.
 const navLinks: NavLink[] = [
-  {
-    href: "/solutions",
-    label: "Solutions",
-    children: [{ href: "/solutions/small-business", label: "Small Business" }],
-  },
+  { href: "/solutions", label: "Solutions" },
   { href: "/pricing", label: "Plans" },
   { href: "/contact", label: "Connect" },
 ];

@@ -11,12 +11,12 @@ import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 const howItWorks = [
   {
     n: "1",
-    title: "Book Your Session",
+    title: "Choose your Plan",
     body: "Choose your plan. Our team visits your workplace, anywhere in Australia. 30 minutes per person, up to 10 staff in one day.",
   },
   {
     n: "2",
-    title: "Your Avatar Setup",
+    title: "We Build Your Avatar",
     body: "We create and train your avatar. No technical setup required from your team.",
   },
   {
@@ -261,7 +261,7 @@ export default async function HomePage() {
 
       <PricingSection id="pricing" isLoggedIn={isLoggedIn} />
 
-      <section className="relative overflow-hidden bg-muted py-24 sm:py-32">
+      <section className="relative overflow-hidden bg-muted py-16 sm:py-20">
         {/* Decorative background — a soft teal glow, matching the same
             treatment used on the hero, final CTA, and testimonials
             sections. Purely decorative: pointer-events-none + aria-hidden. */}
@@ -276,7 +276,7 @@ export default async function HomePage() {
         />
 
         <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-          <div className="mb-16 text-center">
+          <div className="mb-10 text-center">
             <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
               How It <span style={{ color: "#4C9997" }}>Works</span>
             </h2>
@@ -287,17 +287,17 @@ export default async function HomePage() {
           <div className="grid gap-10 sm:grid-cols-3">
             {howItWorks.map(({ n, title, body }, i) => (
               <ScrollReveal key={n} delay={i * 200}>
-                <div className="relative">
-                  <p className="text-sm font-medium text-muted-foreground">
+                <div className="relative text-center">
+                  <p className="text-base font-medium text-muted-foreground">
                     Step {n}
                   </p>
                   <h3
-                    className="mt-1 mb-2 text-xl font-bold tracking-tight"
+                    className="mt-1 mb-2 text-2xl font-bold tracking-tight sm:text-3xl"
                     style={{ color: "#4C9997" }}
                   >
                     {title}
                   </h3>
-                  <p className="leading-relaxed text-muted-foreground">{body}</p>
+                  <p className="text-lg leading-relaxed text-muted-foreground">{body}</p>
                 </div>
               </ScrollReveal>
             ))}
@@ -327,25 +327,34 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden bg-muted py-24 sm:py-32">
+      <section
+        className="relative overflow-hidden py-24 sm:py-32"
+        style={{ backgroundColor: "#333333" }}
+      >
         <div
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse at 85% 10%, rgba(76,153,151,0.14) 0%, transparent 50%), " +
-              "radial-gradient(ellipse at 10% 90%, rgba(76,153,151,0.10) 0%, transparent 45%)",
+              "radial-gradient(ellipse at 85% 10%, rgba(76,153,151,0.18) 0%, transparent 50%), " +
+              "radial-gradient(ellipse at 10% 90%, rgba(76,153,151,0.14) 0%, transparent 45%)",
           }}
         />
         <Quote
-          className="pointer-events-none absolute -left-10 -top-10 size-64 text-primary/5 sm:size-80"
+          className="pointer-events-none absolute -left-10 -top-10 size-64 text-white/5 sm:size-80"
           strokeWidth={1}
         />
         <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
-            <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
+            <h2
+              className="text-4xl font-bold tracking-tighter sm:text-5xl lg:text-6xl"
+              style={{ color: "#FFFFFF" }}
+            >
               Trusted by <span style={{ color: "#4C9997" }}>Our Clients</span>
             </h2>
-            <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
+            <p
+              className="mx-auto mt-4 max-w-md text-lg"
+              style={{ color: "rgba(255,255,255,0.7)" }}
+            >
               Real feedback from the teams already using their digital twins.
             </p>
           </div>
@@ -353,7 +362,7 @@ export default async function HomePage() {
             {testimonials.map(({ quote, name, role, company }) => (
               <div
                 key={name}
-                className="relative flex flex-col overflow-hidden rounded-xl bg-card/60 p-6 backdrop-blur-sm transition-all duration-300 shadow-[0_1px_2px_rgba(51,51,51,0.06),0_8px_16px_-4px_rgba(51,51,51,0.10),0_20px_32px_-8px_rgba(76,153,151,0.12)] hover:-translate-y-1.5 hover:shadow-[0_2px_4px_rgba(51,51,51,0.08),0_16px_28px_-6px_rgba(51,51,51,0.16),0_28px_44px_-10px_rgba(76,153,151,0.22)]"
+                className="relative flex flex-col overflow-hidden rounded-xl bg-white/10 p-6 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1.5 hover:bg-white/15"
               >
                 {/* Each card gets its own small glow, echoing the
                     section's ambient one at a smaller scale, while the
@@ -364,22 +373,28 @@ export default async function HomePage() {
                   aria-hidden="true"
                   style={{
                     background:
-                      "radial-gradient(ellipse at 100% 0%, rgba(76,153,151,0.14) 0%, transparent 55%)",
+                      "radial-gradient(ellipse at 100% 0%, rgba(76,153,151,0.18) 0%, transparent 55%)",
                   }}
                 />
                 <Quote className="relative z-10 size-6 text-accent" />
-                <p className="relative z-10 mt-4 flex-1 text-sm leading-relaxed text-foreground">
+                <p
+                  className="relative z-10 mt-4 flex-1 text-sm leading-relaxed"
+                  style={{ color: "#FFFFFF" }}
+                >
                   {quote}
                 </p>
                 <div className="relative z-10 mt-6 flex items-center gap-3">
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted">
-                    <User className="size-4 text-muted-foreground" />
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white/10">
+                    <User className="size-4" style={{ color: "rgba(255,255,255,0.7)" }} />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-foreground">
+                    <p
+                      className="text-sm font-semibold"
+                      style={{ color: "#FFFFFF" }}
+                    >
                       {name}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>
                       {role},{" "}
                       <span style={{ color: "#4C9997" }}>{company}</span>
                     </p>
@@ -390,19 +405,19 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-20">
-            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-7">
               {clientLogos.map(({ name, src, dark }) => (
                 <div
                   key={src}
-                  className="group relative flex h-20 items-center justify-center rounded-xl shadow-sm transition-shadow duration-300 hover:shadow-md"
+                  className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-[160px] items-center justify-center overflow-hidden rounded-xl shadow-sm"
                   style={{ backgroundColor: dark ? "#333333" : "#FFFFFF" }}
                 >
                   <NextImage
                     src={src}
                     alt={name}
                     fill
-                    sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 33vw"
-                    className="object-contain p-5 grayscale opacity-60 transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100"
+                    sizes="160px"
+                    className="object-contain p-8 grayscale"
                   />
                 </div>
               ))}
@@ -493,15 +508,15 @@ export default async function HomePage() {
             {featuredAt.map(({ name, src, dark }) => (
               <div
                 key={src}
-                className="group relative flex h-20 items-center justify-center rounded-xl p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+                className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-[160px] items-center justify-center overflow-hidden rounded-xl shadow-sm"
                 style={{ backgroundColor: dark ? "#333333" : "#FFFFFF" }}
               >
                 <NextImage
                   src={src}
                   alt={name}
                   fill
-                  sizes="(min-width: 640px) 20vw, 50vw"
-                  className="object-contain p-5 grayscale opacity-60 transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100"
+                  sizes="160px"
+                  className="object-contain p-8 grayscale"
                 />
               </div>
             ))}

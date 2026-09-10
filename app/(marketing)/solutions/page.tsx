@@ -1,19 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  Landmark,
-  Zap,
-  Megaphone,
-  MapPin,
-  BarChart3,
-  Rocket,
-  ShoppingBag,
-  Building2,
-  BookOpen,
-  ShoppingCart,
-  Heart,
-  Cpu,
-  Video,
   Shield,
   Globe,
   Users,
@@ -56,74 +43,6 @@ const capabilities = [
     icon: Radio,
     title: "Team & service announcements",
     body: "Replace written memos with consistent video messages from leadership, delivered to every team member instantly.",
-  },
-];
-
-const industries = [
-  {
-    icon: Landmark,
-    name: "Government",
-    body: "Deliver policy updates, public health announcements, and staff training in multiple languages without re-filming.",
-  },
-  {
-    icon: Zap,
-    name: "Energy, Mining & Utilities",
-    body: "Produce consistent safety briefings, compliance training, and operational updates for distributed field teams.",
-  },
-  {
-    icon: Megaphone,
-    name: "Advertising Agencies",
-    body: "Equip clients with always-on presenter avatars for campaign assets, localized ads, and product walkthroughs.",
-  },
-  {
-    icon: MapPin,
-    name: "Tourism & Events",
-    body: "Create destination guides, event previews, and multilingual welcome messages that reach global audiences.",
-  },
-  {
-    icon: BarChart3,
-    name: "Finance & Insurance",
-    body: "Communicate complex products, regulatory updates, and portfolio summaries at scale with consistent brand representation.",
-  },
-  {
-    icon: Rocket,
-    name: "Entrepreneurs & Startups",
-    body: "Build a professional video presence from day one: investor pitches, product demos, and launch announcements without a production budget.",
-  },
-  {
-    icon: ShoppingBag,
-    name: "Small Business",
-    body: "Produce polished customer-facing videos (promotions, how-to guides, and service updates) with the presence of a much larger team.",
-  },
-  {
-    icon: Building2,
-    name: "Corporate",
-    body: "Scale internal communications, leadership messages, and HR announcements across global departments without scheduling camera time.",
-  },
-  {
-    icon: BookOpen,
-    name: "Education & Training",
-    body: "Deliver consistent, engaging course content and professional development material to learners anywhere, in their language.",
-  },
-  {
-    icon: ShoppingCart,
-    name: "Retail & e-Commerce",
-    body: "Create product demonstrations, seasonal campaigns, and customer onboarding videos that keep pace with inventory and promotions.",
-  },
-  {
-    icon: Heart,
-    name: "Health & Aged Care",
-    body: "Communicate care protocols, patient education, and staff training with clarity and empathy, across multiple languages and facilities.",
-  },
-  {
-    icon: Cpu,
-    name: "Technology, Science & Medicine",
-    body: "Translate complex research, product documentation, and technical training into clear, accessible video content for any audience.",
-  },
-  {
-    icon: Video,
-    name: "Creators",
-    body: "Expand your reach beyond your native language. Generate content in 175+ languages from a single recording and grow your global audience.",
   },
 ];
 
@@ -215,47 +134,6 @@ export default function SolutionsPage() {
                     {body}
                   </p>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Industries ───────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden border-b border-border bg-muted py-20 sm:py-24">
-        <div
-          className="pointer-events-none absolute inset-0"
-          aria-hidden="true"
-          style={{
-            background:
-              "radial-gradient(ellipse at 95% 95%, rgba(76,153,151,0.13) 0%, transparent 48%)",
-          }}
-        />
-        <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-          <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tighter text-foreground sm:text-4xl">
-              Built for <span style={{ color: "#4C9997" }}>every industry</span>
-            </h2>
-            <p className="mx-auto mt-3 max-w-md text-muted-foreground">
-              From government to retail, YouMimic is already helping teams
-              across 13 sectors scale their video communication.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {industries.map(({ icon: Icon, name, body }) => (
-              <div
-                key={name}
-                className="rounded-xl bg-card p-6 shadow-[0_1px_2px_rgba(51,51,51,0.06),0_8px_16px_-4px_rgba(51,51,51,0.10),0_20px_32px_-8px_rgba(76,153,151,0.12)] transition-all duration-300 hover:-translate-y-1"
-              >
-                <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
-                  <Icon className="size-5 text-accent" />
-                </div>
-                <h3 className="mb-2 text-sm font-semibold text-foreground">
-                  {name}
-                </h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {body}
-                </p>
               </div>
             ))}
           </div>

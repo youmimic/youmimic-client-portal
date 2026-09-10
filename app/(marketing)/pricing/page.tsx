@@ -3,22 +3,30 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import {
   Zap,
-  Layers,
-  Globe,
   Building2,
-  Users,
-  Radio,
   Megaphone,
   BookOpen,
   Video,
   Cpu,
   Share2,
-  MessageCircle,
-  PenLine,
+  Landmark,
+  MapPin,
+  BarChart3,
+  Rocket,
+  ShoppingBag,
+  ShoppingCart,
+  Heart,
+  Clock,
+  Maximize2,
+  PiggyBank,
+  Infinity as InfinityIcon,
+  Languages,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PricingSection } from "@/components/marketing/pricing-section";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
+import { NewsletterForm } from "@/components/marketing/newsletter-form";
 
 export const metadata: Metadata = {
   title: "Pricing — YouMimic",
@@ -26,51 +34,36 @@ export const metadata: Metadata = {
     "Simple, transparent pricing for individuals, enterprises, and custom deployments.",
 };
 
-const stats = [
-  { value: "3 min", label: "Average generation time" },
-  { value: "175+", label: "Supported languages" },
-  { value: "500+", label: "Videos generated" },
-  { value: "99.9%", label: "Platform uptime" },
-];
-
-const features = [
+const whyYouMimic = [
   {
-    icon: Zap,
-    title: "Ready right away",
-    body: "Record one session and get professional video straight away. No reshoots, no scheduling, no waiting around.",
+    icon: Clock,
+    title: "Save Time",
+    body: "From concept to completion, have your content produced in a fraction of the time.",
   },
   {
-    icon: Layers,
-    title: "As many videos as you need",
-    body: "Your avatar can make videos all day, every day. One person's time, felt by your whole team.",
+    icon: Maximize2,
+    title: "Scale Content",
+    body: "One piece of video content can be exponentially scaled. Templates can be created for speed and consistency.",
   },
   {
-    icon: Globe,
-    title: "Speaks every language",
-    body: "Say it once and it comes out in any language you need, no re-recording, no translators.",
+    icon: PiggyBank,
+    title: "Reduce Costs",
+    body: "Unlimited videos without the need to film again, saving thousands of dollars compared to traditional methods.",
   },
   {
-    icon: Building2,
-    title: "Built-in oversight",
-    body: "Control who can do what, keep your brand consistent, and see what's been made. Everything stays in order.",
-  },
-];
-
-const modules = [
-  {
-    icon: MessageCircle,
-    title: "Speak",
-    body: "Conversation courses your avatar can lead: practice, roleplay, and everyday dialogue, in any language.",
+    icon: InfinityIcon,
+    title: "24/7 Availability",
+    body: "Platform access, your avatar is available anytime, anywhere, for responsive updates.",
   },
   {
-    icon: BookOpen,
-    title: "Read",
-    body: "Reading courses that turn written material into spoken video lessons, ready to watch or listen to.",
+    icon: Languages,
+    title: "Speak Any Language",
+    body: "Up to 175 different languages and dialects available.",
   },
   {
-    icon: PenLine,
-    title: "Write",
-    body: "Writing courses delivered as video walkthroughs, clear guidance without a wall of text.",
+    icon: ShieldCheck,
+    title: "End to End Data Encryption",
+    body: "Your avatar is encrypted at rest and in transit, ensuring it only says what you've approved, and only those you authorize can access it.",
   },
 ];
 
@@ -95,26 +88,75 @@ const steps = [
   },
 ];
 
-const useCases = [
+// Moved here from /solutions per the client's fix list (item 10a) — sits
+// right after "Not sure which plan fits your business?" on this page now.
+// Each industry's use cases are listed as short bullet items (item 10c)
+// rather than a single comma-heavy sentence.
+const industries = [
   {
-    icon: Users,
-    title: "Employee training",
-    body: "Give every team the same clear onboarding, compliance training, and skill-building, wherever they are.",
+    icon: Landmark,
+    name: "Government",
+    items: ["Policy updates", "Public health announcements", "Staff training in multiple languages"],
   },
   {
-    icon: Radio,
-    title: "Customer communication",
-    body: "Send personalized video updates, product announcements, and support responses without re-filming.",
+    icon: Zap,
+    name: "Energy, Mining & Utilities",
+    items: ["Safety briefings", "Compliance training", "Operational updates for field teams"],
   },
   {
     icon: Megaphone,
-    title: "Marketing and content",
-    body: "Produce campaign assets, product walkthroughs, and localized advertising with a consistent, on-brand presenter.",
+    name: "Advertising Agencies",
+    items: ["Campaign assets", "Localized ads", "Product walkthroughs"],
+  },
+  {
+    icon: MapPin,
+    name: "Tourism & Events",
+    items: ["Destination guides", "Event previews", "Multilingual welcome messages"],
+  },
+  {
+    icon: BarChart3,
+    name: "Finance & Insurance",
+    items: ["Product explainers", "Regulatory updates", "Portfolio summaries"],
+  },
+  {
+    icon: Rocket,
+    name: "Entrepreneurs & Startups",
+    items: ["Investor pitches", "Product demos", "Launch announcements"],
+  },
+  {
+    icon: ShoppingBag,
+    name: "Small Business",
+    items: ["Promotions", "How-to guides", "Service updates"],
+  },
+  {
+    icon: Building2,
+    name: "Corporate",
+    items: ["Internal communications", "Leadership messages", "HR announcements"],
   },
   {
     icon: BookOpen,
-    title: "Internal updates",
-    body: "Replace written memos with professional video messages from leadership, without booking a camera crew.",
+    name: "Education & Training",
+    items: ["Course content", "Professional development material"],
+  },
+  {
+    icon: ShoppingCart,
+    name: "Retail & e-Commerce",
+    items: ["Product demonstrations", "Seasonal campaigns", "Customer onboarding videos"],
+  },
+  {
+    icon: Heart,
+    name: "Health & Aged Care",
+    items: ["Care protocols", "Patient education", "Staff training"],
+  },
+  {
+    icon: Cpu,
+    name: "Technology, Science & Medicine",
+    items: ["Research summaries", "Product documentation", "Technical training"],
+  },
+  {
+    icon: Video,
+    name: "Creators",
+    items: ["Multilingual content", "Global audience growth"],
   },
 ];
 
@@ -175,9 +217,7 @@ export default async function PricingPage({
                 className="text-5xl font-bold leading-[1.05] tracking-tighter sm:text-6xl lg:text-7xl"
                 style={{ color: "#333333" }}
               >
-                Say it once.
-                <br />
-                Scale it everywhere.
+                Choose a plan for your business
               </h1>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row lg:justify-start">
                 <Button
@@ -216,29 +256,6 @@ export default async function PricingPage({
         </div>
       </section>
 
-      <section className="py-20 sm:py-28" style={{ backgroundColor: "#333333" }}>
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-          <dl className="grid grid-cols-2 gap-10 sm:grid-cols-4">
-            {stats.map(({ value, label }) => (
-              <div key={label} className="text-center">
-                <dd
-                  className="text-6xl font-bold tracking-tighter sm:text-7xl"
-                  style={{ color: "#4C9997" }}
-                >
-                  {value}
-                </dd>
-                <dt
-                  className="mt-3 text-sm"
-                  style={{ color: "rgba(255,255,255,0.7)" }}
-                >
-                  {label}
-                </dt>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </section>
-
       <PricingSection id="pricing" banner={banner} isLoggedIn={isLoggedIn} />
 
       <section className="bg-muted py-24 sm:py-32">
@@ -270,63 +287,53 @@ export default async function PricingPage({
                   playsInline
                 />
               </div>
-
-              <div className="mt-8 grid grid-cols-3 gap-3">
-                {modules.map(({ icon: Icon, title, body }) => (
-                  <div
-                    key={title}
-                    className="rounded-xl bg-card p-3 text-center"
-                    style={{ border: "1px solid #FFFFFF" }}
-                  >
-                    <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-accent/10">
-                      <Icon className="size-5 text-accent" />
-                    </div>
-                    <h3 className="mt-3 text-sm font-semibold text-foreground">
-                      {title}
-                    </h3>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      {body}
-                    </p>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="relative overflow-hidden py-24 sm:py-32">
+      <section className="relative overflow-hidden bg-muted py-24 sm:py-32">
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden="true"
           style={{
             background:
-              "radial-gradient(circle at 90% 20%, rgba(76,153,151,0.12) 0%, transparent 50%)",
+              "radial-gradient(ellipse at 95% 95%, rgba(76,153,151,0.13) 0%, transparent 48%)",
           }}
         />
         <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
             <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
-              Made for how you actually communicate
+              Built for <span style={{ color: "#4C9997" }}>every industry</span>
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              Old-school video takes too long. YouMimic doesn&apos;t.
+              You Mimic is saving time for our Government and Private sector
+              clients.
             </p>
           </div>
-          <div className="grid gap-10 sm:grid-cols-2">
-            {features.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="flex gap-5">
-                <div className="mt-0.5 flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent/10">
-                  <Icon className="size-6 text-accent" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {industries.map(({ icon: Icon, name, items }) => (
+              <div
+                key={name}
+                className="rounded-xl bg-card p-6 shadow-[0_1px_2px_rgba(51,51,51,0.06),0_8px_16px_-4px_rgba(51,51,51,0.10),0_20px_32px_-8px_rgba(76,153,151,0.12)] transition-all duration-300 hover:-translate-y-1"
+              >
+                <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
+                  <Icon className="size-5 text-accent" />
                 </div>
-                <div>
-                  <h3 className="text-base font-semibold text-foreground">
-                    {title}
-                  </h3>
-                  <p className="mt-2 leading-relaxed text-muted-foreground">
-                    {body}
-                  </p>
-                </div>
+                <h3 className="mb-2 text-sm font-semibold text-foreground">
+                  {name}
+                </h3>
+                <ul className="space-y-1.5">
+                  {items.map((item) => (
+                    <li
+                      key={item}
+                      className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground"
+                    >
+                      <span className="mt-2 size-1 shrink-0 rounded-full bg-accent" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
               </div>
             ))}
           </div>
@@ -374,17 +381,20 @@ export default async function PricingPage({
         <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
             <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
-              Where teams use YouMimic
+              Why <span style={{ color: "#4C9997" }}>You Mimic</span>?
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              One platform. Every way you communicate.
+              How an AI digital twin can help your business grow.
             </p>
           </div>
           <div className="grid gap-10 sm:grid-cols-2">
-            {useCases.map(({ icon: Icon, title, body }) => (
+            {whyYouMimic.map(({ icon: Icon, title, body }) => (
               <div key={title} className="flex gap-5">
-                <div className="mt-0.5 flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent/10">
-                  <Icon className="size-6 text-accent" />
+                <div
+                  className="flex size-14 shrink-0 items-center justify-center rounded-full"
+                  style={{ backgroundColor: "#4C9997" }}
+                >
+                  <Icon className="size-6" style={{ color: "#FFFFFF" }} />
                 </div>
                 <div>
                   <h3 className="text-base font-semibold text-foreground">
@@ -396,6 +406,25 @@ export default async function PricingPage({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Stay Connected banner — item 13 on the client's fix list. Mirrors
+          the footer's social/newsletter block, placed on this page before
+          the FinalCtaSection hands off to the real site footer. */}
+      <section className="py-16 sm:py-20" style={{ backgroundColor: "#333333" }}>
+        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
+          <div className="mx-auto max-w-md text-center">
+            <h2
+              className="text-2xl font-bold tracking-tight sm:text-3xl"
+              style={{ color: "#FFFFFF" }}
+            >
+              Stay Connected
+            </h2>
+            <div className="mt-6 text-left">
+              <NewsletterForm />
+            </div>
           </div>
         </div>
       </section>
