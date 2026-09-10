@@ -405,7 +405,7 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-20">
-            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-7">
+            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-8">
               {clientLogos.map(({ name, src, dark }) => (
                 <div
                   key={src}
