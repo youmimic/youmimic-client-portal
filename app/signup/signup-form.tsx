@@ -8,9 +8,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { ACCOUNT_TYPES } from "@/lib/validations/auth";
 import { confirmPasswordSchema } from "@/lib/validations/signup-form";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -101,7 +99,6 @@ export default function SignupForm() {
     mode: "onBlur",
   });
 
-  const accountType = form.watch("accountType");
   const acceptTerms = form.watch("acceptTerms");
   const acceptPrivacyPolicy = form.watch("acceptPrivacyPolicy");
 
@@ -201,43 +198,6 @@ export default function SignupForm() {
               className="space-y-5"
               noValidate
             >
-              {/* Account type toggle */}
-              <FormField
-                control={form.control}
-                name="accountType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Account type</FormLabel>
-                    <div className="grid grid-cols-2 overflow-hidden rounded-md border">
-                      {[...ACCOUNT_TYPES].reverse().map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => {
-                            field.onChange(type);
-                            if (type === "INDIVIDUAL") {
-                              form.setValue("businessName", "");
-                              void form.trigger("businessName");
-                            }
-                          }}
-                          className={cn(
-                            "px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            field.value === type
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
-                            type === "BUSINESS" ? "rounded-l-md" : "rounded-r-md",
-                          )}
-                          aria-pressed={field.value === type}
-                        >
-                          {type === "INDIVIDUAL" ? "Individual" : "Business"}
-                        </button>
-                      ))}
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <FormField
                 control={form.control}
                 name="name"
@@ -276,27 +236,24 @@ export default function SignupForm() {
                 )}
               />
 
-              {/* Business name — shown only when Business is selected */}
-              {accountType === "BUSINESS" && (
-                <FormField
-                  control={form.control}
-                  name="businessName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Business name</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="text"
-                          autoComplete="organization"
-                          placeholder="Your business name"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+              <FormField
+                control={form.control}
+                name="businessName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Business name</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        autoComplete="organization"
+                        placeholder="Your business name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

@@ -96,12 +96,20 @@ const industries = [
   {
     icon: Landmark,
     name: "Government",
-    items: ["Policy updates", "Public health announcements", "Staff training in multiple languages"],
+    items: [
+      "Policy updates",
+      "Public health announcements",
+      "Staff training in multiple languages",
+    ],
   },
   {
     icon: Zap,
     name: "Energy, Mining & Utilities",
-    items: ["Safety briefings", "Compliance training", "Operational updates for field teams"],
+    items: [
+      "Safety briefings",
+      "Compliance training",
+      "Operational updates for field teams",
+    ],
   },
   {
     icon: Megaphone,
@@ -111,7 +119,11 @@ const industries = [
   {
     icon: MapPin,
     name: "Tourism & Events",
-    items: ["Destination guides", "Event previews", "Multilingual welcome messages"],
+    items: [
+      "Destination guides",
+      "Event previews",
+      "Multilingual welcome messages",
+    ],
   },
   {
     icon: BarChart3,
@@ -131,7 +143,11 @@ const industries = [
   {
     icon: Building2,
     name: "Corporate",
-    items: ["Internal communications", "Leadership messages", "HR announcements"],
+    items: [
+      "Internal communications",
+      "Leadership messages",
+      "HR announcements",
+    ],
   },
   {
     icon: BookOpen,
@@ -141,7 +157,11 @@ const industries = [
   {
     icon: ShoppingCart,
     name: "Retail & e-Commerce",
-    items: ["Product demonstrations", "Seasonal campaigns", "Customer onboarding videos"],
+    items: [
+      "Product demonstrations",
+      "Seasonal campaigns",
+      "Customer onboarding videos",
+    ],
   },
   {
     icon: Heart,
@@ -151,12 +171,11 @@ const industries = [
   {
     icon: Cpu,
     name: "Technology, Science & Medicine",
-    items: ["Research summaries", "Product documentation", "Technical training"],
-  },
-  {
-    icon: Video,
-    name: "Creators",
-    items: ["Multilingual content", "Global audience growth"],
+    items: [
+      "Research summaries",
+      "Product documentation",
+      "Technical training",
+    ],
   },
 ];
 
@@ -172,8 +191,8 @@ export default async function PricingPage({
 
   const banner = isGated ? (
     <div className="mb-10 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-      An active subscription is required to access that feature. Choose a
-      plan below to continue.
+      An active subscription is required to access that feature. Choose a plan
+      below to continue.
     </div>
   ) : null;
 
@@ -239,17 +258,16 @@ export default async function PricingPage({
                 className="text-lg leading-relaxed sm:text-xl"
                 style={{ color: "rgba(51,51,51,0.7)" }}
               >
-                YouMimic turns a single recording session into a
-                professional AI avatar that speaks for you in any
-                language, whenever you need it.
+                YouMimic turns a single recording session into a professional AI
+                avatar that speaks for you in any language, whenever you need
+                it.
               </p>
               <p
                 className="mt-4 text-lg leading-relaxed sm:text-xl"
                 style={{ color: "rgba(51,51,51,0.7)" }}
               >
-                No camera crew, no reshoots, no waiting around for your
-                next video. Write a script, and your avatar takes it from
-                there.
+                No camera crew, no reshoots, no waiting around for your next
+                video. Write a script, and your avatar takes it from there.
               </p>
             </div>
           </div>
@@ -266,8 +284,7 @@ export default async function PricingPage({
                 Not sure which plan fits your business?
               </h2>
               <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground lg:mx-0">
-                Book a quick meeting and we&apos;ll help you find the right
-                one.
+                Book a quick meeting and we&apos;ll help you find the right one.
               </p>
               <div className="mt-8 flex justify-center lg:justify-start">
                 <Button asChild className="h-12 px-8 text-base font-medium">
@@ -413,7 +430,10 @@ export default async function PricingPage({
       {/* Stay Connected banner — item 13 on the client's fix list. Mirrors
           the footer's social/newsletter block, placed on this page before
           the FinalCtaSection hands off to the real site footer. */}
-      <section className="py-16 sm:py-20" style={{ backgroundColor: "#333333" }}>
+      <section
+        className="py-16 sm:py-20"
+        style={{ backgroundColor: "#333333" }}
+      >
         <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mx-auto max-w-md text-center">
             <h2
