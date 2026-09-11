@@ -3,6 +3,10 @@
     {
       "path": "/api/internal/billing/retry-failed-provisioning",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/internal/videos/refresh-expired-urls",
+      "schedule": "0 4 * * *"
     }
   ]
 }

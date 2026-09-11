@@ -236,3 +236,109 @@ function mapRemoteStatus(status: string): VideoGenerationStatus {
       return "PENDING" as VideoGenerationStatus;
   }
 }
+
+// HeyGen's video/thumbnail URLs are signed with an `Expires` query param
+// (unix seconds) — confirmed against real stored rows to be roughly a
+// 7-day window from generation. Returns null if the URL has no such param
+// (unexpected shape) rather than treating that as "expired", so a parsing
+// surprise doesn't cause needless refresh churn.
+function getUrlExpiryMs(url: string): number | null {
+  try {
+    const expires = new URL(url).searchParams.get("Expires");
+    if (!expires) return null;
+    const seconds = Number(expires);
+    return Number.isFinite(seconds) ? seconds * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+const EXPIRY_REFRESH_BUFFER_MS = 24 * 60 * 60 * 1000; // refresh a day ahead of actual expiry
+
+// Shared by the cron sweep and the single-video manual refresh below —
+// re-fetches a COMPLETED video's status from HeyGen (which returns the
+// same underlying file with a freshly-signed URL) and updates only
+// videoUrl/thumbnailUrl; status/duration/cost are already final for a
+// COMPLETED row and untouched here.
+async function refetchVideoUrlFields(row: { id: string; heygenVideoId: string }) {
+  const remote = await getHeyGenVideoStatus(row.heygenVideoId);
+  return prisma.generatedVideo.update({
+    where: { id: row.id },
+    data: {
+      videoUrl: remote.video_url ?? undefined,
+      thumbnailUrl: remote.thumbnail_url ?? undefined,
+    },
+    select: { videoUrl: true, thumbnailUrl: true },
+  });
+}
+
+export type RefreshExpiringUrlsResult = {
+  checked: number;
+  refreshed: number;
+  failed: { generatedVideoId: string; error: string }[];
+};
+
+// Cron-triggered (see vercel.json) sweep of already-COMPLETED videos whose
+// stored HeyGen URL has expired or is about to. Deliberately separate from
+// refreshGeneratedVideoStatus above, which is a PENDING/PROCESSING-only
+// polling fallback and short-circuits immediately for COMPLETED rows — that
+// function was never meant to (and doesn't) re-sign a stale COMPLETED URL.
+export async function refreshExpiringVideoUrls(): Promise<RefreshExpiringUrlsResult> {
+  const rows = await prisma.generatedVideo.findMany({
+    where: {
+      status: "COMPLETED",
+      videoUrl: { not: null },
+      heygenVideoId: { not: null },
+    },
+    select: { id: true, heygenVideoId: true, videoUrl: true },
+  });
+
+  const now = Date.now();
+  const dueForRefresh = rows.filter((row) => {
+    const expiryMs = getUrlExpiryMs(row.videoUrl!);
+    return expiryMs === null || expiryMs - now < EXPIRY_REFRESH_BUFFER_MS;
+  });
+
+  const failed: RefreshExpiringUrlsResult["failed"] = [];
+  let refreshed = 0;
+
+  for (const row of dueForRefresh) {
+    try {
+      await refetchVideoUrlFields({ id: row.id, heygenVideoId: row.heygenVideoId! });
+      refreshed += 1;
+    } catch (err) {
+      const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
+      failed.push({ generatedVideoId: row.id, error: message });
+    }
+  }
+
+  return { checked: dueForRefresh.length, refreshed, failed };
+}
+
+export type RefreshVideoUrlResult =
+  | { ok: true; videoUrl: string | null; thumbnailUrl: string | null }
+  | { ok: false; code: "NOT_FOUND" | "NOT_COMPLETED" | "HEYGEN_ERROR"; error: string };
+
+// Manual "just in case" fallback for a single COMPLETED video — the cron
+// sweep above normally catches an expiring URL automatically, but Vercel
+// Hobby's cron only runs once daily, so this gives an immediate on-demand
+// path too, exposed as a "Refresh video" button in the dashboard.
+export async function refreshVideoUrl(generatedVideoId: string, userId: string): Promise<RefreshVideoUrlResult> {
+  const row = await prisma.generatedVideo.findFirst({
+    where: { id: generatedVideoId, userId },
+    select: { id: true, heygenVideoId: true, status: true },
+  });
+
+  if (!row) return { ok: false, code: "NOT_FOUND", error: "Not found" };
+  if (row.status !== "COMPLETED" || !row.heygenVideoId) {
+    return { ok: false, code: "NOT_COMPLETED", error: "Video isn't ready yet" };
+  }
+
+  try {
+    const updated = await refetchVideoUrlFields({ id: row.id, heygenVideoId: row.heygenVideoId });
+    return { ok: true, videoUrl: updated.videoUrl, thumbnailUrl: updated.thumbnailUrl };
+  } catch (err) {
+    const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
+    return { ok: false, code: "HEYGEN_ERROR", error: message };
+  }
+}

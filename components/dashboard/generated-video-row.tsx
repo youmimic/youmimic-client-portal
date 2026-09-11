@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-type ActionState = { loading: "status" | "delete" | null; error: string | null };
+type ActionState = { loading: "status" | "url" | "delete" | null; error: string | null };
 const idle: ActionState = { loading: null, error: null };
 
 export type GeneratedVideoData = {
@@ -90,6 +90,21 @@ export function GeneratedVideoRow({
     }
   }
 
+  async function handleRefreshUrl() {
+    setState({ loading: "url", error: null });
+    try {
+      const res = await fetch(`/api/dashboard/videos/${video.id}/refresh-url`, { method: "POST" });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error ?? `Request failed (${res.status})`);
+      }
+      setState(idle);
+      router.refresh();
+    } catch (e) {
+      setState({ loading: null, error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
   const isPending = video.status === "PENDING" || video.status === "PROCESSING";
 
   async function handleDelete() {
@@ -155,6 +170,11 @@ export function GeneratedVideoRow({
         {isPending && (
           <Button variant="outline" size="xs" disabled={state.loading !== null} onClick={handleCheckStatus}>
             {state.loading === "status" ? "Checking…" : "Check status"}
+          </Button>
+        )}
+        {video.status === "COMPLETED" && (
+          <Button variant="outline" size="xs" disabled={state.loading !== null} onClick={handleRefreshUrl}>
+            {state.loading === "url" ? "Refreshing…" : "Refresh video"}
           </Button>
         )}
         <Button
