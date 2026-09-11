@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { useSyncExternalStore } from "react";
+import { cn } from "@/lib/utils";
 
 type SiteLogoProps = {
   href?: string;
@@ -60,7 +61,7 @@ export function SiteLogo({
             alt=""
             width={810}
             height={1030}
-            className={className ?? "h-6 sm:h-7 md:h-8"}
+            className={cn("h-6 sm:h-7 md:h-8", className)}
             style={iconStyle}
             priority
           />
@@ -69,7 +70,7 @@ export function SiteLogo({
             alt="YouMimic"
             width={120}
             height={40}
-            className={className ?? "h-6 sm:h-7 md:h-8"}
+            className={cn("h-6 sm:h-7 md:h-8", className)}
             style={{ width: "auto" }}
             priority
           />
