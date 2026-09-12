@@ -1,5 +1,80 @@
 # HANDOFF.md
 
+## Session: Passwordless guest checkout for Mid Market / Small Business — 2026-09-12
+
+Business change: remove the forced sign-up-before-payment step for Mid
+Market/Small Business (the two already-self-serve, `USER`-owned plans —
+Corporate stays "Contact Sales" only and `PlanType.ENTERPRISE` is
+untouched). New flow: `Pricing → "Get Started" → /checkout review page
+(no login) → Stripe Checkout → verified webhook → account activation
+email → sign in`. This was a real-money/architecture change, so it went
+through a full audit → two rounds of `AskUserQuestion` clarification →
+written plan → "Yes, please proceed" cycle before any code, since the
+originating spec's "just one Enterprise/Business plan" framing didn't
+match the actual 5-plan-concept codebase.
+
+**Key decisions confirmed with the user**: scope is exactly Mid
+Market/Small Business (not Corporate/Enterprise); added a `companyName`
+field directly to `User` rather than inventing an Enterprise-workspace
+concept for these `USER`-owned plans; a guest-entered email that already
+belongs to an existing `User` blocks checkout and asks them to sign in
+first rather than silently attaching a subscription to an unproven
+account.
+
+**What changed** (full detail in
+`updates/2026-09-12-guest-checkout-mid-market-small-business.md`):
+new `CheckoutDraft` Prisma model (+ `companyName` on `User`) holding
+buyer-entered details before a local `User` exists; a new
+`/checkout` review page + guest form + `/api/checkout-draft` +
+`/api/stripe/guest-checkout-session` (pre-creates a placeholder
+`Subscription` row the same way the existing authenticated route already
+does, so the **unmodified** webhook's existing customer-id matching picks
+it up with zero changes); `lib/checkout/activate-guest-account.ts` creates
+the real `User` only once the webhook confirms payment (reusing the exact
+unusable-password-hash + `PasswordResetToken` + welcome-email pattern
+already used for admin-created users — no new token system); a
+`/checkout/success` page that polls a status endpoint returning only
+`{status}` — the webhook remains the sole source of truth, nothing is
+granted from the redirect or a query param. Also fixed a **pre-existing
+bug** found along the way: the webhook's `toPlanType()` silently defaulted
+every non-`CREATOR`/`ENTERPRISE` value (including `MID_MARKET`/
+`SMALL_BUSINESS`) to `CREATOR` — already live, already affecting the
+existing authenticated flow from 2026-09-03, fixed inline since it's
+load-bearing for this feature too. This supersedes 2026-09-03's
+`/signup → /dashboard/checkout` detour for these two plans and makes
+2026-09-05's logged-in-redirect fix for that detour moot (dead code path
+now); the existing authenticated checkout page/route/webhook logic for
+`CREATOR`/`ENTERPRISE` is otherwise completely untouched.
+
+**New tests**: `lib/checkout/create-draft.test.ts` (11) and
+`lib/checkout/activate-guest-account.test.ts` (8) — price-id resolution,
+validation rejecting out-of-scope/bad input, email-already-in-use
+blocking, and idempotency (including the two-concurrent-webhook-deliveries
+race) for the new account-activation branch.
+
+**Checks**: `npx vitest run` → 88/88 passing (10 files, 19 new);
+`npm run lint` → 0 errors, 3 pre-existing warnings (unchanged baseline);
+`npm run typecheck` → clean; `npx next build` → clean, all new routes
+present.
+
+**Post-implementation fix**: the user's first live click-through hit
+`subscriptions_exactly_one_owner_check` on every attempt — the guest
+checkout route pre-created a placeholder `Subscription` row with
+`userId: null` (copying the authenticated route's pattern), but that
+constraint requires exactly one of `userId`/`enterpriseId` to be set at
+all times, and a guest has no `User` yet at that point. Fixed by moving
+`Subscription` row creation into `activate-guest-account.ts`, where it's
+created together with the new `User` in one transaction once the webhook
+confirms payment (owner known at creation time, never null). Re-verified
+clean across lint/typecheck/build/tests (88/88).
+
+**Not done / next**: no live dev-server or Stripe test-mode click-through
+of the new flow's happy path yet (the one live attempt so far hit the bug
+above) — recommended before shipping, given it touches real payment
+provisioning; see the update doc for a concrete test-mode checklist. The
+abandoned "page title SEO format" question from earlier in that session
+is unrelated and still unresolved.
+
 ## Session: Public site UI/UX audit and fix pass — 2026-09-07
 
 Asked to act as a senior UI/UX engineer and fix the UI/UX of the whole

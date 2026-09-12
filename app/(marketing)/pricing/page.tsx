@@ -274,7 +274,7 @@ export default async function PricingPage({
         </div>
       </section>
 
-      <PricingSection id="pricing" banner={banner} isLoggedIn={isLoggedIn} />
+      <PricingSection id="pricing" banner={banner} />
 
       <section className="bg-muted py-24 sm:py-32">
         <div className="mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">

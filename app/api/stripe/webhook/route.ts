@@ -19,6 +19,7 @@ import {
   sendSubscriptionChangedEmail,
   sendPaymentFailedEmail,
 } from "@/lib/mailer";
+import { activateGuestAccountForDraft } from "@/lib/checkout/activate-guest-account";
 
 const PLAN_LABELS: Record<string, string> = {
   FREE: "Free",
@@ -67,6 +68,8 @@ export function toStatus(stripeStatus: string): SubscriptionStatus {
 export function toPlanType(raw: string | undefined): PlanType {
   if (raw === PlanType.CREATOR) return PlanType.CREATOR;
   if (raw === PlanType.ENTERPRISE) return PlanType.ENTERPRISE;
+  if (raw === PlanType.MID_MARKET) return PlanType.MID_MARKET;
+  if (raw === PlanType.SMALL_BUSINESS) return PlanType.SMALL_BUSINESS;
   return PlanType.CREATOR;
 }
 
@@ -290,6 +293,27 @@ async function handleCheckoutCompleted(
     });
     if (updated) {
       await notifySubscriptionStarted(updated.id, planType, eventId);
+    }
+  }
+
+  // Guest Mid Market / Small Business checkout — session.metadata is set by
+  // app/api/stripe/guest-checkout-session/route.ts, never by the browser.
+  // Absent for every other plan type's checkout, so this is a no-op there.
+  // No Subscription row exists yet for this customer at this point (unlike
+  // the authenticated flow, a guest has no pre-created placeholder row —
+  // see activate-guest-account.ts for why), so the updateMany/findFirst
+  // above never match here; activateGuestAccountForDraft creates the row
+  // itself and hands back its id so the same notification fires as for the
+  // authenticated flow above.
+  const checkoutDraftId = session.metadata?.checkoutDraftId;
+  if (checkoutDraftId) {
+    try {
+      const result = await activateGuestAccountForDraft(checkoutDraftId, subId);
+      if (result) {
+        await notifySubscriptionStarted(result.subscriptionId, planType, eventId);
+      }
+    } catch (err) {
+      console.error(`Guest account activation failed for checkout draft ${checkoutDraftId}:`, err);
     }
   }
 }

@@ -266,7 +266,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <PricingSection id="pricing" isLoggedIn={isLoggedIn} />
+      <PricingSection id="pricing" />
 
       <section className="relative overflow-hidden bg-muted py-16 sm:py-20">
         {/* Decorative background — a soft teal glow, matching the same

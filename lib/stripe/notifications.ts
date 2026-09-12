@@ -80,7 +80,12 @@ export async function resolveSubscriptionOwner(
   return null;
 }
 
-const BILLING_ADMIN_ROLES: AdminRole[] = ["BILLING_ADMIN", "ADMIN", "SUPER_ADMIN"];
+// Deliberately excludes plain ADMIN: BILLING_ADMIN exists specifically for
+// "should see billing/subscription activity without full admin access"
+// (see canViewSubscriptions/canViewActivity in lib/admin/rbac.ts), so an
+// ADMIN who isn't also billing-scoped has no reason to be emailed every
+// billing event. SUPER_ADMIN is included since it outranks both.
+const BILLING_ADMIN_ROLES: AdminRole[] = ["BILLING_ADMIN", "SUPER_ADMIN"];
 
 // Emails every BILLING_ADMIN+ admin in one message — internal team
 // distribution, not customer-facing, so exposing admin addresses to each

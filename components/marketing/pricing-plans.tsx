@@ -21,23 +21,15 @@ import {
   type BillingTermKey,
 } from "@/lib/pricing/plans";
 
-function bookNowHref(
-  planType: "MID_MARKET" | "SMALL_BUSINESS",
-  term: BillingTermKey,
-  isLoggedIn: boolean,
-): string {
-  const checkoutPath = `/dashboard/checkout?plan=${planType}&term=${term}`;
-  // An already-authenticated visitor should go straight to checkout — only
-  // a logged-out visitor needs the /signup detour (with callbackUrl bringing
-  // them back here afterwards).
-  return isLoggedIn
-    ? checkoutPath
-    : `/signup?callbackUrl=${encodeURIComponent(checkoutPath)}`;
+function bookNowHref(planType: "MID_MARKET" | "SMALL_BUSINESS", term: BillingTermKey): string {
+  // Public, unauthenticated-friendly review page — no forced signup/login
+  // before starting checkout. It redirects an already-authenticated visitor
+  // straight to the existing /dashboard/checkout page itself, so this link
+  // is the same for everyone regardless of auth state.
+  return `/checkout?plan=${planType}&term=${term}`;
 }
 
-export function PricingPlans({
-  isLoggedIn = false,
-}: { isLoggedIn?: boolean } = {}) {
+export function PricingPlans() {
   const [term, setTerm] = useState<BillingTermKey>("MONTHLY_24");
   const midMarketTier = midMarket.byTerm[term];
   const smallBusinessTier = smallBusiness.byTerm[term];
@@ -151,7 +143,7 @@ export function PricingPlans({
           </CardContent>
           <CardFooter>
             <Button asChild className="w-full">
-              <Link href={bookNowHref("MID_MARKET", term, isLoggedIn)}>
+              <Link href={bookNowHref("MID_MARKET", term)}>
                 Get Started
               </Link>
             </Button>
@@ -193,7 +185,7 @@ export function PricingPlans({
           </CardContent>
           <CardFooter>
             <Button asChild variant="outline" className="w-full">
-              <Link href={bookNowHref("SMALL_BUSINESS", term, isLoggedIn)}>
+              <Link href={bookNowHref("SMALL_BUSINESS", term)}>
                 Get Started
               </Link>
             </Button>

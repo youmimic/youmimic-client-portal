@@ -58,12 +58,12 @@ enum EnterpriseStatus {
 }
 
 model User {
-  id               String     @id @default(cuid())
-  name             String
-  email            String     @unique
-  passwordHash     String
-  emailVerified    Boolean    @default(false)
-  createdAt        DateTime   @default(now())
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
 
   adminRole        AdminRole?
   isSuspended      Boolean    @default(false)
@@ -71,14 +71,19 @@ model User {
   suspensionReason String?
   sessionVersion   Int        @default(1)
 
+  // Collected on the guest Mid Market/Small Business checkout review page
+  // (app/checkout) — optional since existing rows and other signup paths
+  // never set it. Purely informational; nothing currently branches on it.
+  companyName String?
+
   // External HeyGen workspace member ID, for reconciling accounts with
   // HeyGen ahead of a future API integration. Not used for auth.
-  heygenUserId     String?
+  heygenUserId String?
 
   // Email a payment processor (Stripe) has on file for this person, when it
   // differs from their portal login email. Records a known correspondence
   // without asserting it as the account's identity.
-  stripeEmail      String?
+  stripeEmail String?
 
   // Raw GoCardless customer ID and whether GoCardless currently reports an
   // active direct-debit mandate for them, from a manual reconciliation pass
@@ -89,7 +94,7 @@ model User {
   gocardlessMandateActive Boolean @default(false)
 
   userRoles               UserRole[]
-  enterprises             Enterprise[]      @relation("EnterpriseOwner")
+  enterprises             Enterprise[]             @relation("EnterpriseOwner")
   enterpriseMembers       EnterpriseMember[]
   subscriptions           Subscription[]
   avatars                 Avatar[]
@@ -97,11 +102,11 @@ model User {
   bookings                Booking[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
-  invitesSent             Invite[]          @relation("InvitedByUser")
+  invitesSent             Invite[]                 @relation("InvitedByUser")
   systemEvents            SystemEvent[]
   emailLogs               EmailLog[]
-  adminLogs               AdminLog[]        @relation("AdminUser")
-  adminLogsAsTarget       AdminLog[]        @relation("AdminLogTarget")
+  adminLogs               AdminLog[]               @relation("AdminUser")
+  adminLogsAsTarget       AdminLog[]               @relation("AdminLogTarget")
   bookingNotesAuthored    BookingNote[]
   usageLedgerEntries      UsageLedgerEntry[]
 
@@ -251,18 +256,18 @@ enum BillingComponent {
 }
 
 model Subscription {
-  id                   String             @id @default(cuid())
-  userId               String?
-  enterpriseId         String?
+  id           String  @id @default(cuid())
+  userId       String?
+  enterpriseId String?
 
-  ownerType            BillingOwnerType
+  ownerType BillingOwnerType
 
   // Defaults to STRIPE so every existing row is unaffected. GOCARDLESS rows
   // have stripeCustomerId null and gocardlessCustomerId set instead — kept as
   // two distinct nullable id columns (not one shared "external id" column)
   // so admin UI/webhook code can't accidentally treat a GoCardless id as a
   // Stripe one or vice versa.
-  billingProvider      BillingProvider    @default(STRIPE)
+  billingProvider      BillingProvider @default(STRIPE)
   gocardlessCustomerId String?
 
   // Not unique: a single Stripe customer can legitimately hold more than one
@@ -270,33 +275,33 @@ model Subscription {
   // stripeSubscriptionId is the real per-subscription identity. Nullable
   // because GOCARDLESS-provider rows never have one.
   stripeCustomerId     String?
-  stripeSubscriptionId String?            @unique
+  stripeSubscriptionId String? @unique
   stripePriceId        String?
   stripeProductId      String?
 
-  planType             PlanType           @default(FREE)
-  status               SubscriptionStatus @default(INCOMPLETE)
+  planType PlanType           @default(FREE)
+  status   SubscriptionStatus @default(INCOMPLETE)
 
   // Only meaningful for MID_MARKET/SMALL_BUSINESS (see BillingTerm's own
   // comment) — null for every other plan type, including pre-existing rows.
-  billingTerm          BillingTerm?
+  billingTerm BillingTerm?
 
-  currentPeriodStart   DateTime?
-  currentPeriodEnd     DateTime?
-  cancelAtPeriodEnd    Boolean            @default(false)
-  canceledAt           DateTime?
-  trialEndsAt          DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean   @default(false)
+  canceledAt         DateTime?
+  trialEndsAt        DateTime?
 
   // Enterprise avatar billing (Phase 1). unitAmountCents is nullable and
   // stored per-row rather than derived from one shared constant — per-avatar
   // pricing genuinely varies (confirmed: e.g. two avatars at $99 and a third
   // at $10 on the same enterprise), so this is always an editable value, not
   // a hardcoded default baked into UI copy. null = not yet priced.
-  billingComponent     BillingComponent   @default(STANDARD)
-  avatarId             String?
-  avatar               Avatar?            @relation(fields: [avatarId], references: [id])
-  unitAmountCents      Int?
-  currency             String             @default("AUD")
+  billingComponent BillingComponent @default(STANDARD)
+  avatarId         String?
+  avatar           Avatar?          @relation(fields: [avatarId], references: [id])
+  unitAmountCents  Int?
+  currency         String           @default("AUD")
 
   // Phase 2 avatar billing automation — set when a self-serve Stripe
   // provision/cancel call fails, so the row is never silently left unbilled.
@@ -305,13 +310,13 @@ model Subscription {
   provisioningFailedAt   DateTime?
   provisioningFailureMsg String?
 
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user                 User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  enterprise           Enterprise?        @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
-  payments             Payment[]
-  usageLedgerEntries   UsageLedgerEntry[]
+  user               User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enterprise         Enterprise?        @relation(fields: [enterpriseId], references: [id], onDelete: Cascade)
+  payments           Payment[]
+  usageLedgerEntries UsageLedgerEntry[]
 
   @@unique([avatarId])
   @@index([userId])
@@ -338,17 +343,17 @@ enum PaymentType {
 }
 
 model Payment {
-  id                    String         @id @default(cuid())
-  type      PaymentType       
-  stripeInvoiceId       String?        @unique
-  stripePaymentIntentId String?        @unique
+  id                    String      @id @default(cuid())
+  type                  PaymentType
+  stripeInvoiceId       String?     @unique
+  stripePaymentIntentId String?     @unique
   amount                Int
-  currency              String         @default("aud")
+  currency              String      @default("aud")
 
-  status                PaymentStatus  @default(unpaid)
+  status PaymentStatus @default(unpaid)
 
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Links to business objects (optional, depending on type)
   bookingId      String?
@@ -362,9 +367,55 @@ model Payment {
   @@map("payments")
 }
 
+enum CheckoutDraftStatus {
+  CREATED
+  OPEN
+  COMPLETED
+  EXPIRED
+  FAILED
+}
+
+// Passwordless Mid Market / Small Business checkout (app/checkout) — holds
+// buyer-entered details from before a local User exists, so the Stripe
+// Checkout Session and its webhook events have something authoritative to
+// reconcile against. Scoped to MID_MARKET/SMALL_BUSINESS only; CREATOR and
+// ENTERPRISE keep going through the existing authenticated checkout path
+// and never create one of these. Never holds card data — only what the
+// buyer typed on the review page plus Stripe's own opaque ids.
+model CheckoutDraft {
+  id     String              @id @default(cuid())
+  status CheckoutDraftStatus @default(CREATED)
+
+  planType    PlanType
+  billingTerm BillingTerm
+
+  email       String
+  fullName    String
+  companyName String?
+
+  // Set once an account/subscription exists for this draft — lets support
+  // and the webhook handlers trace a draft to what it produced without
+  // re-deriving it from Stripe metadata every time.
+  userId         String?
+  subscriptionId String?
+
+  stripeCheckoutSessionId String? @unique
+  stripeCustomerId        String?
+  stripeSubscriptionId    String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+
+  @@index([email])
+  @@index([status])
+  @@index([userId])
+  @@map("checkout_drafts")
+}
+
 enum AvatarBillingStatus {
   ACTIVE
-  PAUSED   // temporarily excluded from new billing, data retained
+  PAUSED // temporarily excluded from new billing, data retained
   ARCHIVED // fully decommissioned
 }
 
@@ -398,11 +449,11 @@ model Avatar {
   contactPhone  String?
   billingStatus AvatarBillingStatus @default(ACTIVE)
 
-  user          User          @relation(fields: [userId], references: [id])
-  enterprise    Enterprise?   @relation(fields: [enterpriseId], references: [id])
-  subscriptions Subscription[]
+  user            User             @relation(fields: [userId], references: [id])
+  enterprise      Enterprise?      @relation(fields: [enterpriseId], references: [id])
+  subscriptions   Subscription[]
   generatedVideos GeneratedVideo[]
-  looks         AvatarLook[]
+  looks           AvatarLook[]
 
   @@index([userId])
   @@index([enterpriseId])
@@ -462,18 +513,18 @@ enum VideoEngine {
 // manual status-refresh route re-fetches from HeyGen directly as a fallback
 // for whenever the webhook endpoint isn't registered yet or was missed.
 model GeneratedVideo {
-  id              String                 @id @default(cuid())
-  userId          String
-  avatarId        String
-  script          String
-  status          VideoGenerationStatus  @default(PROCESSING)
-  engine          VideoEngine            @default(AVATAR_IV)
-  heygenVideoId   String?                @unique
-  videoUrl        String?
-  thumbnailUrl    String?
-  errorMessage    String?
-  createdAt       DateTime               @default(now())
-  completedAt     DateTime?
+  id            String                @id @default(cuid())
+  userId        String
+  avatarId      String
+  script        String
+  status        VideoGenerationStatus @default(PROCESSING)
+  engine        VideoEngine           @default(AVATAR_IV)
+  heygenVideoId String?               @unique
+  videoUrl      String?
+  thumbnailUrl  String?
+  errorMessage  String?
+  createdAt     DateTime              @default(now())
+  completedAt   DateTime?
 
   // Both populated only once HeyGen reports the video COMPLETED (from its
   // `duration` field, which the video-status API does return, unlike any
@@ -501,9 +552,9 @@ model GeneratedVideo {
   // Avatar.heygenAvatarId and have no look to record here.
   avatarLookId String?
 
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  avatar     Avatar      @relation(fields: [avatarId], references: [id], onDelete: Cascade)
-  avatarLook AvatarLook? @relation(fields: [avatarLookId], references: [id], onDelete: SetNull)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatar             Avatar             @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  avatarLook         AvatarLook?        @relation(fields: [avatarLookId], references: [id], onDelete: SetNull)
   usageLedgerEntries UsageLedgerEntry[]
 
   @@index([userId])
@@ -513,9 +564,9 @@ model GeneratedVideo {
 }
 
 enum UsageLedgerStatus {
-  RESERVED   // estimate reserved at generate-time, HeyGen job in flight
+  RESERVED // estimate reserved at generate-time, HeyGen job in flight
   RECONCILED // HeyGen reported COMPLETED; creditsCharged reflects real duration
-  RELEASED   // never happened / failed before or during generation; credits given back
+  RELEASED // never happened / failed before or during generation; credits given back
 }
 
 // Durable per-generation usage record for monthly credit-limit enforcement.
@@ -528,7 +579,7 @@ enum UsageLedgerStatus {
 // something is charged before that request is sent), then reconciled to
 // the real duration once HeyGen reports completion.
 model UsageLedgerEntry {
-  id             String            @id @default(cuid())
+  id             String  @id @default(cuid())
   userId         String
   subscriptionId String?
   // Nullable + SetNull — the one deliberate exception in this schema to
@@ -596,28 +647,28 @@ enum AustralianCapitalCity {
 }
 
 model Booking {
-  id            String   @id @default(cuid())
-  userId        String
-  enterpriseId  String?
-  requestedDate DateTime
-  timeStart     String
-  timeEnd       String
-  capturesCount        Int                  @default(1)
-  status               BookingStatus        @default(pending)
-  paymentStatus        PaymentStatus        @default(unpaid)
-  notes                String?
-  captureLocationType  CaptureLocationType?
-  capitalCity          AustralianCapitalCity?
-  suburbOrTown         String?
-  stateOrTerritory     String?
-  postcode             String?
-  addressLine1         String?
-  addressLine2         String?
-  locationNotes        String?
-  createdAt            DateTime             @default(now())
+  id                  String                 @id @default(cuid())
+  userId              String
+  enterpriseId        String?
+  requestedDate       DateTime
+  timeStart           String
+  timeEnd             String
+  capturesCount       Int                    @default(1)
+  status              BookingStatus          @default(pending)
+  paymentStatus       PaymentStatus          @default(unpaid)
+  notes               String?
+  captureLocationType CaptureLocationType?
+  capitalCity         AustralianCapitalCity?
+  suburbOrTown        String?
+  stateOrTerritory    String?
+  postcode            String?
+  addressLine1        String?
+  addressLine2        String?
+  locationNotes       String?
+  createdAt           DateTime               @default(now())
 
-  user         User        @relation(fields: [userId], references: [id])
-  enterprise   Enterprise? @relation(fields: [enterpriseId], references: [id])
+  user         User                        @relation(fields: [userId], references: [id])
+  enterprise   Enterprise?                 @relation(fields: [enterpriseId], references: [id])
   payments     Payment[]
   participants BookingCaptureParticipant[]
   adminNotes   BookingNote[]
@@ -713,18 +764,18 @@ model Invite {
 }
 
 model SystemEvent {
-  id        String   @id @default(cuid())
-  type      String
-  source    String
-  message   String
-  metadata  Json?
-  userId    String?
+  id           String   @id @default(cuid())
+  type         String
+  source       String
+  message      String
+  metadata     Json?
+  userId       String?
   // Set for enterprise-owned subscriptions/payments (userId stays null in
   // that case) — kept as its own typed relation rather than folding the id
   // into metadata, matching how every other model in this schema stores a
   // real foreign key instead of an id embedded in a JSON blob.
   enterpriseId String?
-  createdAt DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   user       User?       @relation(fields: [userId], references: [id])
   enterprise Enterprise? @relation(fields: [enterpriseId], references: [id])
@@ -750,12 +801,12 @@ model EmailLog {
 }
 
 model Webhook {
-  id         String   @id @default(cuid())
-  source     String
-  eventType  String
-  payload    Json
-  processed  Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  source    String
+  eventType String
+  payload   Json
+  processed Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   @@map("webhooks")
 }
@@ -795,7 +846,7 @@ model QuickLink {
   // deletion (enforced server-side in the DELETE route, not just hidden in
   // the UI) so a stray click can't wipe out the baseline set. Links added
   // afterward default to false and stay freely removable.
-  isDefault Boolean  @default(false)
+  isDefault Boolean @default(false)
 
   @@index([order])
   @@map("quick_links")

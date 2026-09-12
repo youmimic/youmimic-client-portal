@@ -10,11 +10,9 @@ import { PricingPlans } from "@/components/marketing/pricing-plans";
 export function PricingSection({
   id,
   banner,
-  isLoggedIn = false,
 }: {
   id?: string;
   banner?: ReactNode;
-  isLoggedIn?: boolean;
 } = {}) {
   return (
     <section
@@ -47,7 +45,7 @@ export function PricingSection({
             Start with one avatar. Add more as you grow.
           </p>
         </div>
-        <PricingPlans isLoggedIn={isLoggedIn} />
+        <PricingPlans />
       </div>
     </section>
   );

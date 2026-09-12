@@ -122,7 +122,7 @@ describe("notifyBillingAdmins", () => {
     });
   });
 
-  it("queries only BILLING_ADMIN-tier-and-above roles", async () => {
+  it("queries only BILLING_ADMIN and SUPER_ADMIN roles, excluding plain ADMIN", async () => {
     findManyUser.mockResolvedValue([]);
 
     await notifyBillingAdmins({
@@ -133,7 +133,7 @@ describe("notifyBillingAdmins", () => {
     });
 
     expect(findManyUser).toHaveBeenCalledWith({
-      where: { adminRole: { in: ["BILLING_ADMIN", "ADMIN", "SUPER_ADMIN"] } },
+      where: { adminRole: { in: ["BILLING_ADMIN", "SUPER_ADMIN"] } },
       select: { email: true },
     });
   });
