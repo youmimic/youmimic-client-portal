@@ -36,13 +36,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Checkout session not found" }, { status: 404 });
   }
 
+  // expiresAt is the 30-day data-retention deadline (see the schema comment
+  // on CheckoutDraft.expiresAt), not a Stripe session TTL — Stripe's own
+  // Checkout Session below is always freshly created on every call, so a
+  // draft well past its original creation date can still resume right up
+  // until this deadline. In practice, lib/checkout/process-draft-lifecycle.ts
+  // deletes the row around the same time this would fire, so this is mostly
+  // a defensive fallback for the gap between "past due" and "actually purged".
   if (draft.expiresAt < new Date()) {
     await prisma.checkoutDraft.update({
       where: { id: draft.id },
       data: { status: "EXPIRED" },
     });
     return NextResponse.json(
-      { error: "This checkout link has expired. Please start again from the pricing page." },
+      { error: "This checkout session is no longer available. Please start again from the pricing page." },
       { status: 410 },
     );
   }

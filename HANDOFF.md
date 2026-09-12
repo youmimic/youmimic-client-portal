@@ -1,5 +1,215 @@
 # HANDOFF.md
 
+## Session: Checkout reminder emails + 30-day data retention — 2026-09-12
+
+Business policy: an abandoned guest Mid Market / Small Business checkout
+(reached Stripe or not, never paid) gets a reminder email at day 2 and day
+7, then has its details permanently deleted at day 30 if they still
+haven't converted.
+
+**Discussed and decided before implementing** (asked, not assumed):
+- Considered replacing the Stripe Checkout redirect with an embedded
+  Stripe Payment Element on our own domain. Recommended staying with the
+  redirect: `@stripe/stripe-js` is already an installed-but-unused
+  dependency, and the CSP (`next.config.ts`) was deliberately built with
+  no `js.stripe.com` allowances specifically because Elements isn't in
+  use — switching would mean reopening that CSP plus rebuilding a fair
+  amount of what hosted Checkout already gives for free (wallets, Link,
+  tax display, promo codes, SCA). User agreed to stick with the redirect
+  for now.
+- Surfaced a real wrinkle before building anything: Stripe hard-caps a
+  Checkout Session's lifetime at 24h, and the original `CheckoutDraft.expiresAt`
+  was also 24h — so a day-2/day-7 reminder's link would already be dead
+  under the old logic, which permanently rejected (410 + `EXPIRED`) any
+  attempt to resume past that point. Fixed by repurposing `expiresAt`
+  into the 30-day retention deadline instead (see schema comment) — the
+  guest-checkout-session route already creates a brand new Stripe session
+  on every call, so extending the window was enough on its own.
+- Asked, then confirmed: clicking a reminder email prefills the review
+  form (email/name/company/plan/term) from the saved draft rather than
+  either a full one-click-to-Stripe redirect or a blank re-entry — no
+  Stripe session (or its side effects) is created until the buyer
+  actually clicks "Proceed to payment" again. Also confirmed: deleting a
+  draft after 30 days also deletes its associated Stripe Customer object,
+  not just the local DB row.
+
+**What changed**:
+- **`prisma/schema.prisma`** — `CheckoutDraft` gained `reminder2dSentAt`/
+  `reminder7dSentAt` (idempotency for the cron), and `expiresAt`'s meaning
+  changed (comment updated) from a 24h Stripe-session TTL to the 30-day
+  retention deadline. Migration: `add_checkout_draft_reminders`.
+- **`lib/checkout/create-draft.ts`** — `DRAFT_TTL_MS` 24h → 30 days; added
+  `updateCheckoutDraft(draftId, input)`, used only when resuming an
+  existing draft with edits, so returning multiple times still produces
+  exactly one draft row (and exactly one pair of reminder emails) rather
+  than a new one per attempt. Refuses to edit a draft that's `COMPLETED`
+  or that already has a real `stripeSubscriptionId` (paid, but flagged
+  for manual review — see `activate-guest-account.ts`'s `FAILED` path).
+- **`app/api/checkout-draft/[draftId]/route.ts`** (new) — `PATCH`,
+  same public/unauthenticated trust model as the existing checkout-draft
+  routes (the draftId itself, an unguessable cuid, is the capability).
+- **`app/api/stripe/guest-checkout-session/route.ts`** — updated the
+  `expiresAt` check's comment/message to reflect the new 30-day meaning;
+  no logic change (it already creates a fresh Stripe session every call).
+- **`app/checkout/page.tsx`** — new `findResumableDraft()`: looks up a
+  `draftId` query param and, if it points at a still-open, unpaid,
+  not-yet-expired draft, treats its stored plan/term as authoritative
+  (overriding the URL's) and passes its email/name/company down to
+  prefill the form. Falls back silently to a blank entry for any invalid/
+  stale/paid draftId — resuming is a nicety, not a hard dependency.
+- **`app/checkout/guest-checkout-form.tsx`** and **`app/checkout/checkout-card.tsx`** —
+  threaded through `resumeDraftId`/`initialEmail`/`initialFullName`/
+  `initialCompanyName`; when `resumeDraftId` is set, the form's first step
+  PATCHes that draft instead of POSTing a new one.
+- **`emails/templates/checkout-reminder-2d-email.tsx`** and
+  **`checkout-reminder-7d-email.tsx`** (new) + matching
+  `sendCheckoutReminder2dEmail`/`sendCheckoutReminder7dEmail` in
+  `lib/mailer.ts` — the day-7 email explicitly mentions the 30-day
+  deletion policy so it isn't a surprise.
+- **`lib/checkout/process-draft-lifecycle.ts`** (new) — the actual cron
+  logic: sends both reminders (guarded by `reminder2dSentAt`/`reminder7dSentAt`
+  so the daily job never double-sends), then permanently deletes any
+  draft past its 30-day deadline, deleting its Stripe Customer first.
+  Excludes `COMPLETED` drafts and any draft with a real
+  `stripeSubscriptionId` from every part of this (converted or
+  needs-manual-review rows must never be reminded or purged).
+- **`app/api/internal/billing/retry-failed-provisioning/route.ts`** —
+  now also calls `processCheckoutDraftLifecycle()`. Bundled into this
+  existing daily cron rather than given a new one: Vercel's Hobby plan
+  caps this project at 2 scheduled crons and both were already spoken
+  for. Commented clearly so the file-name/behavior mismatch doesn't
+  confuse a future reader.
+
+**New tests**: `lib/checkout/create-draft.test.ts` gained 6 tests for
+`updateCheckoutDraft` (validation, not-found, refuses `COMPLETED`/paid
+drafts, email-in-use, and a successful in-place update that never touches
+`expiresAt`). `lib/checkout/process-draft-lifecycle.test.ts` (new, 8
+tests) — every query excludes converted/paid drafts, both reminders send
+and mark their timestamp, a failed send is never marked sent, the Stripe
+customer is deleted before the draft row, a missing `stripeCustomerId`
+skips that step without blocking the row deletion, and a failed Stripe
+deletion still lets the row deletion proceed.
+
+**Checks**: `npx vitest run` → 101/101 passing (24 new), `npm run
+typecheck` clean, `npm run lint` → 0 errors (3 pre-existing warnings,
+unchanged), `npx next build` clean — all new/changed routes present
+(`/api/checkout-draft/[draftId]` included). Live-checked: `/checkout`
+with a nonexistent `draftId` still returns 200 (falls back to blank entry
+rather than erroring).
+
+**Not done / next**: no live Stripe test-mode run of the actual resume
+flow (draft → 2-day email → click → prefilled form → pay) — recommended
+before relying on this for a real abandoned checkout. The cron only runs
+once daily, so in practice a "day 2" reminder can land anywhere in a
+roughly 24h window past the 48h mark, same granularity as the existing
+avatar-billing retry cron it's bundled with.
+
+### Follow-up fix same session: same-email double-draft/duplicate-charge gap
+
+User asked what happens if someone with the same email starts a fresh
+checkout (not via a resume link) more than 7 days after an earlier
+abandoned attempt. Traced it through: `createCheckoutDraft` only checked
+whether the email belonged to a real `User`, never whether an older
+*draft* for that email already existed — so a second, fully independent
+`CheckoutDraft` row would get created, leaving the old one to sit until
+its own 30-day purge. Worse: `guest-checkout-session` never re-checks for
+an existing `User` at session-creation time (only `create-draft.ts` does,
+at draft-creation time), so if the *new* draft converted first, the old
+draft's still-live resume link could still generate a fresh Stripe
+session and let them pay a second time — only caught after the fact, by
+`activateGuestAccountForDraft`'s existing `FAILED`/manual-review path,
+by which point Stripe has already charged them.
+
+User's call: a new draft for an email should override (delete) any older
+*still-abandoned* draft for that email, including deleting its Stripe
+Customer — not leave it sitting around as a stale, exploitable link.
+
+**Fix**: extracted `lib/checkout/delete-draft.ts`'s
+`deleteDraftAndStripeCustomer()` (the same "delete the Stripe customer,
+then the row" logic `process-draft-lifecycle.ts`'s 30-day purge already
+had — that file now calls the shared helper too, no behavior change
+there). `lib/checkout/create-draft.ts` gained
+`overrideStaleDraftsForEmail(email, excludeDraftId?)`, called from both
+`createCheckoutDraft` and `updateCheckoutDraft` right before the actual
+write — deliberately placed *after* every validation/rejection check, so
+a submission that's itself going to fail never destroys the old draft it
+would have replaced. Like the reminder/purge logic, this only ever
+touches drafts that aren't `COMPLETED` and don't have a real
+`stripeSubscriptionId` attached — a converted or paid-but-flagged draft
+is never deleted this way. `updateCheckoutDraft`'s call excludes its own
+`draftId`, so resuming a draft without changing its email doesn't delete
+itself; changing the email during a resume to one that collides with a
+different stale draft correctly clears that one instead.
+
+**New tests**: `lib/checkout/delete-draft.test.ts` (new, 3 tests) for the
+extracted helper directly. `lib/checkout/create-draft.test.ts` gained 6
+more tests: the override deletes the old draft + Stripe customer before
+creating the new one; a clean email with no stale draft touches nothing;
+three tests confirming the override never runs when the new submission
+itself would be rejected (bad input, unconfigured plan, email already a
+real `User`); and two `updateCheckoutDraft` tests for the exclude-self
+and changed-email-collides-with-another-draft cases.
+
+**Checks**: `npx vitest run` → 111/111 passing (10 more than before this
+fix), `npm run typecheck` clean, `npm run lint` → 0 errors (unchanged
+baseline), `npx next build` clean.
+
+## Session: In-place plan/term switching on both checkout pages — 2026-09-12
+
+User asked to remove the "Choose a different plan" button on the checkout
+review page (it sent the buyer back to `/pricing`, losing their place)
+and replace it with an inline dropdown near the selected plan that
+updates the page in place — designed as a senior UI/UX pass, and asked to
+draw on the public pricing page's existing UI language.
+
+Applied to **both** checkout review pages for consistency (the guest
+`/checkout` page and the existing authenticated `/dashboard/checkout`
+page both had the identical button) rather than just the one in the
+immediate conversation context, since leaving one fixed and one not would
+be an inconsistent experience between the two nearly-identical pages.
+
+**Design**: a "Plan" `Select` dropdown (Mid Market / Small Business)
+replaces the static plan-name heading, and a 24-months/12-months
+segmented toggle replaces the plain billing-term text — reusing the exact
+pill-toggle visual (colors, active-state styling) from the public
+pricing page's own term switcher (`components/marketing/pricing-plans.tsx`)
+per the request to match the public site's UI concept. Price and included-
+avatars values update immediately on either change (both actually vary by
+term, not just price — e.g. Mid Market's 24-month term includes fewer
+avatars than its 12-month term, so this isn't a simple "cheaper is
+better" toggle; the UI just shows the real numbers for whichever
+combination is selected). Switching is purely local state — no
+CheckoutDraft or Stripe session is created until the buyer actually
+submits, so there's no cost to letting them freely compare options,
+and nothing already typed into the guest form is lost when they do.
+
+**New files**: `lib/checkout/plan-keys.ts` (plain module — the
+plan/term type guards and lookup table, importable from Server
+Components, unlike the client picker component below) and
+`components/checkout/plan-term-fields.tsx` (`"use client"` — the actual
+Select + toggle + reactive price/avatars fields, shared by both pages'
+own small client wrappers: `app/checkout/checkout-card.tsx` and
+`app/(dashboard)/dashboard/checkout/checkout-card.tsx`, each of which
+owns the `useState` and renders its own footer CTA — `GuestCheckoutForm`
+vs. `BillingActionButton` — since that part genuinely differs between the
+two flows).
+
+**Bug hit and fixed along the way**: first attempt put the type guards in
+the same `"use client"` file as the picker component, which crashed both
+server `page.tsx` files at request time (`Attempted to call
+isCheckoutPlanKey() from the server but isCheckoutPlanKey is on the
+client`) — a Server Component can't call any export of a `"use client"`
+module. Fixed by moving the guards into the new plain `lib/checkout/plan-keys.ts`.
+
+**Checks**: `npx vitest run` → 88/88 passing, `npm run typecheck` clean,
+`npm run lint` → 0 errors (3 pre-existing warnings, unchanged), `npx next
+build` clean. Live-verified against the dev server: both plan/term
+combinations render the correct price and avatar count server-side, the
+old "Choose a different plan" text is gone from the rendered HTML, and
+existing route-guard behavior (invalid query params → `/pricing`,
+unauthenticated `/dashboard/checkout` → `/login?callbackUrl=...`) is
+unchanged.
+
 ## Session: Passwordless guest checkout for Mid Market / Small Business — 2026-09-12
 
 Business change: remove the forced sign-up-before-payment step for Mid

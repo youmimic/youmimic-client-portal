@@ -403,8 +403,22 @@ model CheckoutDraft {
   stripeCustomerId        String?
   stripeSubscriptionId    String? @unique
 
+  // Reminder emails (lib/checkout/process-draft-lifecycle.ts, cron-driven) —
+  // set once each has actually been sent, so the daily job never double-sends.
+  // Both stay null for a draft that completes before day 2.
+  reminder2dSentAt DateTime?
+  reminder7dSentAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Data-retention deadline (30 days from creation) — NOT a Stripe Checkout
+  // Session expiry. Stripe caps a Checkout Session's own lifetime at 24h
+  // regardless of this value, which is why app/api/stripe/guest-checkout-session
+  // always creates a brand new Session on every call rather than trying to
+  // reuse an old one; this field only gates how long the DRAFT itself (and
+  // therefore the ability to resume with a fresh Session) stays alive before
+  // lib/checkout/process-draft-lifecycle.ts permanently deletes it.
   expiresAt DateTime
 
   @@index([email])

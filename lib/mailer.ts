@@ -10,6 +10,8 @@ import { SubscriptionStartedEmail } from "@/emails/templates/subscription-starte
 import { SubscriptionChangedEmail } from "@/emails/templates/subscription-changed-email";
 import { PaymentFailedEmail } from "@/emails/templates/payment-failed-email";
 import { AdminBillingEventEmail } from "@/emails/templates/admin-billing-event-email";
+import { CheckoutReminder2dEmail } from "@/emails/templates/checkout-reminder-2d-email";
+import { CheckoutReminder7dEmail } from "@/emails/templates/checkout-reminder-7d-email";
 import type { ContactInput } from "@/lib/validations/contact";
 
 type SendVerifyEmailParams = {
@@ -317,6 +319,77 @@ export async function sendAdminBillingEventEmail({
       subject: `[youmimic billing] ${eventLabel}`,
       react: AdminBillingEventEmail({ eventLabel, summary, detailsUrl }),
       tags: [{ name: "category", value: "admin_billing_event" }],
+    },
+    { idempotencyKey },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+type SendCheckoutReminderEmailParams = {
+  to: string;
+  name: string;
+  planLabel: string;
+  priceDisplay: string;
+  resumeUrl: string;
+  idempotencyKey: string;
+};
+
+// Day-2 nudge for an abandoned guest Mid Market / Small Business checkout
+// (lib/checkout/process-draft-lifecycle.ts, cron-driven). resumeUrl points
+// back at the review page with the draft's id, which prefills the buyer's
+// already-given details — see app/checkout/page.tsx.
+export async function sendCheckoutReminder2dEmail({
+  to,
+  name,
+  planLabel,
+  priceDisplay,
+  resumeUrl,
+  idempotencyKey,
+}: SendCheckoutReminderEmailParams) {
+  const from = getFromEmail();
+
+  const { data, error } = await resend.emails.send(
+    {
+      from,
+      to: [to],
+      subject: `Finish setting up your ${planLabel} plan`,
+      react: CheckoutReminder2dEmail({ name, planLabel, priceDisplay, resumeUrl }),
+      tags: [{ name: "category", value: "checkout_reminder_2d" }],
+    },
+    { idempotencyKey },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+// Day-7, final reminder for the same abandoned checkout — mentions the
+// 30-day data-retention deadline so the buyer isn't surprised later.
+export async function sendCheckoutReminder7dEmail({
+  to,
+  name,
+  planLabel,
+  priceDisplay,
+  resumeUrl,
+  idempotencyKey,
+}: SendCheckoutReminderEmailParams) {
+  const from = getFromEmail();
+
+  const { data, error } = await resend.emails.send(
+    {
+      from,
+      to: [to],
+      subject: `Last reminder: your ${planLabel} plan is waiting`,
+      react: CheckoutReminder7dEmail({ name, planLabel, priceDisplay, resumeUrl }),
+      tags: [{ name: "category", value: "checkout_reminder_7d" }],
     },
     { idempotencyKey },
   );

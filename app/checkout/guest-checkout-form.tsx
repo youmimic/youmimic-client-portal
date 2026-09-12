@@ -37,15 +37,31 @@ const KNOWN_FIELD_KEYS = new Set<keyof FormInput>(["email", "fullName", "company
 export function GuestCheckoutForm({
   planType,
   billingTerm,
+  resumeDraftId,
+  initialEmail,
+  initialFullName,
+  initialCompanyName,
 }: {
   planType: GuestCheckoutPlanType;
   billingTerm: GuestCheckoutBillingTerm;
+  // Present when arriving from a reminder email's resume link (see
+  // app/checkout/page.tsx) — edits that existing draft in place instead of
+  // creating a new one, so returning multiple times still produces exactly
+  // one draft and exactly one pair of reminder emails.
+  resumeDraftId?: string;
+  initialEmail?: string;
+  initialFullName?: string;
+  initialCompanyName?: string;
 }) {
   const [formError, setFormError] = useState("");
 
   const form = useForm<FormInput>({
     resolver: zodResolver(formSchema),
-    defaultValues: { email: "", fullName: "", companyName: "" },
+    defaultValues: {
+      email: initialEmail ?? "",
+      fullName: initialFullName ?? "",
+      companyName: initialCompanyName ?? "",
+    },
     mode: "onBlur",
   });
 
@@ -53,11 +69,14 @@ export function GuestCheckoutForm({
     setFormError("");
 
     try {
-      const draftRes = await fetch("/api/checkout-draft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, planType, billingTerm }),
-      });
+      const draftRes = await fetch(
+        resumeDraftId ? `/api/checkout-draft/${resumeDraftId}` : "/api/checkout-draft",
+        {
+          method: resumeDraftId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...values, planType, billingTerm }),
+        },
+      );
       const draftData = await draftRes.json().catch(() => ({}));
 
       if (!draftRes.ok) {

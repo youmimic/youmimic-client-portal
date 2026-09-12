@@ -1,41 +1,46 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CheckCircle2 } from "lucide-react";
 import { auth } from "@/auth";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  midMarket,
-  smallBusiness,
-  TERM_LABEL,
-  type BillingTermKey,
-} from "@/lib/pricing/plans";
-import { GuestCheckoutForm } from "./guest-checkout-form";
+import prisma from "@/lib/prisma";
+import { isCheckoutPlanKey, isBillingTermKey } from "@/lib/checkout/plan-keys";
+import { CheckoutCard } from "./checkout-card";
 
 export const metadata = {
   title: "Checkout — YouMimic",
 };
 
-const PLANS = {
-  MID_MARKET: midMarket,
-  SMALL_BUSINESS: smallBusiness,
-} as const;
+// Looks up a draftId from a reminder email's resume link
+// (lib/checkout/process-draft-lifecycle.ts builds these) so the review page
+// can prefill the buyer's already-given details instead of making them
+// retype everything. Deliberately permissive on failure: an unknown,
+// already-completed, already-paid, or past-retention-deadline draftId just
+// falls back to a normal blank entry rather than erroring — resuming is a
+// nicety, not something the page depends on.
+async function findResumableDraft(draftId: string | undefined) {
+  if (!draftId) return null;
 
-type PlanKey = keyof typeof PLANS;
+  const draft = await prisma.checkoutDraft.findUnique({
+    where: { id: draftId },
+    select: {
+      planType: true,
+      billingTerm: true,
+      email: true,
+      fullName: true,
+      companyName: true,
+      status: true,
+      stripeSubscriptionId: true,
+      expiresAt: true,
+    },
+  });
 
-function isPlanKey(value: string | undefined): value is PlanKey {
-  return value === "MID_MARKET" || value === "SMALL_BUSINESS";
-}
+  if (!draft) return null;
+  // COMPLETED = already converted; a set stripeSubscriptionId with any other
+  // status means it was actually paid but needs manual review (see
+  // lib/checkout/activate-guest-account.ts's FAILED path) — never offer
+  // either of those up for a fresh payment attempt.
+  if (draft.status === "COMPLETED" || draft.stripeSubscriptionId) return null;
+  if (draft.expiresAt < new Date()) return null;
 
-function isTermKey(value: string | undefined): value is BillingTermKey {
-  return value === "MONTHLY_12" || value === "MONTHLY_24";
+  return draft;
 }
 
 // Public entry point from the pricing page's Mid Market / Small Business
@@ -49,9 +54,9 @@ export default async function CheckoutPage({
 }: {
   searchParams: Promise<{ plan?: string; term?: string; draftId?: string }>;
 }) {
-  const { plan, term } = await searchParams;
+  const { plan, term, draftId } = await searchParams;
 
-  if (!isPlanKey(plan) || !isTermKey(term)) {
+  if (!isCheckoutPlanKey(plan) || !isBillingTermKey(term)) {
     redirect("/pricing");
   }
 
@@ -60,53 +65,32 @@ export default async function CheckoutPage({
     redirect(`/dashboard/checkout?plan=${plan}&term=${term}`);
   }
 
-  const selectedPlan = PLANS[plan];
-  const tier = selectedPlan.byTerm[term];
+  const resumableDraft = await findResumableDraft(draftId);
+  // The draft's own stored plan/term is authoritative over the URL's when
+  // resuming — it's what the buyer actually chose and what the reminder
+  // email described, whereas the query string could in principle be stale
+  // or hand-edited.
+  const resolvedPlan = resumableDraft ? (resumableDraft.planType as typeof plan) : plan;
+  const resolvedTerm = resumableDraft ? (resumableDraft.billingTerm as typeof term) : term;
 
   return (
     <div className="mx-auto w-full max-w-lg px-4 py-12 sm:px-6">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Confirm your plan</h1>
         <p className="text-muted-foreground">
-          Review your selection, then continue to secure payment.
+          Review your selection, then continue to secure payment. Changed your mind? Pick a
+          different plan or billing term right here.
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{selectedPlan.name}</CardTitle>
-          <CardDescription>{selectedPlan.tagline}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-baseline justify-between">
-            <span className="text-sm text-muted-foreground">Price</span>
-            <span className="text-lg font-semibold text-foreground">{tier.priceDisplay}</span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-sm text-muted-foreground">Billing term</span>
-            <span className="text-sm font-medium text-foreground">{TERM_LABEL[term]}</span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-sm text-muted-foreground">Included</span>
-            <span className="text-sm font-medium text-foreground">{tier.avatars}</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Recurring monthly charge, billed automatically until cancelled. Taxes may apply at
-            checkout depending on your location. You can cancel anytime from your billing
-            settings once your account is set up.
-          </p>
-          <div className="flex items-start gap-2 pt-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
-            <span>You&apos;ll be redirected to Stripe to complete payment securely.</span>
-          </div>
-        </CardContent>
-        <CardFooter className="flex-col items-stretch gap-4">
-          <GuestCheckoutForm planType={plan} billingTerm={term} />
-          <Button asChild variant="ghost" className="w-full">
-            <Link href="/pricing">Choose a different plan</Link>
-          </Button>
-        </CardFooter>
-      </Card>
+      <CheckoutCard
+        initialPlan={resolvedPlan}
+        initialTerm={resolvedTerm}
+        resumeDraftId={resumableDraft ? draftId : undefined}
+        initialEmail={resumableDraft?.email}
+        initialFullName={resumableDraft?.fullName}
+        initialCompanyName={resumableDraft?.companyName ?? undefined}
+      />
     </div>
   );
 }
