@@ -106,10 +106,11 @@ const featuredAt = [
 // (needs a dark surface to be visible); everything else already carries
 // its own background or reads fine on white.
 const clientLogos = [
-  { name: "4Front", src: "/Client Logos/13224_4Front logo hi-res.jpg" },
+  { name: "4Front", src: "/Client Logos/forefront.png" },
   {
     name: "Adam Spencer",
-    src: "/Client Logos/Adam Spencer - Corporate Speaker.jpg",
+    src: "/Client Logos/Adam Spencer - Corporate Speaker.png",
+    invert: true,
   },
   {
     name: "Dr. Catherine Ball",
@@ -122,8 +123,13 @@ const clientLogos = [
   {
     name: "DXC Technology",
     src: "/Client Logos/DXC-Veritcal-Tagline-Full-Color-Dark.png",
+    invert: true,
   },
-  { name: "Esri Australia", src: "/Client Logos/Esri_Australia_Logo.png" },
+  {
+    name: "Esri Australia",
+    src: "/Client Logos/Esri_Australia_Logo.png",
+    invert: true,
+  },
   {
     name: "Sporting Shooters Association of Australia",
     src: "/Client Logos/Screenshot 2026-09-03 at 3.44.28 pm.png",
@@ -134,19 +140,20 @@ const clientLogos = [
   },
   { name: "APM", src: "/Client Logos/apm-logo-126.png" },
   { name: "ette Sydney", src: "/Client Logos/ette+Logo+Yellow.webp" },
-  { name: "Course Rebel", src: "/Client Logos/images.jpg" },
-  { name: "BNAA", src: "/Client Logos/images.png" },
+  { name: "Course Rebel", src: "/Client Logos/white.courserebel.png" },
+  { name: "BNAA", src: "/Client Logos/bnaa-logo.svg", invert: true },
   {
     name: "Tasmanian Leaders",
-    src: "/Client Logos/LUGYk0kR6WG8YWLNG1SA@seo-500.jpg",
+    src: "/Client Logos/tasmanian-leaders-logo.svg",
+    invert: true,
   },
   {
     name: "TasICT",
-    src: "/Client Logos/Logo-TasICT-Horizontal-JPG-1024x318.jpg",
+    src: "/Client Logos/tasict-logo.svg",
   },
   {
     name: "CPT Engineering & Surveying",
-    src: "/Client Logos/mie-case-study-cpt.jpg.webp",
+    src: "/Client Logos/cpt-logo-home.png",
   },
 ];
 
@@ -405,19 +412,22 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-20">
-            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-8">
-              {clientLogos.map(({ name, src, dark }) => (
+            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-7">
+              {clientLogos.map(({ name, src, invert }) => (
                 <div
                   key={src}
-                  className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-[160px] items-center justify-center overflow-hidden rounded-xl shadow-sm"
-                  style={{ backgroundColor: dark ? "#333333" : "#FFFFFF" }}
+                  className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-[160px] items-center justify-center"
                 >
                   <NextImage
                     src={src}
                     alt={name}
                     fill
                     sizes="160px"
-                    className="object-contain p-8 grayscale"
+                    className={
+                      invert
+                        ? "object-contain p-8 grayscale invert"
+                        : "object-contain p-8 grayscale"
+                    }
                   />
                 </div>
               ))}

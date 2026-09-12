@@ -42,6 +42,17 @@ const CONTENT_SECURITY_POLICY = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  images: {
+    // Off by default in Next.js since an SVG can embed a <script>; the
+    // client-logo wall includes a vector logo (Tasmanian Leaders), so this
+    // is scoped down with Next's own documented mitigation: served SVGs get
+    // their own locked-down CSP (no script execution) and are forced to
+    // download rather than navigate-to directly, regardless of this app's
+    // own page-level CSP above.
+    dangerouslyAllowSVG: true,
+    contentDispositionType: "attachment",
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
   async headers() {
     return [
       {
