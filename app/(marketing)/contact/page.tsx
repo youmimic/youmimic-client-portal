@@ -92,8 +92,26 @@ export default function ContactPage() {
               "radial-gradient(circle at 50% 100%, rgba(76,153,151,0.10) 0%, transparent 45%)",
           }}
         />
+        {/* Extra blurred accent behind the form card — same restrained,
+            low-opacity technique used on /login and /signup, kept well
+            behind the opaque form card so it never touches text contrast. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute left-0 top-1/3 size-96 -translate-x-1/2 rounded-full bg-accent/15 blur-3xl"
+        />
         <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
-          <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
+          {/* Stacked (full-width) until a custom min-[2300px] breakpoint,
+              not the usual lg: 2-column split — this isn't just a height
+              problem. Calendly's inline widget switches to a taller,
+              narrower internal layout (with its own scrollbar) once its
+              own container drops below roughly 1000px wide. A 50/50 lg:
+              split only gives the widget's column that much room past
+              ~2275px of *viewport* width (confirmed by testing) — at any
+              more realistic desktop/laptop width, halving the container
+              starves it. Full width avoids that everywhere it matters;
+              the side-by-side layout only kicks in on monitors wide
+              enough that even a half column comfortably clears it. */}
+          <div className="grid gap-12 min-[2300px]:grid-cols-2 lg:items-start">
             {/* Contact form */}
             <div>
               <h2 className="mb-6 text-xl font-bold tracking-tight text-foreground">
@@ -107,7 +125,16 @@ export default function ContactPage() {
               <h2 className="mb-6 text-xl font-bold tracking-tight text-foreground">
                 Book a demo
               </h2>
-              <div className="h-125 overflow-hidden rounded-xl border border-border sm:h-150 lg:h-175">
+              {/* Calendly's own docs recommend a minimum height of 630px for
+                  the inline widget — anything shorter and Calendly renders
+                  its own internal scrollbar instead of fitting the calendar
+                  + time-slot list, which looks broken. min-h-157.5 (630px)
+                  is a hard floor for that reason; h-[min(78vh,760px)] lets
+                  it grow with the viewport (without needing separate
+                  hand-tuned breakpoint values) but never shrinks past the
+                  floor, and caps out at 760px so it doesn't dominate very
+                  tall screens. */}
+              <div className="h-[min(78vh,760px)] min-h-157.5 overflow-hidden rounded-xl">
                 <CalendlyInlineWidget
                   url="https://calendly.com/youmimic-sales/new-meeting?primary_color=4c9997"
                   className="h-full min-w-80"

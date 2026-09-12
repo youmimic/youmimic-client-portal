@@ -167,9 +167,27 @@ export default function SignupForm() {
     router.refresh();
   }
 
+  // No flex-1/items-center/min-h-screen on <main> here on purpose — that
+  // stretches main to fill all leftover space between the header and the
+  // (fairly tall) marketing footer, then centers this card within it,
+  // leaving a large variable-sized gap right before the footer on most
+  // screens (confirmed on /login, reverted there for the same reason).
+  // Fixed padding keeps a consistent, predictable gap instead.
   return (
-    <main className="container mx-auto flex flex-1 max-w-lg items-center justify-center px-4 py-10">
-      <Card className="w-full">
+    <main className="relative container mx-auto max-w-lg overflow-hidden px-4 py-16 sm:py-24">
+      {/* Decorative only — same restrained radial-gradient technique already
+          used on the marketing pages (e.g. app/(marketing)/contact/page.tsx),
+          kept subtle and behind an opaque Card so it never affects text
+          contrast. Blurred, aria-hidden, and non-interactive. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-24 -left-24 size-80 rounded-full bg-accent/20 blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-24 -right-24 size-80 rounded-full bg-primary/10 blur-3xl"
+      />
+      <Card className="relative w-full">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Create account</CardTitle>
           <CardDescription>
@@ -179,13 +197,16 @@ export default function SignupForm() {
 
         <CardContent className="space-y-4">
           {formError && showFormError && (
-            <div className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400">
+            <div
+              role="alert"
+              className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400"
+            >
               <p>{formError}</p>
               <button
                 type="button"
                 onClick={() => setShowFormError(false)}
                 aria-label="Dismiss signup error message"
-                className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40"
+                className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-red-400 dark:hover:bg-red-950/40"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -266,9 +287,17 @@ export default function SignupForm() {
                         type="password"
                         autoComplete="new-password"
                         placeholder="Create a strong password"
+                        aria-describedby="password-requirements"
                         {...field}
                       />
                     </FormControl>
+                    {/* Mirrors lib/validations/auth.ts's passwordSchema exactly
+                        — shown up front so validation isn't the first place
+                        someone learns the rules. */}
+                    <p id="password-requirements" className="text-xs text-muted-foreground">
+                      At least 8 characters, with an uppercase letter, a lowercase letter,
+                      and a number.
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}

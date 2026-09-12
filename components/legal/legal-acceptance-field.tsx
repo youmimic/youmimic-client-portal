@@ -45,7 +45,7 @@ export function LegalAcceptanceField({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="text-muted-foreground underline underline-offset-4 hover:text-primary"
+            className="rounded-sm text-muted-foreground underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             view again
           </button>
@@ -55,7 +55,7 @@ export function LegalAcceptanceField({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="text-sm font-medium underline underline-offset-4 hover:text-primary"
+            className="rounded-sm text-sm font-medium underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             Review and accept the {label}
           </button>
@@ -67,7 +67,9 @@ export function LegalAcceptanceField({
       )}
 
       {error && (
-        <p className="mt-2 text-sm font-medium text-destructive">{error}</p>
+        <p role="alert" className="mt-2 text-sm font-medium text-destructive">
+          {error}
+        </p>
       )}
 
       <PdfScrollAcceptDialog

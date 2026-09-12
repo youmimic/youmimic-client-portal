@@ -98,8 +98,13 @@ export default function LoginForm() {
     router.refresh();
   }
 
+  // No flex-1/items-center on <main> here on purpose — that stretches main
+  // to fill all leftover space between the header and the (fairly tall)
+  // marketing footer, then centers this short card within it, leaving a
+  // large variable-sized gap right before the footer on most screens.
+  // Fixed padding keeps a consistent, predictable gap instead.
   return (
-    <main className="container mx-auto flex flex-1 max-w-lg items-center justify-center px-4 py-10">
+    <main className="container mx-auto max-w-lg px-4 py-16 sm:py-24">
       <Card className="w-full">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Log in</CardTitle>
@@ -110,7 +115,10 @@ export default function LoginForm() {
 
         <CardContent className="space-y-4">
           {registered === "1" && showRegistered && (
-            <div className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400">
+            <div
+              role="status"
+              className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400"
+            >
               <p>
                 {verified === "1"
                   ? "Account created successfully. You can log in now."
@@ -120,7 +128,7 @@ export default function LoginForm() {
                 type="button"
                 onClick={() => setShowRegistered(false)}
                 aria-label="Dismiss registration success message"
-                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-950/40"
+                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-green-400 dark:hover:bg-green-950/40"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -128,13 +136,16 @@ export default function LoginForm() {
           )}
 
           {verified === "1" && registered !== "1" && showVerified && (
-            <div className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400">
+            <div
+              role="status"
+              className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400"
+            >
               <p>Your email has been verified. You can now log in.</p>
               <button
                 type="button"
                 onClick={() => setShowVerified(false)}
                 aria-label="Dismiss email verification success message"
-                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-950/40"
+                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-green-400 dark:hover:bg-green-950/40"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -142,13 +153,16 @@ export default function LoginForm() {
           )}
 
           {reset === "1" && showReset && (
-            <div className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400">
+            <div
+              role="status"
+              className="flex items-start justify-between gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-400"
+            >
               <p>Your password has been reset. You can now log in.</p>
               <button
                 type="button"
                 onClick={() => setShowReset(false)}
                 aria-label="Dismiss password reset success message"
-                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-950/40"
+                className="shrink-0 rounded-sm p-1 text-green-700 transition hover:bg-green-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-green-400 dark:hover:bg-green-950/40"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -156,13 +170,16 @@ export default function LoginForm() {
           )}
 
           {formError && showFormError && (
-            <div className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400">
+            <div
+              role="alert"
+              className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400"
+            >
               <p>{formError}</p>
               <button
                 type="button"
                 onClick={() => setShowFormError(false)}
                 aria-label="Dismiss login error message"
-                className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40"
+                className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-red-400 dark:hover:bg-red-950/40"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>

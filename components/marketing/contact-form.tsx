@@ -80,9 +80,12 @@ export function ContactForm() {
 
   if (submitted) {
     return (
-      <div className="rounded-xl border border-accent/30 bg-accent/5 p-8 text-center">
+      <div
+        role="status"
+        className="rounded-xl border border-accent/30 bg-accent/5 p-8 text-center"
+      >
         <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-accent/10">
-          <CheckCircle2 className="size-6 text-accent" />
+          <CheckCircle2 className="size-6 text-accent" aria-hidden="true" />
         </div>
         <h3 className="mb-2 text-lg font-semibold text-foreground">
           Message sent
@@ -97,18 +100,25 @@ export function ContactForm() {
   return (
     <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
       {formError && showFormError && (
-        <div className="mb-6 flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400">
+        <div
+          role="alert"
+          className="mb-6 flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400"
+        >
           <p>{formError}</p>
           <button
             type="button"
             onClick={() => setShowFormError(false)}
             aria-label="Dismiss error message"
-            className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40"
+            className="shrink-0 rounded-sm p-1 text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:text-red-400 dark:hover:bg-red-950/40"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       )}
+
+      <p className="mb-5 text-xs text-muted-foreground">
+        All fields are required.
+      </p>
 
       <Form {...form}>
         <form
@@ -116,81 +126,83 @@ export function ContactForm() {
           className="space-y-5"
           noValidate
         >
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Name</FormLabel>
-                <FormControl>
-                  <Input
-                    type="text"
-                    autoComplete="name"
-                    placeholder="Your full name"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="grid gap-5 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="text"
+                      autoComplete="name"
+                      placeholder="Your full name"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <FormField
-            control={form.control}
-            name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email</FormLabel>
-                <FormControl>
-                  <Input
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@company.com"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@company.com"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <FormField
-            control={form.control}
-            name="companyName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Company name</FormLabel>
-                <FormControl>
-                  <Input
-                    type="text"
-                    autoComplete="organization"
-                    placeholder="Your company"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+            <FormField
+              control={form.control}
+              name="companyName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Company name</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="text"
+                      autoComplete="organization"
+                      placeholder="Your company"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <FormField
-            control={form.control}
-            name="phone"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Phone number</FormLabel>
-                <FormControl>
-                  <Input
-                    type="tel"
-                    autoComplete="tel"
-                    placeholder="+61 4XX XXX XXX"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Phone number</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="tel"
+                      autoComplete="tel"
+                      placeholder="+61 4XX XXX XXX"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           <FormField
             control={form.control}
