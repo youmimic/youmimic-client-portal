@@ -2,12 +2,7 @@
 
 import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   PlanTermHeaderFields,
   PlanTermDetailFields,
@@ -16,7 +11,12 @@ import {
 import type { BillingTermKey } from "@/lib/pricing/plans";
 import { GuestCheckoutForm } from "./guest-checkout-form";
 
-// Owns the plan/term selection state for the guest checkout review page.
+// Two-column checkout layout: order summary (what/how much) on the left,
+// buyer details (the actual action) on the right — the same split Stripe's
+// own hosted Checkout page uses, just carrying youmimic's own branding.
+// Stacks to a single column below `lg` (order summary first, so the buyer
+// knows what they're paying for before being asked for details).
+//
 // Switching plan or term here is instant and purely local — nothing is
 // created server-side (no CheckoutDraft) until the buyer submits the form
 // below, so there's no cost to letting them freely compare options without
@@ -44,32 +44,45 @@ export function CheckoutCard({
   const [term, setTerm] = useState<BillingTermKey>(initialTerm);
 
   return (
-    <Card>
-      <CardHeader>
-        <PlanTermHeaderFields plan={plan} onPlanChange={setPlan} />
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <PlanTermDetailFields plan={plan} term={term} onTermChange={setTerm} />
-        <p className="text-xs text-muted-foreground">
-          Recurring monthly charge, billed automatically until cancelled. Taxes may apply at
-          checkout depending on your location. You can cancel anytime from your billing
-          settings once your account is set up.
-        </p>
-        <div className="flex items-start gap-2 pt-2 text-sm text-muted-foreground">
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
-          <span>You&apos;ll be redirected to Stripe to complete payment securely.</span>
-        </div>
-      </CardContent>
-      <CardFooter className="flex-col items-stretch gap-4">
-        <GuestCheckoutForm
-          planType={plan}
-          billingTerm={term}
-          resumeDraftId={resumeDraftId}
-          initialEmail={initialEmail}
-          initialFullName={initialFullName}
-          initialCompanyName={initialCompanyName}
-        />
-      </CardFooter>
-    </Card>
+    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+      <Card className="border-t-4 border-t-primary bg-muted/30 lg:sticky lg:top-20">
+        <CardHeader>
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Order summary
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <PlanTermHeaderFields plan={plan} onPlanChange={setPlan} />
+          <PlanTermDetailFields plan={plan} term={term} onTermChange={setTerm} />
+          <p className="text-xs text-muted-foreground">
+            Recurring monthly charge, billed automatically until cancelled. Taxes may apply at
+            checkout depending on your location. You can cancel anytime from your billing
+            settings once your account is set up.
+          </p>
+          <div className="flex items-start gap-2 text-sm text-muted-foreground">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
+            <span>You&apos;ll be redirected to Stripe to complete payment securely.</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Your details
+          </p>
+        </CardHeader>
+        <CardContent>
+          <GuestCheckoutForm
+            planType={plan}
+            billingTerm={term}
+            resumeDraftId={resumeDraftId}
+            initialEmail={initialEmail}
+            initialFullName={initialFullName}
+            initialCompanyName={initialCompanyName}
+          />
+        </CardContent>
+      </Card>
+    </div>
   );
 }

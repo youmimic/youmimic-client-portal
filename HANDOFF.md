@@ -1,5 +1,99 @@
 # HANDOFF.md
 
+## Session: Two-column redesign of the guest checkout review page — 2026-09-12
+
+User asked to "redesign the Stripe checkout page" to look like
+youmimic.com.au, with a minimal logo+toggle header and a two-column
+layout. Clarified the scope up front: the actual Stripe-hosted payment
+page (checkout.stripe.com) can't be restyled from this codebase at all —
+its branding (logo, colors, button style) is configured in the Stripe
+Dashboard under Settings → Branding, not in code, and this project
+deliberately stays on hosted Checkout rather than embedding Stripe
+Elements (see the earlier same-day discussion in this file). What *is*
+fully ours to redesign is the review page immediately before Stripe
+(`app/checkout`) — that's what this session's changes target.
+
+**What changed**:
+- **`app/checkout/layout.tsx`** (new) — a minimal sticky header shared by
+  `/checkout` and `/checkout/success`: just `SiteLogo` (left) and
+  `ThemeToggle` (right), same dark bar/height (`HEADER_HEIGHT`,
+  `rgba(51,51,51,0.95)`) as `MarketingHeader` for brand continuity, but
+  deliberately no nav links or sign-in/get-started buttons — a checkout
+  flow's header should reassure the buyer they're still on
+  youmimic.com.au, not invite them to click away mid-purchase.
+- **`app/checkout/checkout-card.tsx`** — restructured from a single
+  centered `Card` into a two-column grid (`lg:grid-cols-2`, stacks to one
+  column below `lg`, order summary first on mobile): left is "Order
+  summary" (the existing plan/term picker + price/avatars +
+  reassurance copy, in a card with a `border-t-primary` accent and a
+  `bg-muted/30` tint, sticky on scroll on desktop); right is "Your
+  details" (the existing guest form, unchanged). Mirrors the classic
+  Stripe-Checkout-style summary-panel + form-panel split, using the
+  site's own teal accent instead of Stripe's.
+- **`app/checkout/page.tsx`** — container widened `max-w-lg` → `max-w-4xl`
+  to fit two columns comfortably; heading left-aligned and bumped to
+  `text-3xl` at `sm:` to suit the wider layout.
+- No change to `app/(dashboard)/dashboard/checkout` (the authenticated
+  confirm-and-pay page) — it already lives inside the dashboard shell
+  with its own header/nav, a different context than the public
+  marketing-adjacent `/checkout` this request was about.
+
+**Checks**: `rm -rf .next && npm run build` (a clean build was needed —
+adding a new route layout changes Next's generated `LayoutRoutes` type,
+which briefly conflicted with a stale `.next/dev` cache and produced two
+spurious `tsc` errors that a normal `npm run typecheck` alone didn't
+clear), `npm run typecheck` clean afterward, `npm run lint` → 0 errors (3
+pre-existing warnings, unchanged), `npx vitest run` → 111/111 passing (no
+test changes needed — this is UI-only). Live-checked against the dev
+server: both cards render, the two-column grid class and sticky/accent
+styling are present in the server-rendered HTML, the minimal header (with
+a working theme-toggle button) renders on both `/checkout` and
+`/checkout/success`, and `/pricing` plus a fresh draft-creation call still
+work unaffected. Not screenshot-verified in an actual browser (no
+Playwright/Puppeteer in this project).
+
+**Not done / next**: if the actual Stripe-hosted page's branding (logo,
+accent color, button style) also needs updating to match, that requires
+a manual change in the Stripe Dashboard (Settings → Branding) — outside
+what this codebase can configure.
+
+### Follow-up same session: logo/header alignment fix
+
+User reported the logo placement in the header (and, by extension, on
+the checkout page beneath it) felt off. Root cause: the new header's
+inner container (`app/checkout/layout.tsx`) used `max-w-5xl` while the
+page content below it (`app/checkout/page.tsx`) used `max-w-4xl` — same
+horizontal padding on both, but a 128px difference in max-width meant the
+logo sat 64px further left than the "Confirm your plan" heading and the
+two order-summary/details cards beneath it on any wide viewport, instead
+of lining up with them.
+
+**First attempted fix** (matching the header's container to `page.tsx`'s
+`max-w-4xl`) didn't actually fix it. User correctly diagnosed why:
+`MarketingHeader` doesn't use a `max-w-*`-and-centered convention at
+all — it uses `lg:w-[90vw]` (90% of the viewport, edge-based, growing
+with screen width) with `lg:px-0`. Approximating that with any fixed
+`max-w-*` value is never going to land in the same screen position,
+since one scales with viewport and the other is capped — the logo would
+still jump to a different spot every time someone navigated from
+`/pricing` (or any other marketing page) to `/checkout`.
+
+**Actual fix**: changed the checkout header's container class to the
+exact same string `MarketingHeader` uses —
+`mx-auto w-full items-center justify-between px-4 sm:px-6 lg:w-[90vw] lg:px-0`
+— not a visual approximation of it. Left a comment explaining why an
+approximate match isn't good enough here. The checkout page's own
+*content* below the header (the two-column cards) intentionally stays at
+its own narrower `max-w-4xl` reading width — a full-width edge-based
+header with a narrower centered content column beneath it is a normal,
+deliberate pattern, not an inconsistency; only the header itself needs to
+match the site-wide convention pixel-for-pixel.
+
+Re-verified: `npm run typecheck` clean, `npm run lint` → 0 errors, and
+confirmed via the dev server that `/checkout` and `/pricing` now render
+the identical `lg:w-[90vw]`/`lg:px-0` classes on their respective header
+containers.
+
 ## Session: Checkout reminder emails + 30-day data retention — 2026-09-12
 
 Business policy: an abandoned guest Mid Market / Small Business checkout

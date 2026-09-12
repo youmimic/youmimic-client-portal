@@ -74,10 +74,10 @@ export default async function CheckoutPage({
   const resolvedTerm = resumableDraft ? (resumableDraft.billingTerm as typeof term) : term;
 
   return (
-    <div className="mx-auto w-full max-w-lg px-4 py-12 sm:px-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Confirm your plan</h1>
-        <p className="text-muted-foreground">
+    <div className="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6">
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Confirm your plan</h1>
+        <p className="mt-1 text-muted-foreground">
           Review your selection, then continue to secure payment. Changed your mind? Pick a
           different plan or billing term right here.
         </p>
