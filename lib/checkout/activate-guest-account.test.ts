@@ -164,7 +164,7 @@ describe("activateGuestAccountForDraft", () => {
     expect(createSubscription.mock.calls[0][0].data.stripeSubscriptionId).toBeNull();
   });
 
-  it("refuses to auto-attach and marks the draft FAILED when the email was registered after the draft was created", async () => {
+  it("refuses to auto-attach and marks the draft FAILED, persisting stripeSubscriptionId as proof payment succeeded", async () => {
     findUniqueCheckoutDraft.mockResolvedValue({ ...DRAFT });
     findUniqueUser.mockResolvedValue({ id: "user_registered_later" });
 
@@ -173,9 +173,16 @@ describe("activateGuestAccountForDraft", () => {
     expect(result).toBeNull();
     expect(createUser).not.toHaveBeenCalled();
     expect(createSubscription).not.toHaveBeenCalled();
+    // stripeSubscriptionId must be persisted here — it's the only signal
+    // that lets lib/checkout/create-draft.ts's overrideStaleDraftsForEmail,
+    // process-draft-lifecycle.ts's reminder/purge job, and
+    // app/checkout/page.tsx's findResumableDraft tell "already paid, needs
+    // manual review" apart from a plain abandoned draft. Without it, a row
+    // representing real money already taken could get emailed "complete
+    // your purchase" or silently deleted after 30 days.
     expect(updateCheckoutDraft).toHaveBeenCalledWith({
       where: { id: "draft_1" },
-      data: { status: "FAILED" },
+      data: { status: "FAILED", stripeSubscriptionId: "sub_stripe_1" },
     });
     expect(sendAdminWelcomeEmail).not.toHaveBeenCalled();
   });

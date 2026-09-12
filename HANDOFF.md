@@ -154,6 +154,51 @@ and changed-email-collides-with-another-draft cases.
 fix), `npm run typecheck` clean, `npm run lint` → 0 errors (unchanged
 baseline), `npx next build` clean.
 
+### Follow-up same session: confirmed "back to previous page" already works, but found the bug that would have quietly broken its safety net
+
+User asked whether clicking Stripe Checkout's back arrow preserves the
+buyer's details on the previous page. It already does — Stripe's Checkout
+page uses `cancel_url` for that back navigation, and
+`guest-checkout-session/route.ts` already built `cancel_url` with
+`draftId` attached; `app/checkout/page.tsx`'s `findResumableDraft`
+(built for the reminder-email resume flow, same session) already
+prefills the form from it. Verified live: created a real draft via the
+public API, loaded `/checkout?...&draftId=...` directly (the same URL
+shape `cancel_url` produces), and confirmed the email/name/company
+appeared in the rendered HTML.
+
+Tracing that through surfaced a real, more serious bug: `CheckoutDraft.stripeSubscriptionId`
+(the column, not the same-named `Subscription` table column) was
+**never actually written anywhere** despite `create-draft.ts`,
+`process-draft-lifecycle.ts`, and `page.tsx`'s `findResumableDraft` (all
+added this same session) treating "has a `stripeSubscriptionId`" as the
+signal for "this draft represents a real, already-paid subscription —
+never remind, resume, or delete it." `activate-guest-account.ts`'s
+existing FAILED branch (fires when the buyer's email got registered as a
+real `User` *after* payment succeeded but *before* the webhook could
+attach it — a "needs manual review" state, not an abandoned checkout)
+only ever set `status: "FAILED"`, never the `stripeSubscriptionId` it
+already had in hand as a parameter. Since `guest-checkout-session`'s
+generic Stripe-API-error catch block *also* sets `status: "FAILED"` for
+an entirely different, genuinely-abandoned-nothing-was-charged case,
+`status` alone can't distinguish the two — meaning, until this fix, a
+row representing money Stripe had already taken could have been emailed
+"complete your purchase" and then **permanently deleted, along with its
+Stripe Customer**, by the 30-day purge.
+
+**Fix**: `activate-guest-account.ts`'s collision branch now persists
+`stripeSubscriptionId` alongside `status: "FAILED"` — one line, since the
+value was already available as a function parameter. No other file
+needed to change; every consumer already correctly checked for a truthy
+`stripeSubscriptionId`, they just never had one to find.
+
+**Test updated**: `activate-guest-account.test.ts`'s FAILED-branch test
+now asserts `stripeSubscriptionId` is included in the update, with a
+comment explaining why it matters.
+
+**Checks**: `npx vitest run` → 111/111 passing, `npm run typecheck`
+clean, `npm run lint` → 0 errors, `npx next build` clean.
+
 ## Session: In-place plan/term switching on both checkout pages — 2026-09-12
 
 User asked to remove the "Choose a different plan" button on the checkout

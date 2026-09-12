@@ -60,9 +60,20 @@ export async function activateGuestAccountForDraft(
       select: { id: true },
     });
     if (existing) {
+      // stripeSubscriptionId is persisted here even though the row is
+      // FAILED — it's the only reliable signal downstream code
+      // (lib/checkout/create-draft.ts's overrideStaleDraftsForEmail,
+      // lib/checkout/process-draft-lifecycle.ts's reminder/purge job,
+      // app/checkout/page.tsx's findResumableDraft) has for telling this
+      // "payment succeeded but needs a human" case apart from a genuinely
+      // abandoned draft that also happens to be FAILED (e.g.
+      // guest-checkout-session's own catch block, a plain Stripe API
+      // error with no payment involved). Without it, a row representing
+      // real, already-taken money could get emailed "complete your
+      // purchase" or silently deleted by the 30-day purge.
       await tx.checkoutDraft.update({
         where: { id: draftId },
-        data: { status: "FAILED" },
+        data: { status: "FAILED", stripeSubscriptionId },
       });
       console.error(
         `Guest checkout draft ${draftId}: email ${draft.email} was registered after the draft was created — refusing to auto-attach. Needs manual review.`,
