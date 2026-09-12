@@ -54,6 +54,7 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
 function Button({
@@ -61,11 +62,13 @@ function Button({
   variant = "default",
   size = "default",
   asChild = false,
+  ref,
   ...props
 }: ButtonProps) {
   if (asChild) {
     return (
       <Slot
+        ref={ref}
         data-slot="button"
         className={cn(buttonVariants({ variant, size, className }))}
         {...props}
@@ -74,6 +77,7 @@ function Button({
   }
   return (
     <ButtonPrimitive
+      ref={ref}
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...(props as ButtonPrimitive.Props)}
