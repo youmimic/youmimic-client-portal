@@ -18,6 +18,7 @@ export async function MarketingHeader() {
       <div className={cn("mx-auto w-full flex items-center justify-between px-4 sm:px-6 lg:w-[90vw] lg:px-0", HEADER_HEIGHT)}>
         <SiteLogo
           forceVariant="dark"
+          iconVariant="light"
           className="flex items-center h-6 w-auto sm:h-7 md:h-8"
         />
 

@@ -86,7 +86,7 @@ const services = [
 const featuredAt = [
   {
     name: "SXSW Sydney",
-    src: "/Where you've seen us/Featured At/SXSW_Sydney_2023_Hero.jpg",
+    src: "/Where you've seen us/Featured At/SXSW_Sydney_2023_Hero.png",
   },
   {
     name: "TEDx Hobart",
@@ -95,7 +95,7 @@ const featuredAt = [
   },
   {
     name: "Governance Institute of Australia",
-    src: "/Where you've seen us/Featured At/Govenerae Instiatute of Australia.jpg",
+    src: "/Where you've seen us/Featured At/Govenerae Instiatute of Australia.png",
   },
   { name: "EdCAT 2026", src: "/Where you've seen us/Featured At/edcat.png" },
 ];
@@ -515,11 +515,10 @@ export default async function HomePage() {
             Featured At
           </p>
           <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {featuredAt.map(({ name, src, dark }) => (
+            {featuredAt.map(({ name, src }) => (
               <div
                 key={src}
-                className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-[160px] items-center justify-center overflow-hidden rounded-xl shadow-sm"
-                style={{ backgroundColor: dark ? "#333333" : "#FFFFFF" }}
+                className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-[160px] items-center justify-center"
               >
                 <NextImage
                   src={src}

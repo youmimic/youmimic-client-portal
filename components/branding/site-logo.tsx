@@ -10,6 +10,11 @@ type SiteLogoProps = {
   href?: string;
   className?: string;
   forceVariant?: "light" | "dark" | "auto";
+  // Overrides just the icon's light/dark pick, independent of forceVariant
+  // (which otherwise drives both the icon and the wordmark together) — for
+  // contexts like the always-dark header/footer that want the white
+  // wordmark but the brand teal icon rather than the inverted-to-white one.
+  iconVariant?: "light" | "dark" | "auto";
   onClick?: () => void;
 };
 
@@ -27,6 +32,7 @@ export function SiteLogo({
   href = "/",
   className,
   forceVariant = "auto",
+  iconVariant,
   onClick,
 }: SiteLogoProps) {
   const { resolvedTheme } = useTheme();
@@ -37,18 +43,22 @@ export function SiteLogo({
     (forceVariant === "auto" && mounted && resolvedTheme === "dark");
   const isKnown = forceVariant !== "auto" || mounted;
 
-  // Favicon icon (square) and wordmark share the same light/dark switch —
-  // rendered as one tight flex lockup, not two independently-placed images,
-  // so they read as a single logo mark rather than a wordmark with a stray
-  // icon next to it.
-  const iconSrc = isDark ? "/dark favicon.png" : "/green transparent favicon.png";
+  // Icon defaults to following forceVariant like the wordmark does, but a
+  // caller can override just this half of the lockup (see iconVariant's
+  // definition above).
+  const resolvedIconVariant = iconVariant ?? forceVariant;
+  const isIconDark =
+    resolvedIconVariant === "dark" ||
+    (resolvedIconVariant === "auto" && mounted && resolvedTheme === "dark");
+
+  const iconSrc = isIconDark ? "/dark favicon.png" : "/green transparent favicon.png";
   const wordmarkSrc = isDark ? "/youmimic-white-transparent.png" : "/youmimic-green-transparent.png";
 
   // "dark favicon.png" is a solid black mark on a transparent background —
   // meant for light surfaces, not an actual dark-mode (white) variant. On a
   // dark background it's invisible, so it's flipped to white with a CSS
   // filter here rather than needing a separately-exported white asset.
-  const iconStyle = isDark
+  const iconStyle = isIconDark
     ? { width: "auto", filter: "brightness(0) invert(1)" }
     : { width: "auto" };
 

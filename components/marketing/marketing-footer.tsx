@@ -57,7 +57,7 @@ export function MarketingFooter() {
       <div className="mx-auto w-full px-4 py-12 sm:px-6 lg:w-[90vw] lg:px-0">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <SiteLogo forceVariant="dark" />
+            <SiteLogo forceVariant="dark" iconVariant="light" />
             <p className="mt-4 text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>
               You Mimic Pty Ltd
               <br />
