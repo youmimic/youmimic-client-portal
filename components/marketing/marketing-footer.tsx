@@ -3,10 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { SiteLogo } from "@/components/branding/site-logo";
 import { NewsletterForm } from "@/components/marketing/newsletter-form";
 
-// lucide-react no longer ships brand/logo icons (Facebook, LinkedIn,
-// Twitter, YouTube were removed from the package over trademark concerns),
-// so the real LinkedIn glyph is hand-coded here; platforms without a
-// dedicated icon fall back to the generic external-link arrow below.
+// lucide-react dropped brand icons; hand-coded here for LinkedIn.
 function LinkedInIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
@@ -15,8 +12,7 @@ function LinkedInIcon({ className }: { className?: string }) {
   );
 }
 
-// Only platforms with a confirmed real URL are rendered — no placeholder
-// or guessed social links. Add more here as real URLs are confirmed.
+// Only platforms with a confirmed real URL are rendered.
 const allSocialLinks = [
   { label: "LinkedIn", href: "https://www.linkedin.com/company/you-mimic/posts/?feedView=all" },
   { label: "Twitter", href: null },
@@ -26,11 +22,7 @@ const socialLinks = allSocialLinks.filter(
   (social): social is (typeof allSocialLinks)[number] & { href: string } => social.href !== null,
 );
 
-// Trimmed to just these two for now, per the checklist ("other pages
-// we'll add back in later") — Press, Contact, Business Terms, Media
-// Center, and Careers are intentionally left out of this column.
-// Dataroom removed from here for now too; the page itself
-// (app/(marketing)/dataroom) is left in place, just unlinked.
+// Dataroom unlinked for now; the page itself is still at /dataroom.
 const companyLinks = [
   { label: "Privacy Policy", href: "/privacy-policy.pdf" },
   { label: "AI Ethics", href: "/ai-ethics" },
@@ -42,13 +34,7 @@ const navigationLinks = [
   { label: "Connect", href: "/contact" },
 ];
 
-// Footer link style — explicit light-on-dark colors rather than theme
-// tokens, since this footer is permanently dark (#333333) regardless of
-// the site's light/dark theme setting. `hover:!text-white` uses Tailwind's
-// important modifier since a plain hover class can't override the inline
-// `style.color` below (inline style always wins over a stylesheet rule
-// unless that rule is !important) — same technique used for the button
-// hover-invert.
+// Footer is permanently dark regardless of site theme, so colors are explicit inline styles.
 const linkClassName = "text-sm transition-colors hover:!text-white";
 const linkStyle = { color: "rgba(255,255,255,0.7)" };
 
@@ -123,10 +109,6 @@ export function MarketingFooter() {
               </ul>
             )}
 
-            {/* Newsletter signup — same column as Social, directly below
-                the social links. Intentionally not gated on socialLinks
-                being non-empty; the two are unrelated features that
-                happen to share a column. */}
             <div className={socialLinks.length > 0 ? "mt-6" : undefined}>
               <NewsletterForm />
             </div>

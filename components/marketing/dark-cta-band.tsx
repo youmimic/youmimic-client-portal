@@ -2,10 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-// Shared dark (#333333) closing CTA band — previously hand-duplicated
-// across solutions/page.tsx and solutions/small-business/page.tsx with
-// only the copy/links changed. Extracted so a future palette/copy tweak
-// happens once, same rationale as PricingSection.
+// Shared dark (#333333) closing CTA band.
 export function DarkCtaBand({
   heading,
   body,
@@ -13,8 +10,6 @@ export function DarkCtaBand({
   primaryLabel,
   secondaryHref,
   secondaryLabel,
-  // Optional padding override — defaults to the original py-24 sm:py-32
-  // so every existing call site keeps its current spacing untouched.
   paddingClassName = "py-24 sm:py-32",
 }: {
   heading: string;

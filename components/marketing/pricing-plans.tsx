@@ -22,10 +22,7 @@ import {
 } from "@/lib/pricing/plans";
 
 function bookNowHref(planType: "MID_MARKET" | "SMALL_BUSINESS", term: BillingTermKey): string {
-  // Public, unauthenticated-friendly review page — no forced signup/login
-  // before starting checkout. It redirects an already-authenticated visitor
-  // straight to the existing /dashboard/checkout page itself, so this link
-  // is the same for everyone regardless of auth state.
+  // Public review page; redirects an authenticated visitor to /dashboard/checkout.
   return `/checkout?plan=${planType}&term=${term}`;
 }
 
@@ -36,8 +33,6 @@ export function PricingPlans() {
 
   return (
     <div className="space-y-8">
-      {/* Billing term toggle — Mid Market and Small Business pricing/avatar
-          counts change with commitment length; Corporate is a flat rate. */}
       <div className="flex justify-center">
         <div className="inline-flex rounded-lg border border-border bg-muted p-1">
           {[
@@ -95,23 +90,13 @@ export function PricingPlans() {
             </ul>
           </CardContent>
           <CardFooter>
-            {/* Corporate deliberately stays "Contact Sales" only — no
-                self-serve payment flow, per the product owner's decision.
-                Labeled to match: "Get Started" here would imply the same
-                self-serve checkout the other two plans use. */}
             <Button asChild variant="outline" className="w-full">
               <Link href="/contact#book-demo">Contact Sales</Link>
             </Button>
           </CardFooter>
         </Card>
 
-        {/* "Most popular" needs to sit above the card's own top edge (a
-            ribbon straddling the border), not just inside it — but Card has
-            overflow-hidden (for the image's rounded top corners), which
-            would clip anything positioned above 0 if the badge were a child
-            of Card itself. So the badge and the Card are both children of
-            this outer relative wrapper instead: the badge is an absolutely
-            positioned sibling, free of Card's own clipping. */}
+        {/* Badge is a sibling of Card (not a child) so Card's overflow-hidden doesn't clip it. */}
         <div className="relative pt-3">
           <span className="absolute top-0 left-1/2 z-10 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground shadow-sm">
             Most popular

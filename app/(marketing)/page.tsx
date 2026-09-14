@@ -9,12 +9,6 @@ import { HowItLooksVideo } from "@/components/marketing/how-it-looks-video";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 
-// Overrides the root layout's generic "YouMimic Portal" fallback, which was
-// never meant for the public marketing homepage (it reads like a login
-// screen, not a product page). Brand-first rather than this site's usual
-// page-name-first convention (e.g. "Solutions — YouMimic") — the homepage
-// is the one page where leading with the brand and a real value
-// proposition matters more than a page topic.
 export const metadata: Metadata = {
   title: "YouMimic | AI Video Avatars for Business Communication",
   description:
@@ -87,15 +81,7 @@ const services = [
   },
 ];
 
-// Every file in the "Where you've seen us / Featured At" folder — skipping
-// blob.png, which is a duplicate of images.jpg's Australian Computer
-// Society mark (icon-only vs. icon+wordmark) rather than a distinct logo.
-// "Rotary Australia" and "Tasmanian Business Conference" were dropped —
-// their source files were deleted from the Featured At folder with no
-// replacement uploaded. EdCAT now points at edcat.png (edcat.jpg was
-// deleted and replaced with a cleaner logo-only export). `dark` flips
-// TEDx Hobart to a dark chip since its wordmark is red-and-white ink on
-// a transparent background — the white half disappears on a white card.
+// Uniform brightness-0 silhouette (light bg-muted background).
 const featuredAt = [
   {
     name: "SXSW Sydney",
@@ -104,70 +90,41 @@ const featuredAt = [
   {
     name: "TEDx Hobart",
     src: "/Where you've seen us/Featured At/tedxHobart.png",
-    dark: true,
   },
   {
     name: "Governance Institute of Australia",
     src: "/Where you've seen us/Featured At/Govenerae Instiatute of Australia.png",
   },
-  { name: "EdCAT 2026", src: "/Where you've seen us/Featured At/edcat.png" },
+  {
+    name: "EdCAT 2026",
+    src: "/Where you've seen us/Featured At/edcat.png",
+  },
+  {
+    name: "Course Rebel",
+    src: "/Client Logos/white.courserebel.png",
+  },
 ];
 
-// Every file in the Client Logos folder — matched to its actual company
-// name rather than the raw (often auto-generated) filename. `dark` flips a
-// card to a dark chip for the one asset that's white ink on transparent
-// (needs a dark surface to be visible); everything else already carries
-// its own background or reads fine on white.
+// Curated 10, two rows of five at lg:grid-cols-5 below.
 const clientLogos = [
-  { name: "4Front", src: "/Client Logos/forefront.png" },
-  {
-    name: "Adam Spencer",
-    src: "/Client Logos/Adam Spencer - Corporate Speaker.png",
-    invert: true,
-  },
-  {
-    name: "Dr. Catherine Ball",
-    src: "/Client Logos/Ball Dr Catherine PHD Logo - White_ 72dp.avif",
-    dark: true,
-  },
+  // Line 1
   { name: "Belle Property Australia", src: "/Client Logos/Bell Property.png" },
-  { name: "CSA", src: "/Client Logos/CSA-Logo-Transparent.png" },
-  { name: "Concinnity", src: "/Client Logos/Concinnity_45@4x.webp" },
+  { name: "Esri Australia", src: "/Client Logos/Esri_Australia_Logo.png" },
   {
     name: "DXC Technology",
     src: "/Client Logos/DXC-Veritcal-Tagline-Full-Color-Dark.png",
-    invert: true,
   },
   {
-    name: "Esri Australia",
-    src: "/Client Logos/Esri_Australia_Logo.png",
-    invert: true,
+    name: "Adam Spencer",
+    src: "/Client Logos/Adam Spencer - Corporate Speaker.png",
   },
-  {
-    name: "Sporting Shooters Association of Australia",
-    src: "/Client Logos/Screenshot 2026-09-03 at 3.44.28 pm.png",
-  },
-  {
-    name: "Devonport Chamber of Commerce & Industry",
-    src: "/Client Logos/Screenshot 2026-09-03 at 3.49.49 pm.png",
-  },
-  { name: "APM", src: "/Client Logos/apm-logo-126.png" },
-  { name: "ette Sydney", src: "/Client Logos/ette+Logo+Yellow.webp" },
-  { name: "Course Rebel", src: "/Client Logos/white.courserebel.png" },
-  { name: "BNAA", src: "/Client Logos/bnaa-logo.svg", invert: true },
-  {
-    name: "Tasmanian Leaders",
-    src: "/Client Logos/tasmanian-leaders-logo.svg",
-    invert: true,
-  },
-  {
-    name: "TasICT",
-    src: "/Client Logos/tasict-logo.svg",
-  },
-  {
-    name: "CPT Engineering & Surveying",
-    src: "/Client Logos/cpt-logo-home.png",
-  },
+  { name: "4 Front Services", src: "/Client Logos/forefront.png" },
+  // Line 2
+  { name: "Concinnity", src: "/Client Logos/Concinnity_45@4x.webp" },
+  { name: "BNAA", src: "/Client Logos/bnaa-logo.svg" },
+  { name: "SSAA", src: "/Client Logos/ssaa-logo.png" },
+  { name: "Corporate Speakers Australia", src: "/Client Logos/CSA-Logo-Transparent.png" },
+  { name: "Ette Sydney", src: "/Client Logos/ette+Logo+Yellow.webp" },
 ];
 
 export default async function HomePage() {
@@ -425,8 +382,20 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-20">
-            <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-7">
-              {clientLogos.map(({ name, src, invert }) => (
+            {/* 5 columns at lg: — exactly matches the 10-logo curated list
+                above, forming the requested two rows of five. */}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+              {/* brightness-0 invert (not grayscale/grayscale invert) — the
+                  same "force solid white" technique already used for the
+                  header/footer icon on this same dark background (see
+                  components/branding/site-logo.tsx). Every logo, regardless
+                  of its own original colors, becomes a plain white
+                  silhouette, so the old per-logo invert flag (needed to fix
+                  individual dark-on-transparent logos before) is no longer
+                  meaningful — everything gets the identical treatment now.
+                  p-4 (down from p-8) makes the visible logo noticeably
+                  larger within the same box. */}
+              {clientLogos.map(({ name, src }) => (
                 <div
                   key={src}
                   className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-[160px] items-center justify-center"
@@ -436,11 +405,7 @@ export default async function HomePage() {
                     alt={name}
                     fill
                     sizes="160px"
-                    className={
-                      invert
-                        ? "object-contain p-8 grayscale invert"
-                        : "object-contain p-8 grayscale"
-                    }
+                    className="object-contain p-4 brightness-0 invert"
                   />
                 </div>
               ))}
@@ -527,7 +492,7 @@ export default async function HomePage() {
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             Featured At
           </p>
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {featuredAt.map(({ name, src }) => (
               <div
                 key={src}
@@ -538,7 +503,7 @@ export default async function HomePage() {
                   alt={name}
                   fill
                   sizes="160px"
-                  className="object-contain p-8 grayscale"
+                  className="object-contain p-4 brightness-0"
                 />
               </div>
             ))}

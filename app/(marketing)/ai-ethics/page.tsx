@@ -203,18 +203,8 @@ export default function AiEthicsPage() {
               Australia&apos;s own AI ethics frameworks.
             </p>
           </div>
-          {/* columns-*, not grid-cols-* — CSS Grid's row tracks still size
-              to the tallest card in each row even with items-start (that
-              only stops the shorter card from being stretched, not the row
-              itself from being tall), so a closed card next to an open one
-              still left a big gap before the next real row began. A
-              multi-column flow has no shared row concept: each column
-              stacks its own cards independently, so an open/closed height
-              difference in one column never affects the other. */}
+          {/* columns-*, not grid-cols-* — avoids grid row-tracks stretching to the tallest open card. */}
           <div className="columns-1 gap-4 lg:columns-2">
-            {/* <details>/<summary> — a native, dependency-free disclosure so
-                each principle can stay collapsed (just icon + title) until
-                someone wants to read it, no client component needed. */}
             {principles.map(({ icon: Icon, title, body }, i) => (
               <details
                 key={title}
@@ -316,10 +306,6 @@ export default function AiEthicsPage() {
         </div>
       </section>
 
-      {/* Same DarkCtaBand every other closing section on the site uses, just
-          with less vertical padding (py-14 sm:py-16 vs. the default
-          py-24 sm:py-32) — a policy page's closing note doesn't need as
-          much room as a full marketing conversion band. */}
       <DarkCtaBand
         heading="Have a question?"
         body="If you'd like to know more about our ethical framework or data handling, get in touch with our team."
