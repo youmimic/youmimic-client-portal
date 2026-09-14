@@ -28,13 +28,18 @@ const isDev = process.env.NODE_ENV !== "production";
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://assets.calendly.com https://conversations-widget.brevo.com`,
+  // Google Tag Manager (app/layout.tsx, site-wide) can load arbitrary tags
+  // from inside its container config without a code deploy — googletagmanager.com
+  // covers gtm.js and the noscript ns.html fallback, but any GA4/Ads tag added
+  // later inside the GTM container (e.g. google-analytics.com) will need its
+  // own CSP entry here too.
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://assets.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com`,
   "style-src 'self' 'unsafe-inline' https://assets.calendly.com",
   "img-src 'self' data: https:",
   "media-src 'self' https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com",
-  "frame-src https://calendly.com https://conversations-widget.brevo.com",
+  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com",
+  "frame-src https://calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self' https://*.sibforms.com",
