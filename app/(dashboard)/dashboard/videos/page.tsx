@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { GeneratedVideoRow } from "@/components/dashboard/generated-video-row";
 
 export const metadata = {
-  title: "Videos — YouMimic Portal",
+  title: "Videos | YouMimic Portal",
 };
 
 export const dynamic = "force-dynamic";

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { syncAvatarFromHeyGen, syncAvatarLookFromHeyGen, rollupAvatarDisplay } from "@/lib/heygen/sync";
 
 export const metadata = {
-  title: "Avatars — YouMimic Portal",
+  title: "Avatars | YouMimic Portal",
 };
 
 async function fetchAvatars(userId: string) {

@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/card";
 
 export const metadata = {
-  title: "Dashboard — YouMimic Portal",
+  title: "Dashboard | YouMimic Portal",
 };
 
 export const dynamic = "force-dynamic";

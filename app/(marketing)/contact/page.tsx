@@ -4,7 +4,7 @@ import { ContactForm } from "@/components/marketing/contact-form";
 import { CalendlyInlineWidget } from "@/components/marketing/calendly-widget";
 
 export const metadata: Metadata = {
-  title: "Contact Sales — YouMimic",
+  title: "Contact Sales | YouMimic",
   description:
     "Book a demo or reach out to the YouMimic team to learn how AI video avatars can scale your business communication.",
 };

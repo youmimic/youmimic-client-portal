@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import NextImage from "next/image";
 import { auth } from "@/auth";
@@ -7,6 +8,18 @@ import { PricingSection } from "@/components/marketing/pricing-section";
 import { HowItLooksVideo } from "@/components/marketing/how-it-looks-video";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
+
+// Overrides the root layout's generic "YouMimic Portal" fallback, which was
+// never meant for the public marketing homepage (it reads like a login
+// screen, not a product page). Brand-first rather than this site's usual
+// page-name-first convention (e.g. "Solutions — YouMimic") — the homepage
+// is the one page where leading with the brand and a real value
+// proposition matters more than a page topic.
+export const metadata: Metadata = {
+  title: "YouMimic | AI Video Avatars for Business Communication",
+  description:
+    "Turn one recording into unlimited video content. YouMimic builds photorealistic AI avatars and digital twins that deliver your message in 175+ languages, at scale.",
+};
 
 const howItWorks = [
   {

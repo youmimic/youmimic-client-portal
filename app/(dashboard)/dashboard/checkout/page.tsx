@@ -3,7 +3,7 @@ import { isCheckoutPlanKey, isBillingTermKey } from "@/lib/checkout/plan-keys";
 import { CheckoutCard } from "./checkout-card";
 
 export const metadata = {
-  title: "Confirm your plan — YouMimic Portal",
+  title: "Confirm your plan | YouMimic Portal",
 };
 
 // Reached from the pricing page's Mid Market / Small Business "Book Now"

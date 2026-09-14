@@ -18,7 +18,7 @@ const ENTERPRISE_EMAIL =
   process.env.NEXT_PUBLIC_ENTERPRISE_EMAIL ?? "enterprise@youmimic.com";
 
 export const metadata = {
-  title: "Account Suspended — YouMimic Portal",
+  title: "Account Suspended | YouMimic Portal",
 };
 
 export default async function SuspendedPage({

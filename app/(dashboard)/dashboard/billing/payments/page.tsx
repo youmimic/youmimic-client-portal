@@ -8,7 +8,7 @@ import { PaymentHistoryTable } from "@/components/dashboard/payment-history-tabl
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Payment History — YouMimic Portal",
+  title: "Payment History | YouMimic Portal",
 };
 
 // Generous single-page cap rather than full pagination — payment history

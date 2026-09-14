@@ -18,7 +18,7 @@ import JoinForm from "./join-form";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Join your team — YouMimic Portal",
+  title: "Join your team | YouMimic Portal",
 };
 
 export default async function InviteJoinPage({

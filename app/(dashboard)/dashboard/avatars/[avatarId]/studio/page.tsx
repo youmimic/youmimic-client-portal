@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma";
 import { AvatarStudio } from "@/components/dashboard/avatar-studio";
 
 export const metadata = {
-  title: "Avatar Studio — YouMimic Portal",
+  title: "Avatar Studio | YouMimic Portal",
 };
 
 export const dynamic = "force-dynamic";

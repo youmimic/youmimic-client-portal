@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ComingSoonPage } from "@/components/marketing/coming-soon-page";
 
 export const metadata: Metadata = {
-  title: "Dataroom — YouMimic",
+  title: "Dataroom | YouMimic",
   description: "YouMimic investor dataroom.",
 };
 

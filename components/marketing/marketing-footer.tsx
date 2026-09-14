@@ -26,13 +26,14 @@ const socialLinks = allSocialLinks.filter(
   (social): social is (typeof allSocialLinks)[number] & { href: string } => social.href !== null,
 );
 
-// Trimmed to just these three for now, per the checklist ("other pages
+// Trimmed to just these two for now, per the checklist ("other pages
 // we'll add back in later") — Press, Contact, Business Terms, Media
 // Center, and Careers are intentionally left out of this column.
+// Dataroom removed from here for now too; the page itself
+// (app/(marketing)/dataroom) is left in place, just unlinked.
 const companyLinks = [
   { label: "Privacy Policy", href: "/privacy-policy.pdf" },
   { label: "AI Ethics", href: "/ai-ethics" },
-  { label: "Dataroom", href: "/contact" },
 ];
 
 const navigationLinks = [

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { DarkCtaBand } from "@/components/marketing/dark-cta-band";
 
 export const metadata: Metadata = {
-  title: "Small Business Solutions — YouMimic",
+  title: "Small Business Solutions | YouMimic",
   description:
     "AI avatar video for small businesses: social content, proposals, outreach, and sales, without a production team.",
 };

@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { SessionProvider } from "next-auth/react";
 import SubscriptionActivator from "./subscription-activator";
 
-export const metadata = { title: "Activating subscription — YouMimic Portal" };
+export const metadata = { title: "Activating subscription | YouMimic Portal" };
 
 function ActivatingState() {
   return (

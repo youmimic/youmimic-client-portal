@@ -68,7 +68,7 @@ export function NewsletterForm() {
         className="mb-3 block text-sm font-semibold"
         style={{ color: "#FFFFFF" }}
       >
-        Subscribe to our newsletter from Neil, the CEO
+        Stay Connected!
       </label>
       {/* Stacked, not side-by-side — this lives in a single narrow footer
           column (alongside Social), not a full-width block, so an inline

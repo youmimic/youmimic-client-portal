@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { DarkCtaBand } from "@/components/marketing/dark-cta-band";
 
 export const metadata: Metadata = {
-  title: "Solutions — YouMimic",
+  title: "Solutions | YouMimic",
   description:
     "See how CEOs, executives, educators, creators, and digital communicators across every industry are scaling their video presence with YouMimic.",
 };

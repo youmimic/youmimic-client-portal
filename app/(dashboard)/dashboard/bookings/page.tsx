@@ -15,7 +15,7 @@ import {
 } from "@/lib/validations/booking";
 
 export const metadata = {
-  title: "Bookings — YouMimic Portal",
+  title: "Bookings | YouMimic Portal",
 };
 
 async function fetchBookings(userId: string) {

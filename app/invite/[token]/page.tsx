@@ -17,7 +17,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Accept invite — YouMimic Portal",
+  title: "Accept invite | YouMimic Portal",
 };
 
 function WrongAccountCard({

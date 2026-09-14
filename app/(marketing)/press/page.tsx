@@ -4,7 +4,7 @@ import { Award, Rocket, Trophy, Newspaper, Building2, Star } from "lucide-react"
 import { DarkCtaBand } from "@/components/marketing/dark-cta-band";
 
 export const metadata: Metadata = {
-  title: "Press — YouMimic",
+  title: "Press | YouMimic",
   description: "Press coverage and recognition for YouMimic.",
 };
 

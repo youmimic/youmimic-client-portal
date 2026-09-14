@@ -12,7 +12,7 @@ import {
 import { InviteForm } from "@/components/dashboard/invite-form";
 
 export const metadata = {
-  title: "Settings — YouMimic Portal",
+  title: "Settings | YouMimic Portal",
 };
 
 export const dynamic = "force-dynamic";

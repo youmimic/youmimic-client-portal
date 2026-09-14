@@ -5,7 +5,7 @@ import { isCheckoutPlanKey, isBillingTermKey } from "@/lib/checkout/plan-keys";
 import { CheckoutCard } from "./checkout-card";
 
 export const metadata = {
-  title: "Checkout — YouMimic",
+  title: "Checkout | YouMimic",
 };
 
 // Looks up a draftId from a reminder email's resume link

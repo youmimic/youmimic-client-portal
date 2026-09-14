@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { ActivationStatus } from "./activation-status";
 
 export const metadata = {
-  title: "Setting up your account — YouMimic",
+  title: "Setting up your account | YouMimic",
 };
 
 // Reached from the guest checkout Stripe Checkout Session's success_url.

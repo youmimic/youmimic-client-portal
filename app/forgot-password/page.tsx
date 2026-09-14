@@ -2,7 +2,7 @@
 import ForgotPasswordForm from "./forgot-password-form";
 
 export const metadata = {
-  title: "Forgot Password — YouMimic Portal",
+  title: "Forgot Password | YouMimic Portal",
 };
 
 export default function ForgotPasswordPage() {

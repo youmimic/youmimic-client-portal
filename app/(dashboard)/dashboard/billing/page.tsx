@@ -28,7 +28,7 @@ import { fetchPaymentsForUser } from "@/lib/payments";
 const RECENT_PAYMENTS_PREVIEW_COUNT = 2;
 
 export const metadata = {
-  title: "Billing — YouMimic Portal",
+  title: "Billing | YouMimic Portal",
 };
 
 // ---------------------------------------------------------------------------

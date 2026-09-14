@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // Shared dark (#333333) closing CTA band — previously hand-duplicated
 // across solutions/page.tsx and solutions/small-business/page.tsx with
@@ -12,6 +13,9 @@ export function DarkCtaBand({
   primaryLabel,
   secondaryHref,
   secondaryLabel,
+  // Optional padding override — defaults to the original py-24 sm:py-32
+  // so every existing call site keeps its current spacing untouched.
+  paddingClassName = "py-24 sm:py-32",
 }: {
   heading: string;
   body: string;
@@ -19,10 +23,11 @@ export function DarkCtaBand({
   primaryLabel: string;
   secondaryHref: string;
   secondaryLabel: string;
+  paddingClassName?: string;
 }) {
   return (
     <section
-      className="relative overflow-hidden py-24 sm:py-32"
+      className={cn("relative overflow-hidden", paddingClassName)}
       style={{ backgroundColor: "#333333" }}
     >
       <div

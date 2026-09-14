@@ -29,7 +29,7 @@ import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 import { NewsletterForm } from "@/components/marketing/newsletter-form";
 
 export const metadata: Metadata = {
-  title: "Pricing — YouMimic",
+  title: "Pricing | YouMimic",
   description:
     "Simple, transparent pricing for individuals, enterprises, and custom deployments.",
 };
