@@ -151,3 +151,10 @@ export function canManageQuickLinks(role: AdminRoleValue): boolean {
 export function canViewActivity(role: AdminRoleValue): boolean {
   return hasMinRole(role, "BILLING_ADMIN");
 }
+
+// Site traffic dashboard (GA4 Data API) — read-only, no financial or PII
+// data, so BILLING_ADMIN minimum: same "any admin who can reach the admin
+// area" tier as canViewActivity, not the stricter ADMIN tier.
+export function canViewAnalytics(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "BILLING_ADMIN");
+}

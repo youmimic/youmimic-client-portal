@@ -1,5 +1,22 @@
 # HANDOFF.md
 
+## Session: Google Tag Manager + admin GA4 analytics dashboard — 2026-09-14
+
+User asked to add Google Tag Manager site-wide, then (after confirming a recommendation) to build an admin-only page showing Google Analytics data, using the GA4 Data API rather than an embedded Looker Studio iframe — chosen because it can be gated behind the existing admin auth/RBAC and matches the dashboard's own look, at the cost of needing a GCP service account and some charting work up front (an iframe would have been live in minutes but with weaker access control).
+
+**Google Tag Manager**: added the standard head script (via `next/script`, `strategy="afterInteractive"`, matching the existing Brevo widget's convention in `app/(marketing)/contact/page.tsx`) and the `<noscript>` iframe fallback to `app/layout.tsx`, container `GTM-P85KFN8F`. Added `https://www.googletagmanager.com` to `script-src`, `connect-src`, and `frame-src` in `next.config.ts`'s CSP — otherwise the existing policy would have silently blocked it. Left a comment flagging that any tag added later inside the GTM container itself (GA4, Ads conversion tracking, etc.) may need its own additional CSP domain, since GTM's whole purpose is injecting remote-configured tags without a code deploy.
+
+**Admin analytics page** (`app/(admin)/admin/analytics/page.tsx`): new page under the existing `(admin)` route group, gated by a new `canViewAnalytics` permission in `lib/admin/rbac.ts` (BILLING_ADMIN minimum — same tier as `canViewActivity`, since this is read-only, non-financial traffic data). Added a matching "Analytics" nav entry to `components/admin/admin-shell.tsx`.
+
+Data comes from a new `lib/ga4/client.ts`, modeled directly on `lib/stripe/mrr.ts`'s convention: a lazily-built client from its own env vars (`GA4_PROPERTY_ID`, `GA4_CLIENT_EMAIL`, `GA4_PRIVATE_KEY`), returning a discriminated `{ ok: true, data } | { ok: false, error }` result and never throwing, so a missing/misconfigured credential degrades to a visible "Analytics unavailable" card instead of a crashed page. Pulls last-28-day totals (active users, sessions, page views, avg. engagement time), a 30-day daily-active-users trend, top 8 pages, and top 6 traffic-source channels via GA4 Data API `runReport` calls (`@google-analytics/data`, added as a new dependency). The trend line is rendered by a small new client component, `components/admin/analytics-trend-chart.tsx`, using `recharts` (also newly added — no charting library existed in this repo before).
+
+**Not yet done, and not possible from code**: the actual GA4 property + GTM tag configuration happens in Google's own consoles, not this repo. Still needed before the page shows real data:
+1. In Google Tag Manager (tagmanager.google.com, container GTM-P85KFN8F), add a GA4 Configuration tag pointing at a real GA4 property, so traffic actually starts flowing into GA4.
+2. In Google Cloud Console, create a service account, enable the "Google Analytics Data API," and grant that service account **Viewer** access on the GA4 property (via GA4's Admin → Property Access Management).
+3. Set three env vars in deployment (and local `.env`): `GA4_PROPERTY_ID` (the numeric property ID), `GA4_CLIENT_EMAIL` (the service account's email), `GA4_PRIVATE_KEY` (the service account key's private key, with literal `\n` escapes — the code unescapes them at runtime).
+
+**Checks**: `npm run typecheck` clean, `npm run lint` → 0 errors (3 pre-existing warnings, unchanged), `npx vitest run` → 111/111 passing (no test changes needed), `npm run build` → clean, including the new `/admin/analytics` route compiling successfully.
+
 ## Session: UI/UX pass, Milestone 2 — /contact, /login, /signup — 2026-09-13
 
 User asked to expand this pass's scope mid-milestone to also cover `/login` and `/signup` (outside the original prompt's stated boundary of `/contact` + `/dashboard` + checkout) — small, similar form-centric pages, folded into this same milestone rather than treated separately.
