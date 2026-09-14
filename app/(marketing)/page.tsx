@@ -100,8 +100,8 @@ const featuredAt = [
     src: "/Where you've seen us/Featured At/edcat.png",
   },
   {
-    name: "Course Rebel",
-    src: "/Client Logos/white.courserebel.png",
+    name: "Fortune 500 Innovation Forum",
+    src: "/Where you've seen us/Featured At/fortune 500 Innovation forum log.png",
   },
 ];
 
