@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import {
   Landmark,
-  ExternalLink,
+  FileDown,
   ChevronDown,
   Users,
   Eye,
@@ -28,13 +28,13 @@ const regulators = [
   {
     name: "Australian Federal Government",
     doc: "Australia's AI Ethics Principles",
-    href: "https://www.industry.gov.au/publications/australias-artificial-intelligence-ethics-principles/australias-ai-ethics-principles",
+    href: "/Industry.gov_ai_ethics_principles.pdf",
   },
   {
     name: "Screen Australia",
     doc: "AI Guiding Principles",
     sub: "Australian Federal Government",
-    href: "https://www.screenaustralia.gov.au/corporate-documents/policies/ai-guiding-principles/",
+    href: "/Screen-Australia-AI-Guiding-Principles.pdf",
   },
 ];
 
@@ -146,7 +146,7 @@ export default function AiEthicsPage() {
                 Our Policy Regulators
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Two published, external frameworks we align our own practice with.
+                Two published frameworks we align our own practice with, available here as PDF.
               </p>
             </div>
           </div>
@@ -171,9 +171,9 @@ export default function AiEthicsPage() {
                   )}
                 </div>
                 <div className="mt-5 flex items-center gap-1.5 text-sm font-medium text-accent">
-                  Read the framework
-                  <ExternalLink
-                    className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                  Learn more
+                  <FileDown
+                    className="size-3.5 transition-transform group-hover:translate-y-0.5"
                     aria-hidden="true"
                   />
                 </div>
@@ -293,12 +293,9 @@ export default function AiEthicsPage() {
           <p className="mb-4 text-xs font-semibold tracking-wide text-accent uppercase">
             A Living Commitment
           </p>
-          <blockquote
-            className="border-l-4 pl-6 text-left text-lg leading-relaxed font-medium text-foreground italic sm:text-xl"
-            style={{ borderColor: "#4C9997" }}
-          >
-            &ldquo;AI is evolving fast. So are our policies.&rdquo;
-          </blockquote>
+          <p className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            AI is evolving fast. So are our policies.
+          </p>
           <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
             We review and adapt our ethical standards regularly, in consultation
             with legal experts, AI researchers, and the people we serve.
