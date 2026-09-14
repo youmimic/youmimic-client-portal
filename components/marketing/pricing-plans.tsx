@@ -105,50 +105,59 @@ export function PricingPlans() {
           </CardFooter>
         </Card>
 
-        <Card className="flex flex-col ring-2 ring-primary">
-          <Image
-            src="/mid-market.avif"
-            alt={midMarket.name}
-            width={420}
-            height={420}
-            className="aspect-video w-full object-cover"
-          />
-          <CardHeader>
-            <span className="mb-2 self-start rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
-              Most popular
-            </span>
-            <CardTitle className="text-2xl font-bold tracking-tight">{midMarket.name}</CardTitle>
-            <CardDescription>{midMarket.tagline}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1">
-            <p className="mb-4 text-lg font-semibold text-foreground">
-              {midMarketTier.priceDisplay}
-            </p>
-            <ul className="space-y-2">
-              {[
-                midMarketTier.avatars,
-                "Priority video processing",
-                "Multilingual generation",
-                "Email + chat support",
-              ].map((feature) => (
-                <li
-                  key={feature}
-                  className="flex items-start gap-2 text-sm text-muted-foreground"
-                >
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
-                  {feature}
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-          <CardFooter>
-            <Button asChild className="w-full">
-              <Link href={bookNowHref("MID_MARKET", term)}>
-                Get Started
-              </Link>
-            </Button>
-          </CardFooter>
-        </Card>
+        {/* "Most popular" needs to sit above the card's own top edge (a
+            ribbon straddling the border), not just inside it — but Card has
+            overflow-hidden (for the image's rounded top corners), which
+            would clip anything positioned above 0 if the badge were a child
+            of Card itself. So the badge and the Card are both children of
+            this outer relative wrapper instead: the badge is an absolutely
+            positioned sibling, free of Card's own clipping. */}
+        <div className="relative pt-3">
+          <span className="absolute top-0 left-1/2 z-10 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground shadow-sm">
+            Most popular
+          </span>
+          <Card className="flex h-full flex-col ring-2 ring-primary">
+            <Image
+              src="/mid-market.avif"
+              alt={midMarket.name}
+              width={420}
+              height={420}
+              className="aspect-video w-full object-cover"
+            />
+            <CardHeader>
+              <CardTitle className="text-2xl font-bold tracking-tight">{midMarket.name}</CardTitle>
+              <CardDescription>{midMarket.tagline}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1">
+              <p className="mb-4 text-lg font-semibold text-foreground">
+                {midMarketTier.priceDisplay}
+              </p>
+              <ul className="space-y-2">
+                {[
+                  midMarketTier.avatars,
+                  "Priority video processing",
+                  "Multilingual generation",
+                  "Email + chat support",
+                ].map((feature) => (
+                  <li
+                    key={feature}
+                    className="flex items-start gap-2 text-sm text-muted-foreground"
+                  >
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+            <CardFooter>
+              <Button asChild className="w-full">
+                <Link href={bookNowHref("MID_MARKET", term)}>
+                  Get Started
+                </Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
 
         <Card className="flex flex-col">
           <Image
