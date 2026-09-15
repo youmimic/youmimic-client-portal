@@ -208,6 +208,7 @@ export default function AiEthicsPage() {
             {principles.map(({ icon: Icon, title, body }, i) => (
               <details
                 key={title}
+                name="guiding-principles"
                 className="group mb-4 break-inside-avoid rounded-xl bg-card shadow-[0_1px_2px_rgba(51,51,51,0.06),0_8px_16px_-4px_rgba(51,51,51,0.10),0_20px_32px_-8px_rgba(76,153,151,0.12)] transition-shadow duration-300"
               >
                 <summary className="flex cursor-pointer list-none items-center gap-5 p-6 [&::-webkit-details-marker]:hidden">
