@@ -46,6 +46,22 @@ export const createCheckoutDraftSchema = z.object({
     .trim()
     .max(200, "Company name must be 200 characters or less")
     .optional(),
+
+  // Same fields/messages as lib/validations/auth.ts's registerSchema — a
+  // guest buyer never goes through /signup, so this is the only place
+  // they'd otherwise never see or accept either document before paying.
+  acceptTerms: z.boolean().refine((value) => value === true, {
+    message: "You must agree to the Terms and Conditions",
+  }),
+  termsLinkClicked: z.boolean().refine((value) => value === true, {
+    message: "Please open and review the Terms and Conditions before continuing",
+  }),
+  acceptPrivacyPolicy: z.boolean().refine((value) => value === true, {
+    message: "You must accept the Privacy Policy",
+  }),
+  privacyPolicyLinkClicked: z.boolean().refine((value) => value === true, {
+    message: "Please open the Privacy Policy before continuing",
+  }),
 });
 
 export type CreateCheckoutDraftInput = z.infer<typeof createCheckoutDraftSchema>;

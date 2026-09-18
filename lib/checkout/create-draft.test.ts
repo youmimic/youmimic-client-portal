@@ -38,6 +38,10 @@ const VALID_INPUT = {
   email: "buyer@example.com",
   fullName: "Jane Buyer",
   companyName: "Acme Co",
+  acceptTerms: true,
+  termsLinkClicked: true,
+  acceptPrivacyPolicy: true,
+  privacyPolicyLinkClicked: true,
 };
 
 beforeEach(() => {

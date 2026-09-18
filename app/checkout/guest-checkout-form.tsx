@@ -15,6 +15,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { LegalAcceptanceField } from "@/components/legal/legal-acceptance-field";
 import type {
   GuestCheckoutPlanType,
   GuestCheckoutBillingTerm,
@@ -28,11 +29,31 @@ const formSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email address"),
   fullName: z.string().min(2, "Full name must be at least 2 characters"),
   companyName: z.string().optional(),
+  acceptTerms: z.boolean().refine((value) => value === true, {
+    message: "You must agree to the Terms and Conditions",
+  }),
+  termsLinkClicked: z.boolean().refine((value) => value === true, {
+    message: "Please open and review the Terms and Conditions before continuing",
+  }),
+  acceptPrivacyPolicy: z.boolean().refine((value) => value === true, {
+    message: "You must accept the Privacy Policy",
+  }),
+  privacyPolicyLinkClicked: z.boolean().refine((value) => value === true, {
+    message: "Please open the Privacy Policy before continuing",
+  }),
 });
 
 type FormInput = z.infer<typeof formSchema>;
 
-const KNOWN_FIELD_KEYS = new Set<keyof FormInput>(["email", "fullName", "companyName"]);
+const KNOWN_FIELD_KEYS = new Set<keyof FormInput>([
+  "email",
+  "fullName",
+  "companyName",
+  "acceptTerms",
+  "termsLinkClicked",
+  "acceptPrivacyPolicy",
+  "privacyPolicyLinkClicked",
+]);
 
 export function GuestCheckoutForm({
   planType,
@@ -61,9 +82,44 @@ export function GuestCheckoutForm({
       email: initialEmail ?? "",
       fullName: initialFullName ?? "",
       companyName: initialCompanyName ?? "",
+      acceptTerms: false,
+      termsLinkClicked: false,
+      acceptPrivacyPolicy: false,
+      privacyPolicyLinkClicked: false,
     },
     mode: "onBlur",
   });
+
+  const acceptTerms = form.watch("acceptTerms");
+  const acceptPrivacyPolicy = form.watch("acceptPrivacyPolicy");
+
+  function handleAcceptTerms() {
+    form.setValue("acceptTerms", true, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
+    form.setValue("termsLinkClicked", true, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
+    void form.trigger(["acceptTerms", "termsLinkClicked"]);
+  }
+
+  function handleAcceptPrivacyPolicy() {
+    form.setValue("acceptPrivacyPolicy", true, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
+    form.setValue("privacyPolicyLinkClicked", true, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
+    void form.trigger(["acceptPrivacyPolicy", "privacyPolicyLinkClicked"]);
+  }
 
   async function onSubmit(values: FormInput) {
     setFormError("");
@@ -172,6 +228,28 @@ export function GuestCheckoutForm({
             No password required to continue. We&apos;ll use your email to send your receipt and
             help you access your workspace after payment.
           </p>
+
+          <LegalAcceptanceField
+            label="Terms and Conditions"
+            fileUrl="/terms-of-business.pdf"
+            accepted={acceptTerms ?? false}
+            onAccept={handleAcceptTerms}
+            error={
+              form.formState.errors.acceptTerms?.message ??
+              form.formState.errors.termsLinkClicked?.message
+            }
+          />
+
+          <LegalAcceptanceField
+            label="Privacy Policy"
+            fileUrl="/privacy-policy.pdf"
+            accepted={acceptPrivacyPolicy ?? false}
+            onAccept={handleAcceptPrivacyPolicy}
+            error={
+              form.formState.errors.acceptPrivacyPolicy?.message ??
+              form.formState.errors.privacyPolicyLinkClicked?.message
+            }
+          />
 
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? "Redirecting…" : "Proceed to payment"}
