@@ -36,11 +36,15 @@ const CONTENT_SECURITY_POLICY = [
   // secondary relay endpoint GA4 also attempts (cross-domain/consent-mode
   // signal forwarding) — any further tag added later inside the GTM
   // container (Ads conversion tracking, etc.) may need its own entry too.
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://assets.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com`,
+  // https://core.sanity-cdn.com/bridge.js is Sanity Studio's Presentation
+  // tool bridge script (the postMessage handshake between Studio and the
+  // preview iframe) — a different host than the *.sanity.io domains below.
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://assets.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com https://*.sanity-cdn.com`,
   "style-src 'self' 'unsafe-inline' https://assets.calendly.com",
   "img-src 'self' data: https:",
   "media-src 'self' https:",
-  "font-src 'self' data:",
+  // design-system-static.sanity.io serves Studio's own UI font (Inter).
+  "font-src 'self' data: https://*.sanity.io",
   // Sanity Studio (app/admin/studio, admin-gated) is bundled and served
   // from this same origin, but its runtime data/asset calls go to Sanity's
   // cloud — *.sanity.io covers api.sanity.io (content) and cdn.sanity.io
@@ -49,7 +53,12 @@ const CONTENT_SECURITY_POLICY = [
   // check for package updates (harmless if blocked, but noisy in the
   // console — allowed here to keep that quiet).
   "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com https://*.sanity.io wss://*.sanity.io https://sanity-cdn.com",
-  "frame-src https://calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com",
+  // 'self' — Sanity's Presentation tool (the live-preview split view in
+  // Studio) loads the actual site in an iframe on the same origin (e.g. to
+  // hit /api/draft-mode/enable) to power click-to-edit; without 'self'
+  // here that same-origin iframe load is blocked exactly like a
+  // third-party one would be.
+  "frame-src 'self' https://calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com",
   // GA4's own script spins up a background Web Worker via a blob: URL;
   // with no worker-src set this falls back to script-src, which doesn't
   // permit blob: workers — set explicitly rather than relying on fallback.
@@ -57,7 +66,11 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self' https://*.sibforms.com",
-  "frame-ancestors 'none'",
+  // 'self' (not 'none'): Studio framing the live site for preview (see
+  // frame-src above) only works if the framed page itself also permits
+  // being framed by its own origin. External sites still can't frame us
+  // either way — this only opens same-origin framing, not third-party.
+  "frame-ancestors 'self'",
 ].join("; ");
 
 const nextConfig: NextConfig = {
@@ -82,7 +95,12 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
           },
-          { key: "X-Frame-Options", value: "DENY" },
+          // SAMEORIGIN (not DENY): matches the CSP frame-ancestors 'self'
+          // change above, for browsers that honor X-Frame-Options over/
+          // instead of CSP's frame-ancestors. Sanity Studio's Presentation
+          // tool needs to frame the live site from the same origin;
+          // third-party sites still can't frame us either way.
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           {
             key: "Referrer-Policy",
