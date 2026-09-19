@@ -29,17 +29,24 @@ const isDev = process.env.NODE_ENV !== "production";
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   // Google Tag Manager (app/layout.tsx, site-wide) can load arbitrary tags
-  // from inside its container config without a code deploy — googletagmanager.com
-  // covers gtm.js and the noscript ns.html fallback, but any GA4/Ads tag added
-  // later inside the GTM container (e.g. google-analytics.com) will need its
-  // own CSP entry here too.
+  // from inside its container config without a code deploy — this is the
+  // GA4 Configuration tag added inside GTM's own console, which needed its
+  // own CSP entries beyond just googletagmanager.com: the actual pageview
+  // "collect" beacon goes to google-analytics.com, with www.google.com as a
+  // secondary relay endpoint GA4 also attempts (cross-domain/consent-mode
+  // signal forwarding) — any further tag added later inside the GTM
+  // container (Ads conversion tracking, etc.) may need its own entry too.
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://assets.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com`,
   "style-src 'self' 'unsafe-inline' https://assets.calendly.com",
   "img-src 'self' data: https:",
   "media-src 'self' https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com",
+  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com",
   "frame-src https://calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com",
+  // GA4's own script spins up a background Web Worker via a blob: URL;
+  // with no worker-src set this falls back to script-src, which doesn't
+  // permit blob: workers — set explicitly rather than relying on fallback.
+  "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self' https://*.sibforms.com",
