@@ -1,5 +1,6 @@
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
+import { GoogleTagManagerScripts } from "@/components/analytics/google-tag-manager";
 
 export default function LoginLayout({
   children,
@@ -8,6 +9,7 @@ export default function LoginLayout({
 }) {
   return (
     <>
+      <GoogleTagManagerScripts />
       <MarketingHeader />
       <main className="flex-1">{children}</main>
       <MarketingFooter />

@@ -503,7 +503,7 @@ export default async function HomePage() {
                   alt={name}
                   fill
                   sizes="160px"
-                  className="object-contain p-4 brightness-0"
+                  className="object-contain p-4 brightness-0 dark:invert"
                 />
               </div>
             ))}

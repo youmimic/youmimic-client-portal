@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SiteLogo } from "@/components/branding/site-logo";
 import { HEADER_HEIGHT } from "@/components/marketing/marketing-header-config";
+import { GoogleTagManagerScripts } from "@/components/analytics/google-tag-manager";
 
 // Deliberately minimal — no nav, no sign-in/get-started buttons, unlike
 // MarketingHeader. A checkout flow's own header should give the buyer
@@ -13,6 +14,7 @@ import { HEADER_HEIGHT } from "@/components/marketing/marketing-header-config";
 export default function CheckoutLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
+      <GoogleTagManagerScripts />
       <header
         className="sticky top-0 z-50 border-b border-white/10 backdrop-blur"
         style={{ backgroundColor: "rgba(51,51,51,0.95)" }}
