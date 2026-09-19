@@ -8,6 +8,26 @@ import { PricingSection } from "@/components/marketing/pricing-section";
 import { HowItLooksVideo } from "@/components/marketing/how-it-looks-video";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
+import { sanityFetch } from "@/sanity/lib/fetch";
+import { urlForImage } from "@/sanity/lib/image";
+
+type HomepageHero = {
+  heading: string;
+  ctaLabel: string;
+  backgroundImage: { asset?: { _ref: string } } | null;
+};
+
+const HOMEPAGE_HERO_QUERY = `*[_type == "homepageHero"][0]{heading, ctaLabel, backgroundImage}`;
+
+// Editable in Studio (/studio → Homepage Hero) once the CMS is configured
+// (see sanity/env.ts) — these are the hardcoded values every visitor saw
+// before the CMS existed, and what still renders if no document has been
+// published yet, or Sanity isn't configured in this environment.
+const DEFAULT_HERO = {
+  heading: "Your Business. Future Ready.",
+  ctaLabel: "Get Started",
+  backgroundImageUrl: "/hero-bg-new.avif",
+};
 
 export const metadata: Metadata = {
   title: "YouMimic | AI Video Avatars for Business Communication",
@@ -128,9 +148,18 @@ const clientLogos = [
 ];
 
 export default async function HomePage() {
-  const session = await auth();
+  const [session, hero] = await Promise.all([
+    auth(),
+    sanityFetch<HomepageHero>(HOMEPAGE_HERO_QUERY),
+  ]);
   const isLoggedIn = Boolean(session?.user);
   const getStartedHref = isLoggedIn ? "/dashboard" : "/signup";
+
+  const heroHeading = hero?.heading || DEFAULT_HERO.heading;
+  const heroCtaLabel = hero?.ctaLabel || DEFAULT_HERO.ctaLabel;
+  const heroBackgroundUrl = hero?.backgroundImage
+    ? urlForImage(hero.backgroundImage).width(1920).url()
+    : DEFAULT_HERO.backgroundImageUrl;
 
   return (
     <>
@@ -144,7 +173,7 @@ export default async function HomePage() {
               className="absolute inset-0 bg-cover bg-center bg-no-repeat"
               style={{
                 backgroundColor: "#333333",
-                backgroundImage: "url('/hero-bg-new.avif')",
+                backgroundImage: `url('${heroBackgroundUrl}')`,
               }}
             />
             <div
@@ -170,7 +199,7 @@ export default async function HomePage() {
                   textShadow: "0 2px 10px rgba(0,0,0,0.35)",
                 }}
               >
-                Your Business. Future Ready.
+                {heroHeading}
               </h1>
               <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                 <Button
@@ -182,7 +211,7 @@ export default async function HomePage() {
                     borderColor: "#4C9997",
                   }}
                 >
-                  <Link href={getStartedHref}>Get Started</Link>
+                  <Link href={getStartedHref}>{heroCtaLabel}</Link>
                 </Button>
               </div>
             </div>

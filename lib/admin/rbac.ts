@@ -158,3 +158,11 @@ export function canViewActivity(role: AdminRoleValue): boolean {
 export function canViewAnalytics(role: AdminRoleValue): boolean {
   return hasMinRole(role, "BILLING_ADMIN");
 }
+
+// Sanity Studio (app/studio) — editing live marketing site copy/images is a
+// real write capability unrelated to billing, so this follows the
+// ADMIN-minimum tier every other write surface in this file uses, not the
+// BILLING_ADMIN tier used for the read-only dashboards above.
+export function canManageContent(role: AdminRoleValue): boolean {
+  return hasMinRole(role, "ADMIN");
+}

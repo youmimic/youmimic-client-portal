@@ -41,7 +41,14 @@ const CONTENT_SECURITY_POLICY = [
   "img-src 'self' data: https:",
   "media-src 'self' https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com",
+  // Sanity Studio (app/admin/studio, admin-gated) is bundled and served
+  // from this same origin, but its runtime data/asset calls go to Sanity's
+  // cloud — *.sanity.io covers api.sanity.io (content) and cdn.sanity.io
+  // (images), wss:// is its realtime collaborative-editing connection, and
+  // sanity-cdn.com is a separate domain Studio pings in the background to
+  // check for package updates (harmless if blocked, but noisy in the
+  // console — allowed here to keep that quiet).
+  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com https://*.sanity.io wss://*.sanity.io https://sanity-cdn.com",
   "frame-src https://calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com",
   // GA4's own script spins up a background Web Worker via a blob: URL;
   // with no worker-src set this falls back to script-src, which doesn't

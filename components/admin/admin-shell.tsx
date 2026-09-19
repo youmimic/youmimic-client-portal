@@ -10,6 +10,7 @@ import {
   Building2,
   CalendarDays,
   CreditCard,
+  FileText,
   LayoutDashboard,
   Menu,
   ShieldCheck,
@@ -31,6 +32,12 @@ const navItems = [
   { href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard, exact: false },
   { href: "/admin/activity", label: "Activity", icon: Activity, exact: false },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3, exact: false },
+  // /admin/studio (Sanity Studio) lives outside the app/(admin) route group
+  // — it's a full-viewport tool that gates itself (see
+  // app/admin/studio/[[...tool]]/page.tsx) rather than inheriting this
+  // shell's sidebar layout, but it's still linked from here so it's
+  // reachable from the admin portal.
+  { href: "/admin/studio", label: "Content", icon: FileText, exact: false },
 ];
 
 type SidebarContentProps = {
