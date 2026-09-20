@@ -84,6 +84,12 @@ const nextConfig: NextConfig = {
     dangerouslyAllowSVG: true,
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    // Homepage logo grids render Sanity-hosted images through next/image
+    // (app/(marketing)/page.tsx); next/image refuses any host not listed
+    // here. Scoped to Sanity's image path only, not the whole CDN host.
+    remotePatterns: [
+      { protocol: "https", hostname: "cdn.sanity.io", pathname: "/images/**" },
+    ],
   },
   async headers() {
     return [
