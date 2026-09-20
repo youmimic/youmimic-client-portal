@@ -15,6 +15,7 @@ export const homepageHero = defineType({
       name: "heading",
       title: "Heading",
       type: "string",
+      initialValue: "Your Business. Future Ready.",
       validation: (rule) => rule.required(),
     }),
     defineField({

@@ -1,3 +1,17 @@
 import { homepageHero } from "./homepageHero";
+import { homepageIntro } from "./homepageIntro";
+import { homepageHowItWorks } from "./homepageHowItWorks";
+import { homepageHowItLooks } from "./homepageHowItLooks";
+import { homepageTestimonialsIntro } from "./homepageTestimonialsIntro";
+import { homepageServices } from "./homepageServices";
+import { homepageFeaturedAt } from "./homepageFeaturedAt";
 
-export const schemaTypes = [homepageHero];
+export const schemaTypes = [
+  homepageHero,
+  homepageIntro,
+  homepageHowItWorks,
+  homepageHowItLooks,
+  homepageTestimonialsIntro,
+  homepageServices,
+  homepageFeaturedAt,
+];

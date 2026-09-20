@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import NextImage from "next/image";
 import { auth } from "@/auth";
-import { Quote, UserSquare2, Bot, Presentation, User } from "lucide-react";
+import { Quote, UserSquare2, Bot, Presentation, User, ImageOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PricingSection } from "@/components/marketing/pricing-section";
 import { HowItLooksVideo } from "@/components/marketing/how-it-looks-video";
@@ -11,22 +11,169 @@ import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 import { sanityFetch } from "@/sanity/lib/fetch";
 import { urlForImage } from "@/sanity/lib/image";
 
-type HomepageHero = {
-  heading: string;
-  ctaLabel: string;
-  backgroundImage: { asset?: { _ref: string } } | null;
+type SanityImageRef = { asset?: { _ref: string } } | null;
+
+type HeadingIntro = {
+  headingPrefix: string;
+  headingAccent: string;
+  subheading: string;
 };
 
-const HOMEPAGE_HERO_QUERY = `*[_type == "homepageHero"][0]{heading, ctaLabel, backgroundImage}`;
+type TestimonialItem = {
+  quote: string;
+  name: string;
+  role: string;
+  company: string;
+};
 
-// Editable in Studio (/studio → Homepage Hero) once the CMS is configured
-// (see sanity/env.ts) — these are the hardcoded values every visitor saw
-// before the CMS existed, and what still renders if no document has been
-// published yet, or Sanity isn't configured in this environment.
-const DEFAULT_HERO = {
-  heading: "Your Business. Future Ready.",
-  ctaLabel: "Get Started",
-  backgroundImageUrl: "/hero-bg-new.avif",
+type StepItem = {
+  title: string;
+  body: string;
+};
+
+type ClientLogoItem = {
+  name: string;
+  logo: SanityImageRef;
+};
+
+type ServiceItem = {
+  title: string;
+  body: string;
+  image: SanityImageRef;
+};
+
+type FeaturedAtItem = {
+  name: string;
+  logo: SanityImageRef;
+};
+
+type HomepageContent = {
+  hero: {
+    heading: string;
+    ctaLabel: string;
+    backgroundImage: SanityImageRef;
+  } | null;
+  intro: {
+    headingPrefix: string;
+    headingAccent: string;
+    body: string;
+    image: SanityImageRef;
+    ctaLabel: string;
+  } | null;
+  howItWorks: (HeadingIntro & { steps: StepItem[]; ctaLabel: string }) | null;
+  howItLooks: HeadingIntro | null;
+  testimonialsIntro:
+    | (HeadingIntro & { items: TestimonialItem[]; logos: ClientLogoItem[] })
+    | null;
+  services:
+    | { heading: string; subheading: string; items: ServiceItem[]; ctaLabel: string }
+    | null;
+  featuredAt: { heading: string; items: FeaturedAtItem[] } | null;
+};
+
+// One combined GROQ query — a single round trip to Sanity for every
+// editable piece of this page, rather than five separate fetches.
+const HOMEPAGE_CONTENT_QUERY = `{
+  "hero": *[_type == "homepageHero"][0]{heading, ctaLabel, backgroundImage},
+  "intro": *[_type == "homepageIntro"][0]{headingPrefix, headingAccent, body, image, ctaLabel},
+  "howItWorks": *[_type == "homepageHowItWorks"][0]{headingPrefix, headingAccent, subheading, steps[]{title, body}, ctaLabel},
+  "howItLooks": *[_type == "homepageHowItLooks"][0]{headingPrefix, headingAccent, subheading},
+  "testimonialsIntro": *[_type == "homepageTestimonialsIntro"][0]{headingPrefix, headingAccent, subheading, items[]{quote, name, role, company}, logos[]{name, logo}},
+  "services": *[_type == "homepageServices"][0]{heading, subheading, items[]{title, body, image}, ctaLabel},
+  "featuredAt": *[_type == "homepageFeaturedAt"][0]{heading, items[]{name, logo}}
+}`;
+
+// Editable in Studio (/admin/studio) once each document is published —
+// these are the exact hardcoded values every visitor saw before the CMS
+// existed, and what still renders per-section if that document hasn't been
+// published yet, or Sanity isn't configured in this environment. Each
+// section falls back independently, so publishing just the hero doesn't
+// require also publishing the others.
+const DEFAULTS = {
+  hero: {
+    heading: "Your Business. Future Ready.",
+    ctaLabel: "Get Started",
+    backgroundImageUrl: "/hero-bg-new.avif",
+  },
+  intro: {
+    headingPrefix: "We create your",
+    headingAccent: "digital twin",
+    body: "One capture. Infinite communication. It speaks, looks, and sounds exactly like you, training teams, updating clients, and pitching investors in 175+ languages, at 4K quality, anywhere, anytime.",
+    // No imageUrl fallback, deliberately — an admin must publish a real
+    // image in Studio before this section shows one; the site never
+    // silently substitutes the old hardcoded photo, which would leave
+    // Studio (empty field) and the live site (an image anyway) telling two
+    // different stories.
+    ctaLabel: "Learn More",
+  },
+  howItWorks: {
+    headingPrefix: "How It",
+    headingAccent: "Works",
+    subheading: "We create a photorealistic digital twin of your staff.",
+    steps: [
+      {
+        title: "Choose your Plan",
+        body: "Choose your plan. Our team visits your workplace, anywhere in Australia. 30 minutes per person, up to 10 staff in one day.",
+      },
+      {
+        title: "We Build Your Avatar",
+        body: "We create and train your avatar. No technical setup required from your team.",
+      },
+      {
+        title: "Your Avatar Is Ready",
+        body: "We deploy your avatar and give you access to our platform. Your team can create business content on demand, in 175+ languages.",
+      },
+    ],
+    ctaLabel: "Get Started",
+  },
+  howItLooks: {
+    headingPrefix: "How It",
+    headingAccent: "Looks",
+    subheading:
+      "We create a photorealistic digital twin of your team, capable of producing 4K-quality video content from a simple text prompt, no camera, no studio, no reshoots.",
+  },
+  testimonialsIntro: {
+    headingPrefix: "Trusted by",
+    headingAccent: "Our Clients",
+    subheading: "Real feedback from the teams already using their digital twins.",
+    // Plain text, no image involved — same fallback pattern as every other
+    // text field on this page (unlike homepageIntro's photo).
+    items: [
+      {
+        quote:
+          "You Mimic AI are amazing! From capture session to onboarding and support. The quality of my avatar is mind blowing!",
+        name: "Patrick Lang",
+        role: "Realtor",
+        company: "Belle Property Australia",
+      },
+      {
+        quote:
+          "You Mimic AI is a truly forward-thinking partner for us. Hyper-realistic avatars that power our Sales Kick-offs, Town Halls and Customer Presentations. It saves us time.",
+        name: "Joel Starkey",
+        role: "Sales Enablement",
+        company: "DXC Technology",
+      },
+      {
+        quote:
+          "You Mimic AI are the gold standard in avatar captures and set the benchmark for quality, ethics and responsible AI.",
+        name: "Dr. Catherine Ball",
+        role: "Corporate Speaker",
+        company: "Xprize Board Member",
+      },
+    ],
+  },
+  services: {
+    heading: "Our Services",
+    subheading:
+      "We capture your digital twin at your office, train and deploy it. Your team can create 4K content with a simple text prompt, in any language, on demand.",
+    // No items fallback — each service needs an image, same "no
+    // misleading fallback" reasoning as everywhere else on this page.
+    ctaLabel: "Get Started",
+  },
+  featuredAt: {
+    heading: "Featured At",
+    // No items fallback — logos, same reasoning as above.
+  },
 };
 
 export const metadata: Metadata = {
@@ -35,131 +182,79 @@ export const metadata: Metadata = {
     "Turn one recording into unlimited video content. YouMimic builds photorealistic AI avatars and digital twins that deliver your message in 175+ languages, at scale.",
 };
 
-const howItWorks = [
-  {
-    n: "1",
-    title: "Choose your Plan",
-    body: "Choose your plan. Our team visits your workplace, anywhere in Australia. 30 minutes per person, up to 10 staff in one day.",
-  },
-  {
-    n: "2",
-    title: "We Build Your Avatar",
-    body: "We create and train your avatar. No technical setup required from your team.",
-  },
-  {
-    n: "3",
-    title: "Your Avatar Is Ready",
-    body: "We deploy your avatar and give you access to our platform. Your team can create business content on demand, in 175+ languages.",
-  },
-];
-
-const testimonials = [
-  {
-    quote:
-      "You Mimic AI are amazing! From capture session to onboarding and support. The quality of my avatar is mind blowing!",
-    name: "Patrick Lang",
-    role: "Realtor",
-    company: "Belle Property Australia",
-  },
-  {
-    quote:
-      "You Mimic AI is a truly forward-thinking partner for us. Hyper-realistic avatars that power our Sales Kick-offs, Town Halls and Customer Presentations. It saves us time.",
-    name: "Joel Starkey",
-    role: "Sales Enablement",
-    company: "DXC Technology",
-  },
-  {
-    quote:
-      "You Mimic AI are the gold standard in avatar captures and set the benchmark for quality, ethics and responsible AI.",
-    name: "Dr. Catherine Ball",
-    role: "Corporate Speaker",
-    company: "Xprize Board Member",
-  },
-];
-
-const services = [
-  {
-    n: "01",
-    icon: UserSquare2,
-    title: "Digital Twins",
-    image: "/digital-twins.avif",
-    body: "Photorealistic digital twins of your people, from executives and subject-matter experts to entire teams. Generate training, sales, internal communications, and customer content on demand, refreshed anytime without booking a new recording session.",
-  },
-  {
-    n: "02",
-    icon: Bot,
-    title: "Interactive Avatars",
-    image: "/interactive avatars.avif",
-    body: "Turn your digital twins into interactive AI employees, trained on your approved business knowledge. They can answer questions, onboard staff, support customers, and deliver information around the clock in most languages.",
-  },
-  {
-    n: "03",
-    icon: Presentation,
-    title: "Holograms",
-    image: "/holograms.avif",
-    body: "Life-size digital presenters for malls, airports, terminals, retail, and events, delivering branded content, advertising, and customer engagement around the clock, without needing on-site staff to keep them running.",
-  },
-];
-
-// Uniform brightness-0 silhouette (light bg-muted background).
-const featuredAt = [
-  {
-    name: "SXSW Sydney",
-    src: "/Where you've seen us/Featured At/SXSW_Sydney_2023_Hero.png",
-  },
-  {
-    name: "TEDx Hobart",
-    src: "/Where you've seen us/Featured At/tedxHobart.png",
-  },
-  {
-    name: "Governance Institute of Australia",
-    src: "/Where you've seen us/Featured At/Govenerae Instiatute of Australia.png",
-  },
-  {
-    name: "EdCAT 2026",
-    src: "/Where you've seen us/Featured At/edcat.png",
-  },
-  {
-    name: "Fortune 500 Innovation Forum",
-    src: "/Where you've seen us/Featured At/fortune 500 Innovation forum log.png",
-  },
-];
-
-// Curated 10, two rows of five at lg:grid-cols-5 below.
-const clientLogos = [
-  // Line 1
-  { name: "Belle Property Australia", src: "/Client Logos/Bell Property.png" },
-  { name: "Esri Australia", src: "/Client Logos/Esri_Australia_Logo.png" },
-  {
-    name: "DXC Technology",
-    src: "/Client Logos/DXC-Veritcal-Tagline-Full-Color-Dark.png",
-  },
-  {
-    name: "Adam Spencer",
-    src: "/Client Logos/Adam Spencer - Corporate Speaker.png",
-  },
-  { name: "4 Front Services", src: "/Client Logos/forefront.png" },
-  // Line 2
-  { name: "Concinnity", src: "/Client Logos/Concinnity_45@4x.webp" },
-  { name: "BNAA", src: "/Client Logos/bnaa-logo.svg" },
-  { name: "SSAA", src: "/Client Logos/ssaa-logo.png" },
-  { name: "Corporate Speakers Australia", src: "/Client Logos/CSA-Logo-Transparent.png" },
-  { name: "Ette Sydney", src: "/Client Logos/ette+Logo+Yellow.webp" },
-];
+// Fixed order matching the original 3 services (Digital Twins, Interactive
+// Avatars, Holograms) — see homepageServices.ts's comment for why icons
+// aren't a CMS field.
+const SERVICE_ICONS = [UserSquare2, Bot, Presentation];
 
 export default async function HomePage() {
-  const [session, hero] = await Promise.all([
+  const [session, content] = await Promise.all([
     auth(),
-    sanityFetch<HomepageHero>(HOMEPAGE_HERO_QUERY),
+    sanityFetch<HomepageContent>(HOMEPAGE_CONTENT_QUERY),
   ]);
   const isLoggedIn = Boolean(session?.user);
   const getStartedHref = isLoggedIn ? "/dashboard" : "/signup";
 
-  const heroHeading = hero?.heading || DEFAULT_HERO.heading;
-  const heroCtaLabel = hero?.ctaLabel || DEFAULT_HERO.ctaLabel;
+  const hero = content?.hero;
+  const heroHeading = hero?.heading || DEFAULTS.hero.heading;
+  const heroCtaLabel = hero?.ctaLabel || DEFAULTS.hero.ctaLabel;
   const heroBackgroundUrl = hero?.backgroundImage
     ? urlForImage(hero.backgroundImage).width(1920).url()
-    : DEFAULT_HERO.backgroundImageUrl;
+    : DEFAULTS.hero.backgroundImageUrl;
+
+  const intro = content?.intro;
+  const introHeadingPrefix = intro?.headingPrefix || DEFAULTS.intro.headingPrefix;
+  const introHeadingAccent = intro?.headingAccent || DEFAULTS.intro.headingAccent;
+  const introBody = intro?.body || DEFAULTS.intro.body;
+  // No local-file fallback here (see DEFAULTS.intro's comment) — null means
+  // "show the placeholder" until a real image is published in Studio.
+  const introImageUrl = intro?.image ? urlForImage(intro.image).width(1200).url() : null;
+  const introCtaLabel = intro?.ctaLabel || DEFAULTS.intro.ctaLabel;
+
+  const howItWorksIntro = content?.howItWorks;
+  const howItWorksPrefix = howItWorksIntro?.headingPrefix || DEFAULTS.howItWorks.headingPrefix;
+  const howItWorksAccent = howItWorksIntro?.headingAccent || DEFAULTS.howItWorks.headingAccent;
+  const howItWorksSubheading = howItWorksIntro?.subheading || DEFAULTS.howItWorks.subheading;
+  const howItWorksSteps =
+    howItWorksIntro?.steps && howItWorksIntro.steps.length > 0
+      ? howItWorksIntro.steps
+      : DEFAULTS.howItWorks.steps;
+  const howItWorksCtaLabel = howItWorksIntro?.ctaLabel || DEFAULTS.howItWorks.ctaLabel;
+
+  const howItLooksIntro = content?.howItLooks;
+  const howItLooksPrefix = howItLooksIntro?.headingPrefix || DEFAULTS.howItLooks.headingPrefix;
+  const howItLooksAccent = howItLooksIntro?.headingAccent || DEFAULTS.howItLooks.headingAccent;
+  const howItLooksSubheading = howItLooksIntro?.subheading || DEFAULTS.howItLooks.subheading;
+
+  const testimonialsIntro = content?.testimonialsIntro;
+  const testimonialsPrefix =
+    testimonialsIntro?.headingPrefix || DEFAULTS.testimonialsIntro.headingPrefix;
+  const testimonialsAccent =
+    testimonialsIntro?.headingAccent || DEFAULTS.testimonialsIntro.headingAccent;
+  const testimonialsSubheading =
+    testimonialsIntro?.subheading || DEFAULTS.testimonialsIntro.subheading;
+  const testimonialsItems =
+    testimonialsIntro?.items && testimonialsIntro.items.length > 0
+      ? testimonialsIntro.items
+      : DEFAULTS.testimonialsIntro.items;
+  // No code fallback here — same "no misleading fallback" reasoning as the
+  // Digital Twin Intro's image. If no logos are published, the grid just
+  // doesn't render (see the conditional below) instead of silently
+  // continuing to show the old hardcoded logo files.
+  const clientLogoItems = testimonialsIntro?.logos ?? [];
+
+  const servicesContent = content?.services;
+  const servicesHeading = servicesContent?.heading || DEFAULTS.services.heading;
+  const servicesSubheading = servicesContent?.subheading || DEFAULTS.services.subheading;
+  const servicesCtaLabel = servicesContent?.ctaLabel || DEFAULTS.services.ctaLabel;
+  // No fallback — each service needs an image (see DEFAULTS.services'
+  // comment), so an empty/missing document just hides the whole grid.
+  const servicesItems = servicesContent?.items ?? [];
+
+  const featuredAtContent = content?.featuredAt;
+  const featuredAtHeading = featuredAtContent?.heading || DEFAULTS.featuredAt.heading;
+  // No fallback — logos, same reasoning as servicesItems above.
+  const featuredAtItems = featuredAtContent?.items ?? [];
 
   return (
     <>
@@ -235,14 +330,11 @@ export default async function HomePage() {
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div className="text-center lg:text-left">
               <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
-                We create your{" "}
-                <span style={{ color: "#4C9997" }}>digital twin</span>.
+                {introHeadingPrefix}{" "}
+                <span style={{ color: "#4C9997" }}>{introHeadingAccent}</span>.
               </h2>
               <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground lg:mx-0">
-                One capture. Infinite communication. It speaks, looks, and
-                sounds exactly like you, training teams, updating clients, and
-                pitching investors in 175+ languages, at 4K quality, anywhere,
-                anytime.
+                {introBody}
               </p>
               <div className="mt-8 flex justify-center lg:justify-start">
                 <Button
@@ -250,16 +342,28 @@ export default async function HomePage() {
                   variant="outline"
                   className="h-11 px-6 text-sm font-medium"
                 >
-                  <Link href="/solutions">Learn More</Link>
+                  <Link href="/solutions">{introCtaLabel}</Link>
                 </Button>
               </div>
             </div>
 
             <div className="mx-auto w-full max-w-sm lg:max-w-md">
-              <div
-                className="aspect-21/9 w-full overflow-hidden rounded-xl bg-cover bg-center"
-                style={{ backgroundImage: "url('/digital-twin-photo.avif')" }}
-              />
+              {introImageUrl ? (
+                <div
+                  className="aspect-21/9 w-full overflow-hidden rounded-xl bg-cover bg-center"
+                  style={{ backgroundImage: `url('${introImageUrl}')` }}
+                />
+              ) : (
+                // No fallback to a local file here on purpose (see
+                // DEFAULTS.intro's comment) — an admin must publish a real
+                // image in Studio before this section shows one.
+                <div className="flex aspect-21/9 w-full items-center justify-center rounded-xl border border-dashed border-border bg-muted">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <ImageOff className="size-6" aria-hidden="true" />
+                    <p className="text-xs">Image not set in Studio</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -284,18 +388,18 @@ export default async function HomePage() {
         <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-10 text-center">
             <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
-              How It <span style={{ color: "#4C9997" }}>Works</span>
+              {howItWorksPrefix} <span style={{ color: "#4C9997" }}>{howItWorksAccent}</span>
             </h2>
             <p className="mx-auto mt-4 max-w-md text-lg text-muted-foreground">
-              We create a photorealistic digital twin of your staff.
+              {howItWorksSubheading}
             </p>
           </div>
           <div className="grid gap-10 sm:grid-cols-3">
-            {howItWorks.map(({ n, title, body }, i) => (
-              <ScrollReveal key={n} delay={i * 200}>
+            {howItWorksSteps.map(({ title, body }, i) => (
+              <ScrollReveal key={title} delay={i * 200}>
                 <div className="relative text-center">
                   <p className="text-base font-medium text-muted-foreground">
-                    Step {n}
+                    Step {i + 1}
                   </p>
                   <h3
                     className="mt-1 mb-2 text-2xl font-bold tracking-tight sm:text-3xl"
@@ -310,7 +414,7 @@ export default async function HomePage() {
           </div>
           <div className="mt-12 flex justify-center">
             <Button asChild className="h-12 px-8 text-base font-medium">
-              <Link href={getStartedHref}>Get Started</Link>
+              <Link href={getStartedHref}>{howItWorksCtaLabel}</Link>
             </Button>
           </div>
         </div>
@@ -319,12 +423,10 @@ export default async function HomePage() {
       <section className="py-16 sm:py-20">
         <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
           <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
-            How It <span style={{ color: "#4C9997" }}>Looks</span>
+            {howItLooksPrefix} <span style={{ color: "#4C9997" }}>{howItLooksAccent}</span>
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            We create a photorealistic digital twin of your team, capable of
-            producing 4K-quality video content from a simple text prompt, no
-            camera, no studio, no reshoots.
+            {howItLooksSubheading}
           </p>
           <HowItLooksVideo
             src="/how-it-looks.mp4"
@@ -355,17 +457,17 @@ export default async function HomePage() {
               className="text-4xl font-bold tracking-tighter sm:text-5xl lg:text-6xl"
               style={{ color: "#FFFFFF" }}
             >
-              Trusted by <span style={{ color: "#4C9997" }}>Our Clients</span>
+              {testimonialsPrefix} <span style={{ color: "#4C9997" }}>{testimonialsAccent}</span>
             </h2>
             <p
               className="mx-auto mt-4 max-w-md text-lg"
               style={{ color: "rgba(255,255,255,0.7)" }}
             >
-              Real feedback from the teams already using their digital twins.
+              {testimonialsSubheading}
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {testimonials.map(({ quote, name, role, company }) => (
+            {testimonialsItems.map(({ quote, name, role, company }) => (
               <div
                 key={name}
                 className="relative flex flex-col overflow-hidden rounded-xl bg-white/10 p-6 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1.5 hover:bg-white/15"
@@ -410,36 +512,40 @@ export default async function HomePage() {
             ))}
           </div>
 
-          <div className="mt-20">
-            {/* 5 columns at lg: — exactly matches the 10-logo curated list
-                above, forming the requested two rows of five. */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {/* brightness-0 invert (not grayscale/grayscale invert) — the
-                  same "force solid white" technique already used for the
-                  header/footer icon on this same dark background (see
-                  components/branding/site-logo.tsx). Every logo, regardless
-                  of its own original colors, becomes a plain white
-                  silhouette, so the old per-logo invert flag (needed to fix
-                  individual dark-on-transparent logos before) is no longer
-                  meaningful — everything gets the identical treatment now.
-                  p-4 (down from p-8) makes the visible logo noticeably
-                  larger within the same box. */}
-              {clientLogos.map(({ name, src }) => (
-                <div
-                  key={src}
-                  className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-[160px] items-center justify-center"
-                >
-                  <NextImage
-                    src={src}
-                    alt={name}
-                    fill
-                    sizes="160px"
-                    className="object-contain p-4 brightness-0 invert"
-                  />
-                </div>
-              ))}
+          {clientLogoItems.length > 0 && (
+            <div className="mt-20">
+              {/* 5 columns at lg: forms two rows of five for a 10-logo list;
+                  fewer/more logos just reflow normally. No fallback to the
+                  old hardcoded logo files if this array is empty (see
+                  clientLogoItems above) — the whole block just doesn't
+                  render rather than showing logos Studio can't reflect. */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+                {/* brightness-0 invert (not grayscale/grayscale invert) — the
+                    same "force solid white" technique already used for the
+                    header/footer icon on this same dark background (see
+                    components/branding/site-logo.tsx). Every logo, regardless
+                    of its own original colors, becomes a plain white
+                    silhouette. p-4 makes the visible logo noticeably larger
+                    within the same box. */}
+                {clientLogoItems
+                  .filter((item) => item.logo)
+                  .map(({ name, logo }) => (
+                    <div
+                      key={name}
+                      className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-40 items-center justify-center"
+                    >
+                      <NextImage
+                        src={urlForImage(logo!).width(320).url()}
+                        alt={name}
+                        fill
+                        sizes="160px"
+                        className="object-contain p-4 brightness-0 invert"
+                      />
+                    </div>
+                  ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </section>
 
@@ -459,83 +565,96 @@ export default async function HomePage() {
         <div className="relative z-10 mx-auto w-full px-4 sm:px-6 lg:w-[90vw] lg:px-0">
           <div className="mb-16 text-center">
             <h2 className="text-4xl font-bold tracking-tighter text-foreground sm:text-5xl lg:text-6xl">
-              Our Services
+              {servicesHeading}
             </h2>
             <p className="mx-auto mt-4 max-w-lg text-lg text-muted-foreground">
-              We capture your digital twin at your office, train and deploy it.
-              Your team can create 4K content with a simple text prompt, in any
-              language, on demand.
+              {servicesSubheading}
             </p>
           </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {services.map(({ n, icon: Icon, title, image, body }, i) => (
-              <ScrollReveal key={title} delay={i * 100}>
-                <div className="group relative overflow-hidden rounded-xl border border-border bg-card/60 backdrop-blur-sm transition-shadow duration-300 hover:shadow-lg">
-                  {/* Per-card glow, echoing the section's own ambient
-                      radial gradient at a smaller scale, same technique
-                      used for the testimonial cards. Visible through the
-                      card's translucent background in the content area
-                      below the (opaque) image. */}
-                  <div
-                    className="pointer-events-none absolute inset-0"
-                    aria-hidden="true"
-                    style={{
-                      background:
-                        "radial-gradient(ellipse at 100% 0%, rgba(76,153,151,0.14) 0%, transparent 55%)",
-                    }}
-                  />
-                  <div className="relative z-10 aspect-video w-full overflow-hidden">
-                    <div
-                      className="h-full w-full bg-cover bg-center transition-transform duration-500 ease-out group-hover:scale-105"
-                      style={{ backgroundImage: `url('${image}')` }}
-                    />
-                    <span className="absolute left-4 top-4 flex size-9 items-center justify-center rounded-full bg-black/50 text-sm font-semibold text-white backdrop-blur-sm">
-                      {n}
-                    </span>
-                  </div>
-                  <div className="relative z-10 p-6">
-                    <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
-                      <Icon className="size-5 text-accent" />
-                    </div>
-                    <h3 className="mb-2 text-sm font-semibold text-foreground">
-                      {title}
-                    </h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {body}
-                    </p>
-                  </div>
-                </div>
-              </ScrollReveal>
-            ))}
-          </div>
-          <div className="mt-10 flex justify-center">
-            <Button asChild className="h-12 px-8 text-base font-medium">
-              <Link href={getStartedHref}>Get Started</Link>
-            </Button>
-          </div>
+          {servicesItems.length > 0 && (
+            <>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {servicesItems.map(({ title, body, image }, i) => {
+                  // Icon stays fixed by position rather than a CMS field —
+                  // see homepageServices.ts's comment for why.
+                  const Icon = SERVICE_ICONS[i % SERVICE_ICONS.length];
+                  return (
+                    <ScrollReveal key={title} delay={i * 100}>
+                      <div className="group relative overflow-hidden rounded-xl border border-border bg-card/60 backdrop-blur-sm transition-shadow duration-300 hover:shadow-lg">
+                        {/* Per-card glow, echoing the section's own ambient
+                            radial gradient at a smaller scale, same technique
+                            used for the testimonial cards. Visible through the
+                            card's translucent background in the content area
+                            below the (opaque) image. */}
+                        <div
+                          className="pointer-events-none absolute inset-0"
+                          aria-hidden="true"
+                          style={{
+                            background:
+                              "radial-gradient(ellipse at 100% 0%, rgba(76,153,151,0.14) 0%, transparent 55%)",
+                          }}
+                        />
+                        <div className="relative z-10 aspect-video w-full overflow-hidden">
+                          <div
+                            className="h-full w-full bg-cover bg-center transition-transform duration-500 ease-out group-hover:scale-105"
+                            style={{
+                              backgroundImage: image
+                                ? `url('${urlForImage(image).width(800).url()}')`
+                                : undefined,
+                            }}
+                          />
+                          <span className="absolute left-4 top-4 flex size-9 items-center justify-center rounded-full bg-black/50 text-sm font-semibold text-white backdrop-blur-sm">
+                            {String(i + 1).padStart(2, "0")}
+                          </span>
+                        </div>
+                        <div className="relative z-10 p-6">
+                          <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-accent/20 bg-accent/10">
+                            <Icon className="size-5 text-accent" />
+                          </div>
+                          <h3 className="mb-2 text-sm font-semibold text-foreground">
+                            {title}
+                          </h3>
+                          <p className="text-sm leading-relaxed text-muted-foreground">
+                            {body}
+                          </p>
+                        </div>
+                      </div>
+                    </ScrollReveal>
+                  );
+                })}
+              </div>
+              <div className="mt-10 flex justify-center">
+                <Button asChild className="h-12 px-8 text-base font-medium">
+                  <Link href={getStartedHref}>{servicesCtaLabel}</Link>
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </section>
 
       <section className="bg-muted py-12 sm:py-16">
         <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Featured At
+            {featuredAtHeading}
           </p>
           <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            {featuredAt.map(({ name, src }) => (
-              <div
-                key={src}
-                className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-[160px] items-center justify-center"
-              >
-                <NextImage
-                  src={src}
-                  alt={name}
-                  fill
-                  sizes="160px"
-                  className="object-contain p-4 brightness-0 dark:invert"
-                />
-              </div>
-            ))}
+            {featuredAtItems
+              .filter((item) => item.logo)
+              .map(({ name, logo }) => (
+                <div
+                  key={name}
+                  className="relative mx-auto flex aspect-[179.57/167.13] w-full max-w-40 items-center justify-center"
+                >
+                  <NextImage
+                    src={urlForImage(logo!).width(320).url()}
+                    alt={name}
+                    fill
+                    sizes="160px"
+                    className="object-contain p-4 brightness-0 dark:invert"
+                  />
+                </div>
+              ))}
           </div>
         </div>
       </section>

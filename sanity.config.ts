@@ -6,10 +6,18 @@ import { apiVersion, dataset, projectId } from "@/sanity/env";
 import { schemaTypes } from "@/sanity/schemaTypes";
 
 // Desk structure lists exactly one item per singleton document rather than
-// the default document-type list — there is only ever one Homepage Hero
-// document, so an editor should never see a generic "create new" list for
-// it.
-const singletonTypes = new Set(["homepageHero"]);
+// the default document-type list — there is only ever one of each of these
+// per site, so an editor should never see a generic "create new" list for
+// any of them.
+const singletonTypes = new Set([
+  "homepageHero",
+  "homepageIntro",
+  "homepageHowItWorks",
+  "homepageHowItLooks",
+  "homepageTestimonialsIntro",
+  "homepageServices",
+  "homepageFeaturedAt",
+]);
 
 export default defineConfig({
   name: "youmimic",
@@ -34,6 +42,40 @@ export default defineConfig({
               .title("Homepage Hero")
               .id("homepageHero")
               .child(S.document().schemaType("homepageHero").documentId("homepageHero")),
+            S.listItem()
+              .title("Homepage: Digital Twin Intro")
+              .id("homepageIntro")
+              .child(S.document().schemaType("homepageIntro").documentId("homepageIntro")),
+            S.listItem()
+              .title("Homepage: How It Works")
+              .id("homepageHowItWorks")
+              .child(
+                S.document().schemaType("homepageHowItWorks").documentId("homepageHowItWorks"),
+              ),
+            S.listItem()
+              .title("Homepage: How It Looks")
+              .id("homepageHowItLooks")
+              .child(
+                S.document().schemaType("homepageHowItLooks").documentId("homepageHowItLooks"),
+              ),
+            S.listItem()
+              .title("Homepage: Testimonials Intro")
+              .id("homepageTestimonialsIntro")
+              .child(
+                S.document()
+                  .schemaType("homepageTestimonialsIntro")
+                  .documentId("homepageTestimonialsIntro"),
+              ),
+            S.listItem()
+              .title("Homepage: Services")
+              .id("homepageServices")
+              .child(S.document().schemaType("homepageServices").documentId("homepageServices")),
+            S.listItem()
+              .title("Homepage: Featured At")
+              .id("homepageFeaturedAt")
+              .child(
+                S.document().schemaType("homepageFeaturedAt").documentId("homepageFeaturedAt"),
+              ),
           ]),
     }),
     presentationTool({
