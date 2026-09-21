@@ -72,7 +72,8 @@ export const proxy = auth(async (req) => {
     // pre-migration tokens which are treated as false (fail closed).
     const requiresSubscription =
       matchesPrefix(pathname, "/dashboard/bookings") ||
-      /^\/dashboard\/avatars\/[^/]+\/studio(\/|$)/.test(pathname);
+      /^\/dashboard\/avatars\/[^/]+\/studio(\/|$)/.test(pathname) ||
+      matchesPrefix(pathname, "/dashboard/videos/projects");
 
     if (requiresSubscription && !user.hasActiveSubscription) {
       const url = new URL("/dashboard/billing", nextUrl.origin);

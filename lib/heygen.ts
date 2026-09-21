@@ -56,10 +56,10 @@ function heygenApiKey(): string {
 // 8s timeout on every call — several of these run from page render paths
 // (see app/(dashboard)/dashboard/avatars/page.tsx), so a slow/hanging
 // HeyGen request must never be allowed to stall a page indefinitely.
-async function heygenFetchRaw<T>(path: string, init?: RequestInit): Promise<T> {
+async function heygenFetchRaw<T>(path: string, init?: RequestInit, timeoutMs = 8000): Promise<T> {
   const apiKey = heygenApiKey();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(`${HEYGEN_API_BASE}${path}`, {
@@ -85,8 +85,8 @@ async function heygenFetchRaw<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
-async function heygenFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const json = await heygenFetchRaw<{ data?: T } | null>(path, init);
+async function heygenFetch<T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
+  const json = await heygenFetchRaw<{ data?: T } | null>(path, init, timeoutMs);
   return (json?.data ?? json) as T;
 }
 
@@ -137,6 +137,55 @@ export async function createHeyGenVideo(params: {
       ...(params.resolution ? { resolution: params.resolution } : {}),
     }),
   });
+}
+
+// POST /v3/videos with type "studio" — one job that renders an ordered list of
+// scenes into a single video. Confirmed against the live API with a
+// deliberately fake avatar id: the request shape passes validation and only
+// fails at the avatar lookup ("failed at scene index 0"), so nothing was
+// created. The provider returns one video_id for the whole video and no
+// per-scene status, so scenes cannot be rendered or retried individually.
+// Aspect ratio, resolution and engine are global to the job. Scenes are
+// hard cuts (no transitions), and avatar scenes only support a solid colour
+// background.
+export async function createHeyGenStudioVideo(params: {
+  scenes: {
+    avatarId: string;
+    script: string;
+    voiceId: string;
+    backgroundColor?: string | null;
+  }[];
+  engine: HeyGenEngine;
+  callbackUrl?: string;
+  title?: string;
+  aspectRatio?: string;
+  resolution?: string;
+}): Promise<{ video_id: string }> {
+  return heygenFetch<{ video_id: string }>(
+    "/v3/videos",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        type: "studio",
+        scenes: params.scenes.map((scene) => ({
+          type: "avatar_video",
+          input: {
+            type: "avatar",
+            avatar_id: scene.avatarId,
+            script: scene.script,
+            voice_id: scene.voiceId,
+            engine: { type: params.engine },
+            ...(scene.backgroundColor ? { background: { type: "color", color: scene.backgroundColor } } : {}),
+          },
+        })),
+        ...(params.callbackUrl ? { callback_url: params.callbackUrl } : {}),
+        ...(params.title ? { title: params.title } : {}),
+        ...(params.aspectRatio ? { aspect_ratio: params.aspectRatio } : {}),
+        ...(params.resolution ? { resolution: params.resolution } : {}),
+      }),
+    },
+    20000,
+  );
 }
 
 // GET /v3/voices — per HeyGen's docs (not yet exercised against the live

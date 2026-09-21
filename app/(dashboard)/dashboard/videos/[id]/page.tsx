@@ -30,6 +30,7 @@ export default async function VideoPage({
     include: { avatar: { select: { id: true, name: true } } },
   });
   if (!video) notFound();
+  if (video.projectId) redirect(`/dashboard/videos/projects/${video.projectId}`);
 
   // Other videos made from the same script on this avatar, i.e. earlier or
   // later regenerations and duplicates.

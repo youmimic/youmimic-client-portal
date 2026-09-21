@@ -31,6 +31,8 @@ export type LibraryVideo = {
   aspectRatio: string | null;
   errorMessage: string | null;
   avatarName: string;
+  // Set when this video was rendered from a multi-scene project.
+  projectId: string | null;
 };
 
 type Filter = "ALL" | "ACTIVE" | "COMPLETED" | "FAILED";
@@ -95,7 +97,7 @@ export function VideoLibrary({ videos }: { videos: LibraryVideo[] }) {
           {visible.map((v) => (
             <li key={v.id}>
               <Link
-                href={`/dashboard/videos/${v.id}`}
+                href={v.projectId ? `/dashboard/videos/projects/${v.projectId}` : `/dashboard/videos/${v.id}`}
                 className="group block overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <div className="relative flex aspect-video items-center justify-center bg-muted">
@@ -116,6 +118,7 @@ export function VideoLibrary({ videos }: { videos: LibraryVideo[] }) {
                 <div className="space-y-1 p-3">
                   <p className="truncate text-sm font-medium group-hover:text-primary">{v.title}</p>
                   <p className="truncate text-xs text-muted-foreground">
+                    {v.projectId ? "Multi-scene · " : ""}
                     {v.avatarName} · {formatDateTime(v.createdAt)}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">

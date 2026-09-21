@@ -4,12 +4,20 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown, Clock, Loader2, Play, RotateCcw, TriangleAlert, UserCircle2, Video } from "lucide-react";
+import { ChevronDown, Clock, Loader2, Play, RotateCcw, Trash2, TriangleAlert, UserCircle2, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EnginePicker } from "@/components/dashboard/engine-picker";
 import { VoicePicker, type SelectedVoice } from "@/components/dashboard/video/voice-picker";
 import type { HeyGenEngine } from "@/lib/heygen";
@@ -198,6 +206,9 @@ export function VideoWorkspace({
   const [lookPreviewOpen, setLookPreviewOpen] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
   const [draftHandled, setDraftHandled] = useState(false);
+  // Which draft the discard confirmation is about: the saved one waiting in
+  // the restore banner, or what is currently in the form.
+  const [discardTarget, setDiscardTarget] = useState<"saved" | "current" | null>(null);
 
   // An unsent draft saved by an earlier visit. Read through
   // useSyncExternalStore so the server render (no localStorage) and the first
@@ -250,11 +261,23 @@ export function VideoWorkspace({
     return () => window.clearTimeout(timer);
   }, [avatarId, pendingDraft, title, script, lookId, engine, aspectRatio, resolution, voice]);
 
-  const discardDraft = useCallback(() => {
-    writeDraft(avatarId, null);
-    setDraftSavedAt(null);
-    setDraftHandled(true);
-  }, [avatarId]);
+  const discardDraft = useCallback(
+    (target: "saved" | "current") => {
+      writeDraft(avatarId, null);
+      setDraftSavedAt(null);
+      setDraftHandled(true);
+      if (target === "current") {
+        setTitle("");
+        setScript("");
+        setVoice(null);
+        setResolution(null);
+        setTouched(false);
+        setSubmitError(null);
+      }
+      setDiscardTarget(null);
+    },
+    [avatarId],
+  );
 
   const estimate = useMemo(
     () => estimateGeneration(script, engine.toUpperCase() as VideoEngineValue),
@@ -341,7 +364,7 @@ export function VideoWorkspace({
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                 Restore draft
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={discardDraft}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setDiscardTarget("saved")}>
                 Discard
               </Button>
             </span>
@@ -566,6 +589,20 @@ export function VideoWorkspace({
               )}
             </Button>
 
+            {(script.trim() || title.trim()) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full text-destructive hover:text-destructive"
+                disabled={submitting}
+                onClick={() => setDiscardTarget("current")}
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                Discard draft
+              </Button>
+            )}
+
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground" aria-live="polite">
               <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
               {draftSavedAt
@@ -575,6 +612,30 @@ export function VideoWorkspace({
           </CardContent>
         </Card>
       </aside>
+      <Dialog open={discardTarget !== null} onOpenChange={(o) => !o && setDiscardTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Discard this draft?</DialogTitle>
+            <DialogDescription>
+              {discardTarget === "saved"
+                ? "The unsent draft saved in this browser will be deleted. This can't be undone."
+                : "Your script, title and voice choice will be cleared, and the draft saved in this browser will be deleted. This can't be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDiscardTarget(null)}>
+              Keep draft
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => discardDraft(discardTarget ?? "current")}
+            >
+              Discard draft
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }

@@ -9,6 +9,7 @@ import { VideoWorkspace, type WorkspaceInitialValues } from "@/components/dashbo
 import { VideoStatusBadge } from "@/components/dashboard/video/video-status-badge";
 import { formatDateTime, videoTitle } from "@/lib/video-display";
 import { VIDEO_ASPECT_RATIOS } from "@/lib/validations/video";
+import { NewProjectButton } from "@/components/dashboard/project/new-project-button";
 
 export const metadata = {
   title: "Create video | YouMimic Portal",
@@ -117,9 +118,12 @@ export default async function AvatarStudioPage({
             <span className="font-medium text-foreground">{avatar.name}</span>.
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href="/dashboard/videos">All videos</Link>
-        </Button>
+        <div className="flex flex-wrap items-start gap-2">
+          {usable && <NewProjectButton avatarId={avatar.id} label="Build a multi-scene video" />}
+          <Button asChild variant="outline">
+            <Link href="/dashboard/videos">All videos</Link>
+          </Button>
+        </div>
       </div>
 
       {usable ? (

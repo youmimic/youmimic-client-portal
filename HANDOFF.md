@@ -1,5 +1,15 @@
 # HANDOFF.md
 
+## Session: Multi-scene video projects — 2026-09-21 (evening)
+
+Added a scene-by-scene video editor at `/dashboard/videos/projects/[projectId]`. Full detail is in `updates/2026-09-21-multi-scene-video-projects.md`.
+
+HeyGen supports multiple scenes only as one `type: "studio"` job (up to 50 scenes, one video id, one status, no per-scene status or retry). The owner chose to give up per-scene retry and regenerate, so the whole project is one job with one credit reservation, and editing a scene after a render marks the video out of date. The final render is a normal `GeneratedVideo` row (new nullable `projectId` and `sceneSnapshot`), so webhook, refresh, URL refresh and ledger are unchanged.
+
+New tables `video_projects` and `video_scenes` (migration `20260921113057_add_video_projects`, applied to dev with `prisma migrate deploy`). New API under `/api/dashboard/projects` with per-user scoping, strict Zod bodies, optimistic versioning (409 on a stale tab) and a conditional-update claim to stop double submits. Editor has autosave, drag and drop plus keyboard reorder, readiness panel, estimates, and a result view with polling.
+
+Checks: typecheck clean, lint 0 errors, vitest 157 passing, `npx next build` clean, real-database lifecycle check passed and its throwaway data was removed. Not done: a signed-in browser walkthrough and a real generation. Confirm on an approved test avatar (Neil or Chris) before wider use. Still open: real credit limits and rates, provider billing per scene, concurrent-job limits.
+
 ## Session: Avatar to video creator workspace — 2026-09-21
 
 Redesigned `/dashboard/avatars` to `/dashboard/videos` into a creator workspace (script, look, voice with preview, format, advanced settings, review card with credit and time estimates, draft autosave), added a video detail page at `/dashboard/videos/[id]` with status polling and Download, Regenerate, Duplicate, Delete, and turned the videos list into a filterable card grid. Full detail is in `updates/2026-09-21-avatar-video-creator-workspace.md`.

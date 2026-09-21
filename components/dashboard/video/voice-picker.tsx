@@ -29,9 +29,15 @@ type LoadState =
 export function VoicePicker({
   value,
   onChange,
+  defaultLabel = "Avatar's own voice (default)",
+  disabled = false,
 }: {
   value: SelectedVoice;
   onChange: (voice: SelectedVoice) => void;
+  // What "no voice chosen" means in the current context, for example
+  // "Using project voice: Emma".
+  defaultLabel?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [voices, setVoices] = useState<VoiceOption[]>([]);
@@ -92,7 +98,7 @@ export function VoicePicker({
         <div className="min-w-0">
           <p className="text-sm font-medium">Voice</p>
           <p className="truncate text-xs text-muted-foreground">
-            {value ? value.name : "Avatar's own voice (default)"}
+            {value ? value.name : defaultLabel}
           </p>
         </div>
         <Button
@@ -101,6 +107,7 @@ export function VoicePicker({
           size="sm"
           aria-expanded={open}
           aria-controls="voice-picker-panel"
+          disabled={disabled}
           onClick={() => {
             // Load lazily the first time the panel opens.
             if (!open && load.kind === "idle") void loadVoices();
@@ -136,7 +143,7 @@ export function VoicePicker({
                   value === null ? "border-primary ring-2 ring-primary" : "border-transparent hover:bg-muted",
                 )}
               >
-                <span>Avatar&apos;s own voice (default)</span>
+                <span>{defaultLabel}</span>
                 {value === null && <Check className="h-4 w-4 text-primary" aria-hidden="true" />}
               </button>
             </li>

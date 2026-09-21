@@ -6,6 +6,9 @@ import prisma from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { VideoLibrary } from "@/components/dashboard/video/video-library";
+import { NewProjectButton } from "@/components/dashboard/project/new-project-button";
+import { ProjectCard } from "@/components/dashboard/project/project-card";
+import { listProjects } from "@/lib/projects/service";
 import { videoTitle } from "@/lib/video-display";
 
 export const metadata = {
@@ -24,6 +27,8 @@ export default async function VideosPage({
 
   const { deleted } = await searchParams;
 
+  const projects = (await listProjects(session.user.id)).filter((p) => p.status !== "COMPLETED");
+
   const videos = await prisma.generatedVideo.findMany({
     where: { userId: session.user.id },
     orderBy: { createdAt: "desc" },
@@ -39,6 +44,7 @@ export default async function VideosPage({
       durationSeconds: true,
       estimatedCostCents: true,
       aspectRatio: true,
+      projectId: true,
       avatar: { select: { id: true, name: true } },
     },
   });
@@ -70,9 +76,12 @@ export default async function VideosPage({
             )}
           </p>
         </div>
-        <Button asChild>
-          <Link href="/dashboard/avatars">Create a video</Link>
-        </Button>
+        <div className="flex flex-wrap items-start gap-2">
+          <NewProjectButton />
+          <Button asChild>
+            <Link href="/dashboard/avatars">Create a video</Link>
+          </Button>
+        </div>
       </div>
 
       {deleted && (
@@ -87,7 +96,28 @@ export default async function VideosPage({
         </p>
       )}
 
-      {videos.length === 0 ? (
+      {projects.length > 0 && (
+        <section aria-labelledby="projects-heading" className="space-y-2">
+          <h2 id="projects-heading" className="text-base font-semibold tracking-tight">
+            Multi-scene projects in progress
+          </h2>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {projects.map((p) => (
+              <li key={p.id}>
+                <ProjectCard
+                  id={p.id}
+                  title={p.title}
+                  status={p.status}
+                  sceneCount={p.sceneCount}
+                  updatedAt={p.updatedAt}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {videos.length === 0 && projects.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-start gap-3 py-8">
             <p className="font-medium">No videos yet</p>
@@ -113,6 +143,7 @@ export default async function VideosPage({
             aspectRatio: v.aspectRatio,
             errorMessage: v.errorMessage,
             avatarName: v.avatar.name,
+            projectId: v.projectId,
           }))}
         />
       )}

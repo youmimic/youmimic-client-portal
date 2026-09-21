@@ -99,6 +99,7 @@ model User {
   subscriptions           Subscription[]
   avatars                 Avatar[]
   generatedVideos         GeneratedVideo[]
+  videoProjects           VideoProject[]
   bookings                Booking[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -496,6 +497,80 @@ model AvatarLook {
   @@map("avatar_looks")
 }
 
+// A multi-scene video the user is building. Only a whole project can be
+// rendered: the provider returns one job and one status for the full video,
+// so there is no per-scene render state here. Scene status shown in the UI
+// (draft, needs attention, ready) is derived from validation, not stored.
+enum VideoProjectStatus {
+  DRAFT
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+model VideoProject {
+  id     String             @id @default(cuid())
+  userId String
+  title  String             @default("")
+  status VideoProjectStatus @default(DRAFT)
+
+  // Output settings apply to every scene (the provider takes them once for
+  // the whole video), so they live here and cannot be overridden per scene.
+  aspectRatio String      @default("16:9")
+  resolution  String?
+  engine      VideoEngine @default(AVATAR_III)
+
+  // Defaults that scenes inherit when their own value is null.
+  defaultAvatarId     String?
+  defaultAvatarLookId String?
+  defaultVoiceId      String?
+  defaultVoiceName    String?
+
+  // Bumped on every save so two open tabs cannot silently overwrite each
+  // other's edits.
+  version Int @default(1)
+
+  // Hash of the scene content that was last sent for rendering. A different
+  // hash on the current scenes means the video is out of date.
+  lastGeneratedHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenes          VideoScene[]
+  generatedVideos GeneratedVideo[]
+
+  @@index([userId, updatedAt])
+  @@map("video_projects")
+}
+
+model VideoScene {
+  id         String @id @default(cuid())
+  projectId  String
+  // 0-based position. Reorders renumber the whole project inside a
+  // transaction, which is fine at the 20-scene cap and keeps ordering simple.
+  orderIndex Int
+  title      String @default("")
+  script     String @default("")
+
+  // Null means "use the project default".
+  avatarId        String?
+  avatarLookId    String?
+  voiceId         String?
+  voiceName       String?
+  // Solid colour only, which is all the provider supports for avatar scenes.
+  backgroundColor String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, orderIndex])
+  @@map("video_scenes")
+}
+
 enum VideoGenerationStatus {
   PENDING
   PROCESSING
@@ -576,6 +651,14 @@ model GeneratedVideo {
   voiceId     String?
   voiceName   String?
 
+  // Set only when this render was produced from a multi-scene project.
+  // sceneSnapshot is the ordered scene list exactly as it was sent to the
+  // provider, so the project can be edited later without changing what this
+  // video was made from (also what "edited since generated" compares to).
+  projectId     String?
+  sceneSnapshot Json?
+  project       VideoProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
   user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   avatar             Avatar             @relation(fields: [avatarId], references: [id], onDelete: Cascade)
   avatarLook         AvatarLook?        @relation(fields: [avatarLookId], references: [id], onDelete: SetNull)
@@ -584,6 +667,7 @@ model GeneratedVideo {
   @@index([userId])
   @@index([avatarId])
   @@index([avatarLookId])
+  @@index([projectId])
   @@map("generated_videos")
 }
 
