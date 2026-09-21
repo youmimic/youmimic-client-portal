@@ -51,7 +51,7 @@ export default async function VideosPage() {
           {totalEstimatedCostCents > 0 && (
             <>
               {" "}
-              Estimated HeyGen usage so far:{" "}
+              Estimated usage so far:{" "}
               <span className="font-medium text-foreground">
                 ${(totalEstimatedCostCents / 100).toFixed(2)}
               </span>

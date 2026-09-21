@@ -179,10 +179,10 @@ function ExternalLinksSection() {
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <ExternalLinkCard
         icon={<Video className="h-5 w-5 shrink-0" />}
-        title="HeyGen"
-        description="Open HeyGen in a new tab."
+        title="Video Studio"
+        description="Open the video studio in a new tab."
         href="https://app.heygen.com"
-        linkLabel="Open HeyGen"
+        linkLabel="Open Video Studio"
       />
       <ExternalLinkCard
         icon={<Bot className="h-5 w-5 shrink-0" />}
@@ -209,7 +209,7 @@ function ExternalLinksSection() {
       <ExternalLinkCard
         icon={<Languages className="h-5 w-5 shrink-0" />}
         title="Translate"
-        description="Open HeyGen Translate."
+        description="Open the video translation tool."
         href="https://app.heygen.com/video-translate"
         linkLabel="Open Translate"
       />

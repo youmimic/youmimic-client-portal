@@ -39,7 +39,7 @@ export async function DELETE(
         heygenWarning =
           err instanceof HeyGenApiError
             ? err.message
-            : "Could not reach HeyGen to delete the video there.";
+            : "Could not reach the video service to delete the video there.";
       }
     }
   }
@@ -48,6 +48,6 @@ export async function DELETE(
 
   return NextResponse.json({
     ok: true,
-    ...(heygenWarning ? { warning: `Removed from portal. HeyGen delete failed: ${heygenWarning}` } : {}),
+    ...(heygenWarning ? { warning: `Removed from portal. Deleting it from the video service failed: ${heygenWarning}` } : {}),
   });
 }

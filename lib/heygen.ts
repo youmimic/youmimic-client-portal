@@ -71,7 +71,7 @@ async function heygenFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const json = await res.json().catch(() => null);
 
     if (!res.ok) {
-      const message = json?.error?.message ?? `HeyGen API returned ${res.status}`;
+      const message = json?.error?.message ?? `Video service returned ${res.status}`;
       throw new HeyGenApiError(message, json?.error?.code, res.status);
     }
 
@@ -79,7 +79,7 @@ async function heygenFetch<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (err) {
     if (err instanceof HeyGenApiError) throw err;
     const message = err instanceof Error ? err.message : "Unknown error";
-    throw new HeyGenApiError(`HeyGen request failed: ${message}`);
+    throw new HeyGenApiError(`Video service request failed: ${message}`);
   } finally {
     clearTimeout(timeout);
   }

@@ -89,11 +89,11 @@ export async function generateAvatarVideo(
     voiceId = look.default_voice_id;
   } catch (err) {
     const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
-    return { ok: false, code: "HEYGEN_ERROR", error: `Couldn't look up this avatar in HeyGen: ${message}` };
+    return { ok: false, code: "HEYGEN_ERROR", error: `Couldn't look up this avatar: ${message}` };
   }
 
   if (!voiceId) {
-    return { ok: false, code: "NO_VOICE", error: "This avatar has no default voice configured in HeyGen yet." };
+    return { ok: false, code: "NO_VOICE", error: "This avatar has no default voice set up yet." };
   }
 
   const prismaEngine = ENGINE_TO_PRISMA[engine];
