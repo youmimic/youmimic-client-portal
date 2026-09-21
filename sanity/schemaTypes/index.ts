@@ -5,6 +5,7 @@ import { homepageHowItLooks } from "./homepageHowItLooks";
 import { homepageTestimonialsIntro } from "./homepageTestimonialsIntro";
 import { homepageServices } from "./homepageServices";
 import { homepageFeaturedAt } from "./homepageFeaturedAt";
+import { homepageAwards } from "./homepageAwards";
 
 export const schemaTypes = [
   homepageHero,
@@ -14,4 +15,5 @@ export const schemaTypes = [
   homepageTestimonialsIntro,
   homepageServices,
   homepageFeaturedAt,
+  homepageAwards,
 ];

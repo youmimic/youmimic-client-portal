@@ -17,6 +17,7 @@ const singletonTypes = new Set([
   "homepageTestimonialsIntro",
   "homepageServices",
   "homepageFeaturedAt",
+  "homepageAwards",
 ]);
 
 export default defineConfig({
@@ -76,6 +77,10 @@ export default defineConfig({
               .child(
                 S.document().schemaType("homepageFeaturedAt").documentId("homepageFeaturedAt"),
               ),
+            S.listItem()
+              .title("Homepage: Awards and Nominations")
+              .id("homepageAwards")
+              .child(S.document().schemaType("homepageAwards").documentId("homepageAwards")),
           ]),
     }),
     presentationTool({

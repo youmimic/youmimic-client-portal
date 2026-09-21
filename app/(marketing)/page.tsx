@@ -47,6 +47,11 @@ type FeaturedAtItem = {
   logo: SanityImageRef;
 };
 
+type AwardItem = {
+  name: string;
+  logo: SanityImageRef;
+};
+
 type HomepageContent = {
   hero: {
     heading: string;
@@ -69,6 +74,7 @@ type HomepageContent = {
     | { heading: string; subheading: string; items: ServiceItem[]; ctaLabel: string }
     | null;
   featuredAt: { heading: string; items: FeaturedAtItem[] } | null;
+  awards: { heading: string; items: AwardItem[] } | null;
 };
 
 // One combined GROQ query — a single round trip to Sanity for every
@@ -80,7 +86,8 @@ const HOMEPAGE_CONTENT_QUERY = `{
   "howItLooks": *[_type == "homepageHowItLooks"][0]{headingPrefix, headingAccent, subheading},
   "testimonialsIntro": *[_type == "homepageTestimonialsIntro"][0]{headingPrefix, headingAccent, subheading, items[]{quote, name, role, company}, logos[]{name, logo}},
   "services": *[_type == "homepageServices"][0]{heading, subheading, items[]{title, body, image}, ctaLabel},
-  "featuredAt": *[_type == "homepageFeaturedAt"][0]{heading, items[]{name, logo}}
+  "featuredAt": *[_type == "homepageFeaturedAt"][0]{heading, items[]{name, logo}},
+  "awards": *[_type == "homepageAwards"][0]{heading, items[]{name, logo}}
 }`;
 
 // Editable in Studio (/admin/studio) once each document is published —
@@ -174,6 +181,10 @@ const DEFAULTS = {
     heading: "Featured At",
     // No items fallback — logos, same reasoning as above.
   },
+  awards: {
+    heading: "Awards and Nominations",
+    // No items fallback — badge images, same reasoning as above.
+  },
 };
 
 export const metadata: Metadata = {
@@ -255,6 +266,11 @@ export default async function HomePage() {
   const featuredAtHeading = featuredAtContent?.heading || DEFAULTS.featuredAt.heading;
   // No fallback — logos, same reasoning as servicesItems above.
   const featuredAtItems = featuredAtContent?.items ?? [];
+
+  const awardsContent = content?.awards;
+  const awardsHeading = awardsContent?.heading || DEFAULTS.awards.heading;
+  // No fallback — badge images, same reasoning as featuredAtItems above.
+  const awardsItems = (awardsContent?.items ?? []).filter((item) => item.logo);
 
   return (
     <>
@@ -658,6 +674,35 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {awardsItems.length > 0 && (
+        <section className="py-16 sm:py-20">
+          <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
+            <h2 className="text-3xl font-bold tracking-tighter text-foreground sm:text-4xl">
+              {awardsHeading}
+            </h2>
+            {/* Full-colour badges shown as-is: no tile, border or background.
+                The Featured At silhouette treatment would erase the
+                artwork's detail. */}
+            <div className="mt-10 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
+              {awardsItems.map(({ name, logo }) => (
+                <div
+                  key={name}
+                  className="relative mx-auto aspect-square w-full max-w-64"
+                >
+                  <NextImage
+                    src={urlForImage(logo!).width(600).url()}
+                    alt={name}
+                    fill
+                    sizes="(min-width: 1024px) 256px, 45vw"
+                    className="object-contain"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <FinalCtaSection isLoggedIn={isLoggedIn} />
     </>
