@@ -214,3 +214,14 @@
     scroll-behavior: smooth;
   }
 }
+
+@keyframes video-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[video-progress_1\.6s_ease-in-out_infinite\] {
+    animation: none;
+  }
+}

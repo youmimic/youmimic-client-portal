@@ -45,10 +45,29 @@ export async function POST(
     parsed.data.script,
     parsed.data.avatarLookId,
     parsed.data.engine,
+    {
+      title: parsed.data.title,
+      aspectRatio: parsed.data.aspectRatio,
+      resolution: parsed.data.resolution,
+      voiceId: parsed.data.voiceId,
+      voiceName: parsed.data.voiceName,
+    },
   );
   if (!result.ok) {
     const status =
       result.code === "HEYGEN_ERROR" ? 502 : result.code === "OVER_LIMIT" ? 402 : 422;
+    if (result.code === "OVER_LIMIT") {
+      return NextResponse.json(
+        {
+          error: result.error,
+          code: result.code,
+          creditsUsedMilli: result.creditsUsedMilli,
+          creditsLimitMilli: result.creditsLimitMilli,
+          periodEnd: result.periodEnd,
+        },
+        { status },
+      );
+    }
     return NextResponse.json({ error: result.error, code: result.code }, { status });
   }
 

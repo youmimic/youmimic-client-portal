@@ -1,16 +1,11 @@
-import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { UserCircle2 } from "lucide-react";
+import { CalendarDays, UserCircle2, Video } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AvatarGallery, type GalleryAvatar } from "@/components/dashboard/avatar/avatar-gallery";
 import { syncAvatarFromHeyGen, syncAvatarLookFromHeyGen, rollupAvatarDisplay } from "@/lib/heygen/sync";
 
 export const metadata = {
@@ -26,6 +21,7 @@ async function fetchAvatars(userId: string) {
         orderBy: { name: "asc" },
         select: { id: true, heygenLookId: true, name: true, status: true, previewUrl: true, videoUrl: true },
       },
+      _count: { select: { generatedVideos: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -33,149 +29,28 @@ async function fetchAvatars(userId: string) {
 
 type AvatarRow = Awaited<ReturnType<typeof fetchAvatars>>[number];
 
-const STATUS_STYLES: Record<string, string> = {
-  pending:
-    "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
-  processing:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  training:
-    "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  // Set only by a live HeyGen sync — the avatar subject needs to record
-  // consent in HeyGen before training/generation can proceed.
-  pending_consent:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  ready:
-    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  active:
-    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-  error: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  pending_consent: "Awaiting consent",
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const classes =
-    STATUS_STYLES[status.toLowerCase()] ?? "bg-muted text-muted-foreground";
-  const label = STATUS_LABELS[status.toLowerCase()] ?? status;
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${classes}`}
-    >
-      {label}
-    </span>
-  );
-}
-
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(date));
-}
-
-function AvatarThumbnail({
-  previewUrl,
-  name,
-}: {
-  previewUrl: string | null;
-  name: string;
-}) {
-  if (previewUrl) {
-    return (
-      <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
-        <Image
-          src={previewUrl}
-          alt={`${name} preview`}
-          fill
-          unoptimized
-          className="object-cover"
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex aspect-video w-full items-center justify-center rounded-t-xl bg-muted">
-      <UserCircle2
-        className="h-12 w-12 text-muted-foreground/30"
-        aria-hidden="true"
-      />
-    </div>
-  );
-}
-
-function AvatarCard({ avatar }: { avatar: AvatarRow }) {
+function toGalleryAvatar(avatar: AvatarRow): GalleryAvatar {
   const hasLooks = avatar.looks.length > 0;
   const rollup = hasLooks ? rollupAvatarDisplay(avatar.looks) : null;
-  const displayStatus = rollup?.status ?? avatar.status;
-  const displayPreviewUrl = rollup?.previewUrl ?? avatar.previewUrl;
-  const displayVideoUrl = rollup?.videoUrl ?? avatar.videoUrl;
-  const usable = hasLooks ? displayStatus === "ready" : displayStatus.toLowerCase() === "ready" && !!avatar.heygenAvatarId;
-
-  return (
-    <Card className="overflow-hidden pt-0">
-      <AvatarThumbnail previewUrl={displayPreviewUrl} name={avatar.name} />
-
-      <CardHeader className="pb-2 pt-4">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base font-semibold leading-snug">
-            {avatar.name}
-          </CardTitle>
-          <StatusBadge status={displayStatus} />
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-2 pb-4">
-        {avatar.enterprise && (
-          <p className="text-xs text-muted-foreground">
-            {avatar.enterprise.name}
-          </p>
-        )}
-
-        {hasLooks && (
-          <p className="text-xs text-muted-foreground">
-            {avatar.looks.length === 1 ? "1 look" : `${avatar.looks.length} looks`}
-          </p>
-        )}
-
-        <p className="text-xs text-muted-foreground">
-          Created {formatDate(avatar.createdAt)}
-        </p>
-
-        {displayVideoUrl && (
-          <video controls preload="none" poster={displayPreviewUrl ?? undefined} className="w-full rounded-md border">
-            <source src={displayVideoUrl} type="video/mp4" />
-          </video>
-        )}
-
-        {usable && (
-          <Button asChild size="sm" className="w-full">
-            <Link href={`/dashboard/avatars/${avatar.id}/studio`}>Use Avatar</Link>
-          </Button>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function AvatarGrid({ avatars }: { avatars: AvatarRow[] }) {
-  return (
-    <div>
-      <p className="mb-4 text-sm text-muted-foreground">
-        {avatars.length === 1 ? "1 avatar" : `${avatars.length} avatars`}
-      </p>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {avatars.map((avatar) => (
-          <AvatarCard key={avatar.id} avatar={avatar} />
-        ))}
-      </div>
-    </div>
-  );
+  const status = rollup?.status ?? avatar.status;
+  return {
+    id: avatar.id,
+    name: avatar.name,
+    enterpriseName: avatar.enterprise?.name ?? null,
+    createdAt: avatar.createdAt.toISOString(),
+    status,
+    previewUrl: rollup?.previewUrl ?? avatar.previewUrl,
+    introVideoUrl: rollup?.videoUrl ?? avatar.videoUrl,
+    usable: hasLooks ? status === "ready" : status.toLowerCase() === "ready" && !!avatar.heygenAvatarId,
+    looks: avatar.looks.map((l) => ({
+      id: l.id,
+      name: l.name,
+      status: l.status,
+      previewUrl: l.previewUrl,
+      videoUrl: l.videoUrl,
+    })),
+    videoCount: avatar._count.generatedVideos,
+  };
 }
 
 // Best-effort live refresh: for every avatar with looks, sync each look; for
@@ -228,32 +103,51 @@ export default async function AvatarsPage() {
   if (!session?.user) redirect("/login");
 
   const dbAvatars = await fetchAvatars(session.user.id);
-  const avatars = await withLiveHeyGenStatus(dbAvatars);
+  const avatars = (await withLiveHeyGenStatus(dbAvatars)).map(toGalleryAvatar);
+  const ready = avatars.filter((a) => a.usable);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Avatars</h1>
-        <p className="text-muted-foreground">
-          Your AI avatars provisioned through the YouMimic platform.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Avatars</h1>
+          <p className="text-muted-foreground">
+            {avatars.length === 0
+              ? "Your AI avatars will appear here."
+              : `${avatars.length} ${avatars.length === 1 ? "avatar" : "avatars"}, ${ready.length} ready to use. Pick one to start a video.`}
+          </p>
+        </div>
+        {ready.length === 1 && (
+          <Button asChild>
+            <Link href={`/dashboard/avatars/${ready[0].id}/studio`}>
+              <Video className="h-4 w-4" aria-hidden="true" />
+              Create a video
+            </Link>
+          </Button>
+        )}
       </div>
 
       {avatars.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <UserCircle2
-              className="mb-4 h-10 w-10 text-muted-foreground/50"
-              aria-hidden="true"
-            />
-            <p className="text-base font-medium">No avatars yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Your AI avatars will appear here once they have been provisioned.
-            </p>
+          <CardContent className="flex flex-col items-start gap-4 py-10">
+            <UserCircle2 className="h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
+            <div>
+              <p className="text-base font-medium">No avatars yet</p>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                Avatars are created by our team from a capture session. Once yours has been set up, it will show up
+                here and you can start making videos straight away.
+              </p>
+            </div>
+            <Button asChild variant="outline">
+              <Link href="/dashboard/bookings">
+                <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                Book a capture session
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       ) : (
-        <AvatarGrid avatars={avatars} />
+        <AvatarGallery avatars={avatars} />
       )}
     </div>
   );

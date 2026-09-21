@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { deleteHeyGenVideo, HeyGenApiError } from "@/lib/heygen";
+import { releaseReservationForVideo } from "@/lib/usage/ledger";
 
 // Deletes a video from both this app and HeyGen. The HeyGen call is
 // best-effort: a video_not_found there (already gone, or it never made it
@@ -43,6 +44,11 @@ export async function DELETE(
       }
     }
   }
+
+  // A video deleted while still queued or processing would otherwise leave
+  // its RESERVED credits counted against the period forever. No-op if the
+  // entry was already reconciled or released.
+  await releaseReservationForVideo(id);
 
   await prisma.generatedVideo.delete({ where: { id } });
 

@@ -56,7 +56,7 @@ function heygenApiKey(): string {
 // 8s timeout on every call — several of these run from page render paths
 // (see app/(dashboard)/dashboard/avatars/page.tsx), so a slow/hanging
 // HeyGen request must never be allowed to stall a page indefinitely.
-async function heygenFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function heygenFetchRaw<T>(path: string, init?: RequestInit): Promise<T> {
   const apiKey = heygenApiKey();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
@@ -75,7 +75,7 @@ async function heygenFetch<T>(path: string, init?: RequestInit): Promise<T> {
       throw new HeyGenApiError(message, json?.error?.code, res.status);
     }
 
-    return (json?.data ?? json) as T;
+    return json as T;
   } catch (err) {
     if (err instanceof HeyGenApiError) throw err;
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -83,6 +83,11 @@ async function heygenFetch<T>(path: string, init?: RequestInit): Promise<T> {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function heygenFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const json = await heygenFetchRaw<{ data?: T } | null>(path, init);
+  return (json?.data ?? json) as T;
 }
 
 export async function getHeyGenAvatarLook(lookId: string): Promise<HeyGenAvatarLook> {
@@ -109,6 +114,9 @@ export async function createHeyGenVideo(params: {
   voiceId: string;
   engine: HeyGenEngine;
   callbackUrl?: string;
+  title?: string;
+  aspectRatio?: string;
+  resolution?: string;
 }): Promise<{ video_id: string }> {
   return heygenFetch<{ video_id: string }>("/v3/videos", {
     method: "POST",
@@ -124,8 +132,47 @@ export async function createHeyGenVideo(params: {
       // field ("Unable to extract tag using discriminator 'type'").
       engine: { type: params.engine },
       ...(params.callbackUrl ? { callback_url: params.callbackUrl } : {}),
+      ...(params.title ? { title: params.title } : {}),
+      ...(params.aspectRatio ? { aspect_ratio: params.aspectRatio } : {}),
+      ...(params.resolution ? { resolution: params.resolution } : {}),
     }),
   });
+}
+
+// GET /v3/voices — per HeyGen's docs (not yet exercised against the live
+// API). Cursor-paginated; preview_audio_url can be null.
+export interface HeyGenVoice {
+  voice_id: string;
+  name: string;
+  language: string | null;
+  gender: string | null;
+  preview_audio_url: string | null;
+  type?: string;
+}
+
+export async function listHeyGenVoices(params: {
+  language?: string;
+  gender?: string;
+  limit?: number;
+  token?: string;
+}): Promise<{ voices: HeyGenVoice[]; hasMore: boolean; nextToken: string | null }> {
+  const query = new URLSearchParams();
+  if (params.language) query.set("language", params.language);
+  if (params.gender) query.set("gender", params.gender);
+  query.set("limit", String(params.limit ?? 50));
+  if (params.token) query.set("token", params.token);
+
+  const raw = await heygenFetchRaw<{
+    data?: HeyGenVoice[];
+    has_more?: boolean;
+    next_token?: string | null;
+  } | null>(`/v3/voices?${query.toString()}`);
+
+  return {
+    voices: raw?.data ?? [],
+    hasMore: raw?.has_more ?? false,
+    nextToken: raw?.next_token ?? null,
+  };
 }
 
 // DELETE /v3/videos/{video_id} — not listed on HeyGen's docs site (which

@@ -19,12 +19,33 @@ const ENGINE_TO_PRISMA: Record<HeyGenEngine, VideoEngine> = {
   avatar_v: "AVATAR_V" as VideoEngine,
 };
 
+// Optional workspace settings. Every field is optional so callers that only
+// have a script keep the original behaviour (provider defaults, and the
+// chosen look's own default voice).
+export type GenerateVideoOptions = {
+  title?: string;
+  aspectRatio?: string;
+  resolution?: string;
+  voiceId?: string;
+  voiceName?: string;
+};
+
 export type GenerateVideoResult =
   | { ok: true; generatedVideoId: string }
   | {
       ok: false;
-      code: "AVATAR_NOT_READY" | "NO_VOICE" | "HEYGEN_ERROR" | "OVER_LIMIT";
+      code: "AVATAR_NOT_READY" | "NO_VOICE" | "HEYGEN_ERROR";
       error: string;
+    }
+  | {
+      ok: false;
+      code: "OVER_LIMIT";
+      error: string;
+      // Millicredits and an ISO date, so the UI can show a usable
+      // credit-limit state instead of only the message text.
+      creditsUsedMilli: number;
+      creditsLimitMilli: number;
+      periodEnd: string;
     };
 
 function callbackUrl(): string | undefined {
@@ -33,8 +54,7 @@ function callbackUrl(): string | undefined {
   return `${appUrl}/api/webhooks/heygen`;
 }
 
-// Avatar Studio v1 — script only, the chosen look's own default HeyGen
-// voice, no background/aspect-ratio controls. Kicks off one HeyGen video job
+// Avatar Studio — script plus optional title, format, resolution and voice. Kicks off one HeyGen video job
 // and records it immediately (status PROCESSING — HeyGen has no separate
 // "queued" state); completion is picked up by the webhook receiver, with
 // the status-refresh route as a manual fallback for whenever the webhook
@@ -50,6 +70,7 @@ export async function generateAvatarVideo(
   script: string,
   avatarLookId?: string,
   engine: HeyGenEngine = "avatar_iii",
+  options: GenerateVideoOptions = {},
 ): Promise<GenerateVideoResult> {
   const avatar = await prisma.avatar.findFirst({
     where: { id: avatarId, userId },
@@ -83,13 +104,17 @@ export async function generateAvatarVideo(
     resolvedLookId = null;
   }
 
-  let voiceId: string | null;
-  try {
-    const look = await getHeyGenAvatarLook(heygenLookId);
-    voiceId = look.default_voice_id;
-  } catch (err) {
-    const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
-    return { ok: false, code: "HEYGEN_ERROR", error: `Couldn't look up this avatar: ${message}` };
+  // A voice picked in the workspace wins; otherwise fall back to the look's
+  // own default voice (the original behaviour).
+  let voiceId: string | null = options.voiceId ?? null;
+  if (!voiceId) {
+    try {
+      const look = await getHeyGenAvatarLook(heygenLookId);
+      voiceId = look.default_voice_id;
+    } catch (err) {
+      const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
+      return { ok: false, code: "HEYGEN_ERROR", error: `Couldn't look up this avatar: ${message}` };
+    }
   }
 
   if (!voiceId) {
@@ -109,6 +134,9 @@ export async function generateAvatarVideo(
       ok: false,
       code: "OVER_LIMIT",
       error: `You've used all your video credits for this billing period (resets ${reservation.periodEnd.toDateString()}).`,
+      creditsUsedMilli: reservation.creditsUsedMilli,
+      creditsLimitMilli: reservation.creditsLimitMilli,
+      periodEnd: reservation.periodEnd.toISOString(),
     };
   }
 
@@ -119,6 +147,9 @@ export async function generateAvatarVideo(
       voiceId,
       engine,
       callbackUrl: callbackUrl(),
+      title: options.title,
+      aspectRatio: options.aspectRatio,
+      resolution: options.resolution,
     });
 
     const generatedVideo = await prisma.generatedVideo.create({
@@ -130,6 +161,11 @@ export async function generateAvatarVideo(
         status: "PROCESSING" as VideoGenerationStatus,
         engine: prismaEngine,
         heygenVideoId: video_id,
+        title: options.title,
+        aspectRatio: options.aspectRatio,
+        resolution: options.resolution,
+        voiceId: options.voiceId,
+        voiceName: options.voiceName,
       },
       select: { id: true },
     });
@@ -159,6 +195,11 @@ export async function generateAvatarVideo(
         status: "FAILED" as VideoGenerationStatus,
         engine: prismaEngine,
         errorMessage: message,
+        title: options.title,
+        aspectRatio: options.aspectRatio,
+        resolution: options.resolution,
+        voiceId: options.voiceId,
+        voiceName: options.voiceName,
       },
     });
 

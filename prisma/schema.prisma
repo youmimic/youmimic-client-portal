@@ -566,6 +566,16 @@ model GeneratedVideo {
   // Avatar.heygenAvatarId and have no look to record here.
   avatarLookId String?
 
+  // Settings chosen in the creator workspace. All nullable so rows created
+  // before the workspace existed (and API callers that omit them) stay valid.
+  // A null aspectRatio/resolution means the provider default was used, and a
+  // null voiceId means the look's own default voice was used.
+  title       String?
+  aspectRatio String?
+  resolution  String?
+  voiceId     String?
+  voiceName   String?
+
   user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   avatar             Avatar             @relation(fields: [avatarId], references: [id], onDelete: Cascade)
   avatarLook         AvatarLook?        @relation(fields: [avatarLookId], references: [id], onDelete: SetNull)

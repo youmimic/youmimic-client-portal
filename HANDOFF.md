@@ -1,5 +1,13 @@
 # HANDOFF.md
 
+## Session: Avatar to video creator workspace — 2026-09-21
+
+Redesigned `/dashboard/avatars` to `/dashboard/videos` into a creator workspace (script, look, voice with preview, format, advanced settings, review card with credit and time estimates, draft autosave), added a video detail page at `/dashboard/videos/[id]` with status polling and Download, Regenerate, Duplicate, Delete, and turned the videos list into a filterable card grid. Full detail is in `updates/2026-09-21-avatar-video-creator-workspace.md`.
+
+Backend changes are additive only: migration `20260921090000_add_video_workspace_settings` (nullable `title`, `aspectRatio`, `resolution`, `voiceId`, `voiceName` on `generated_videos`), optional new fields on the generate-video API, `OVER_LIMIT` responses now include used, limit and period end, a new `GET /api/dashboard/voices`, and a fix so deleting a queued or processing video releases its reserved credits. The migration was applied to the dev database with `prisma migrate deploy`; production picks it up through the build script.
+
+Checks: typecheck clean, lint 0 errors, vitest 120 passing, `npx next build` clean. An authenticated browser walkthrough was not done. Still open: real credit limits and rates, live verification of the voices and aspect ratio or resolution parameters against the provider, and a same-origin download route.
+
 ## Session: Google Tag Manager + admin GA4 analytics dashboard — 2026-09-14
 
 User asked to add Google Tag Manager site-wide, then (after confirming a recommendation) to build an admin-only page showing Google Analytics data, using the GA4 Data API rather than an embedded Looker Studio iframe — chosen because it can be gated behind the existing admin auth/RBAC and matches the dashboard's own look, at the cost of needing a GCP service account and some charting work up front (an iframe would have been live in minutes but with weaker access control).
