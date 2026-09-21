@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import NextImage from "next/image";
 import { auth } from "@/auth";
@@ -10,6 +9,8 @@ import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 import { sanityFetch } from "@/sanity/lib/fetch";
 import { urlForImage } from "@/sanity/lib/image";
+import { organizationJsonLd, pageMetadata } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/json-ld";
 
 type SanityImageRef = { asset?: { _ref: string } } | null;
 
@@ -187,11 +188,12 @@ const DEFAULTS = {
   },
 };
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: "YouMimic | AI Video Avatars for Business Communication",
   description:
     "Turn one recording into unlimited video content. YouMimic builds photorealistic AI avatars and digital twins that deliver your message in 175+ languages, at scale.",
-};
+  path: "/",
+});
 
 // Fixed order matching the original 3 services (Digital Twins, Interactive
 // Avatars, Holograms) — see homepageServices.ts's comment for why icons
@@ -274,6 +276,7 @@ export default async function HomePage() {
 
   return (
     <>
+      <JsonLd data={organizationJsonLd()} />
       <section
         className="py-10 sm:py-16"
         style={{ backgroundColor: "#FFFFFF" }}
@@ -681,9 +684,11 @@ export default async function HomePage() {
             <h2 className="text-3xl font-bold tracking-tighter text-foreground sm:text-4xl">
               {awardsHeading}
             </h2>
-            {/* Full-colour badges shown as-is: no tile, border or background.
-                The Featured At silhouette treatment would erase the
-                artwork's detail. */}
+            {/* True greyscale (not the solid-silhouette brightness-0 used for
+                Featured At/clients, which would flatten these detailed
+                badges into blobs). dark:invert flips the badges' dark
+                text to light so it stays readable on the dark theme. No
+                tile, border or background. */}
             <div className="mt-10 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
               {awardsItems.map(({ name, logo }) => (
                 <div
@@ -695,7 +700,7 @@ export default async function HomePage() {
                     alt={name}
                     fill
                     sizes="(min-width: 1024px) 256px, 45vw"
-                    className="object-contain"
+                    className="object-contain grayscale dark:invert"
                   />
                 </div>
               ))}
