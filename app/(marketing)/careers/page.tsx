@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { ComingSoonPage } from "@/components/marketing/coming-soon-page";
+import { noIndex } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Careers | YouMimic",
   description: "Careers at YouMimic.",
+  robots: noIndex,
 };
 
 export default function CareersPage() {

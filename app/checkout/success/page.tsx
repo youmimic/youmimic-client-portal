@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { ActivationStatus } from "./activation-status";
+import { noIndex } from "@/lib/seo";
 
 export const metadata = {
   title: "Setting up your account | YouMimic",
+  robots: noIndex,
 };
 
 // Reached from the guest checkout Stripe Checkout Session's success_url.

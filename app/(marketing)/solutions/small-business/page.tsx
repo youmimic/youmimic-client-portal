@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Share2,
@@ -11,12 +10,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DarkCtaBand } from "@/components/marketing/dark-cta-band";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: "Small Business Solutions | YouMimic",
   description:
     "AI avatar video for small businesses: social content, proposals, outreach, and sales, without a production team.",
-};
+  path: "/solutions/small-business",
+});
 
 const offerings = [
   {

@@ -1,12 +1,14 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { Award, Rocket, Trophy, Newspaper, Building2, Star } from "lucide-react";
 import { DarkCtaBand } from "@/components/marketing/dark-cta-band";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: "Press | YouMimic",
-  description: "Press coverage and recognition for YouMimic.",
-};
+  description:
+    "News coverage and recognition for YouMimic and our AI avatar technology.",
+  path: "/press",
+});
 
 // Real press mentions/awards (from glassengine.wixstudio.com/youmimicai's
 // /expertise page) — headlines are the real, specific claims from that

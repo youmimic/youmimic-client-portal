@@ -14,6 +14,7 @@ import {
   PlanTermDetailFields,
   type CheckoutPlanKey,
 } from "@/components/checkout/plan-term-fields";
+import { CheckoutTrustPanel } from "@/components/checkout/trust-signals";
 import type { BillingTermKey } from "@/lib/pricing/plans";
 
 // Owns the plan/term selection state for the authenticated confirm-and-pay
@@ -32,23 +33,26 @@ export function CheckoutCard({
   const [term, setTerm] = useState<BillingTermKey>(initialTerm);
 
   return (
-    <Card>
-      <CardHeader>
-        <PlanTermHeaderFields plan={plan} onPlanChange={setPlan} />
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <PlanTermDetailFields plan={plan} term={term} onTermChange={setTerm} />
-        <div className="flex items-start gap-2 pt-2 text-sm text-muted-foreground">
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
-          <span>You&apos;ll be redirected to Stripe to complete payment securely.</span>
-        </div>
-      </CardContent>
-      <CardFooter className="flex-col items-stretch gap-3">
-        <BillingActionButton
-          action={{ type: "checkout", planType: plan, billingTerm: term }}
-          label="Proceed to payment"
-        />
-      </CardFooter>
-    </Card>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <PlanTermHeaderFields plan={plan} onPlanChange={setPlan} />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <PlanTermDetailFields plan={plan} term={term} onTermChange={setTerm} />
+          <div className="flex items-start gap-2 pt-2 text-sm text-muted-foreground">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
+            <span>You&apos;ll be redirected to Stripe to complete payment securely.</span>
+          </div>
+        </CardContent>
+        <CardFooter className="flex-col items-stretch gap-3">
+          <BillingActionButton
+            action={{ type: "checkout", planType: plan, billingTerm: term }}
+            label="Proceed to payment"
+          />
+        </CardFooter>
+      </Card>
+      <CheckoutTrustPanel />
+    </div>
   );
 }

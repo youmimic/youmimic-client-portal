@@ -1,13 +1,14 @@
-import type { Metadata } from "next";
 import Script from "next/script";
 import { ContactForm } from "@/components/marketing/contact-form";
 import { CalendlyInlineWidget } from "@/components/marketing/calendly-widget";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: "Contact Sales | YouMimic",
   description:
     "Book a demo or reach out to the YouMimic team to learn how AI video avatars can scale your business communication.",
-};
+  path: "/contact",
+});
 
 const offices = [
   { city: "Hobart", address: "Level 5, 24 Davey Street, Tasmania 7008" },

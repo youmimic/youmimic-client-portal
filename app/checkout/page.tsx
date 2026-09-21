@@ -3,9 +3,11 @@ import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { isCheckoutPlanKey, isBillingTermKey } from "@/lib/checkout/plan-keys";
 import { CheckoutCard } from "./checkout-card";
+import { noIndex } from "@/lib/seo";
 
 export const metadata = {
   title: "Checkout | YouMimic",
+  robots: noIndex,
 };
 
 // Looks up a draftId from a reminder email's resume link
@@ -74,8 +76,8 @@ export default async function CheckoutPage({
   const resolvedTerm = resumableDraft ? (resumableDraft.billingTerm as typeof term) : term;
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6">
-      <div className="mb-8">
+    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
+      <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Confirm your plan</h1>
         <p className="mt-1 text-muted-foreground">
           Review your selection, then continue to secure payment. Changed your mind? Pick a

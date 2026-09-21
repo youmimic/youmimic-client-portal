@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@/auth";
 import {
@@ -27,12 +26,14 @@ import { Button } from "@/components/ui/button";
 import { PricingSection } from "@/components/marketing/pricing-section";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 import { NewsletterForm } from "@/components/marketing/newsletter-form";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: "Pricing | YouMimic",
   description:
-    "Simple, transparent pricing for individuals, enterprises, and custom deployments.",
-};
+    "Compare YouMimic plans for small businesses, growing teams and large organisations. Pick a 12 or 24 month term and get your AI avatars set up.",
+  path: "/pricing",
+});
 
 const whyYouMimic = [
   {

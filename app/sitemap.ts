@@ -1,12 +1,21 @@
 import type { MetadataRoute } from "next";
+import { siteUrl } from "@/lib/seo";
 
-const baseUrl = process.env.BASE_URL || "http://localhost:3000";
+// Only pages that are real, public and worth ranking. Placeholder pages
+// (careers, dataroom, media center) and sign-in/checkout steps are left out
+// on purpose. No lastModified: a fake "changed just now" date on every
+// entry teaches search engines to ignore the field, so it's better left off.
+const routes = [
+  "",
+  "/pricing",
+  "/solutions",
+  "/solutions/small-business",
+  "/contact",
+  "/ai-ethics",
+  "/press",
+];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const routes = ["", "/pricing", "/solutions", "/contact"];
-
-  return routes.map((route) => ({
-    url: `${baseUrl}${route}`,
-    lastModified: new Date(),
-  }));
+  const baseUrl = siteUrl();
+  return routes.map((route) => ({ url: `${baseUrl}${route}` }));
 }

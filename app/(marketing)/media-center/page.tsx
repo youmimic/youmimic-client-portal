@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { ComingSoonPage } from "@/components/marketing/coming-soon-page";
+import { noIndex } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Media Center | YouMimic",
   description: "YouMimic media resources and brand assets.",
+  robots: noIndex,
 };
 
 export default function MediaCenterPage() {

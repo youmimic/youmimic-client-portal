@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Lock } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -252,7 +253,14 @@ export function GuestCheckoutForm({
           />
 
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? "Redirecting…" : "Proceed to payment"}
+            {form.formState.isSubmitting ? (
+              "Redirecting…"
+            ) : (
+              <>
+                <Lock className="size-4" aria-hidden="true" />
+                Proceed to payment
+              </>
+            )}
           </Button>
         </form>
       </Form>

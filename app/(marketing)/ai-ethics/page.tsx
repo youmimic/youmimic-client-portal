@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import {
   Landmark,
   FileDown,
@@ -15,12 +14,14 @@ import {
   Globe2,
 } from "lucide-react";
 import { DarkCtaBand } from "@/components/marketing/dark-cta-band";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: "AI Ethics | YouMimic",
   description:
-    "YouMimic's approach to responsible AI avatar generation: our policy regulators, our guiding principles, and our ethics commitment.",
-};
+    "How YouMimic approaches responsible AI avatars: the frameworks we follow, our guiding principles, and what we promise to our clients.",
+  path: "/ai-ethics",
+});
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 

@@ -3,6 +3,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SiteLogo } from "@/components/branding/site-logo";
 import { HEADER_HEIGHT } from "@/components/marketing/marketing-header-config";
 import { GoogleTagManagerScripts } from "@/components/analytics/google-tag-manager";
+import { SecureCheckoutLabel } from "@/components/checkout/trust-signals";
 
 // Deliberately minimal — no nav, no sign-in/get-started buttons, unlike
 // MarketingHeader. A checkout flow's own header should give the buyer
@@ -38,7 +39,10 @@ export default function CheckoutLayout({ children }: { children: React.ReactNode
             iconVariant="light"
             className="flex h-6 w-auto items-center sm:h-7 md:h-8"
           />
-          <ThemeToggle className="text-white hover:!text-white hover:bg-white/10" />
+          <div className="flex items-center gap-3">
+            <SecureCheckoutLabel />
+            <ThemeToggle className="text-white hover:!text-white hover:bg-white/10" />
+          </div>
         </div>
       </header>
       <main className="flex-1 bg-background">{children}</main>

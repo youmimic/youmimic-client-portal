@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import SignOutButton from "@/components/auth/sign-out-button";
+import { noIndex } from "@/lib/seo";
 
 const ACCOUNTS_EMAIL =
   process.env.NEXT_PUBLIC_ACCOUNTS_EMAIL ?? "accounts@youmimic.com";
@@ -18,7 +19,8 @@ const ENTERPRISE_EMAIL =
   process.env.NEXT_PUBLIC_ENTERPRISE_EMAIL ?? "enterprise@youmimic.com";
 
 export const metadata = {
-  title: "Account Suspended | YouMimic Portal",
+  title: "Account Suspended | YouMimic",
+  robots: noIndex,
 };
 
 export default async function SuspendedPage({

@@ -11,6 +11,12 @@ import {
 } from "@/components/ui/card";
 import SignOutButton from "@/components/auth/sign-out-button";
 import LoginForm from "./login-form";
+import { noIndex } from "@/lib/seo";
+
+export const metadata = {
+  title: "Log in | YouMimic",
+  robots: noIndex,
+};
 
 function getInitial(name?: string | null, email?: string | null) {
   const value = name?.trim() || email?.trim() || "U";

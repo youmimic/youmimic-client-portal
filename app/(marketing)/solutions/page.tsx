@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Shield,
@@ -9,12 +8,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DarkCtaBand } from "@/components/marketing/dark-cta-band";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: "Solutions | YouMimic",
   description:
     "See how CEOs, executives, educators, creators, and digital communicators across every industry are scaling their video presence with YouMimic.",
-};
+  path: "/solutions",
+});
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 

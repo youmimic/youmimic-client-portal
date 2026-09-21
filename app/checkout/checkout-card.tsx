@@ -9,6 +9,7 @@ import {
   type CheckoutPlanKey,
 } from "@/components/checkout/plan-term-fields";
 import type { BillingTermKey } from "@/lib/pricing/plans";
+import { CheckoutTrustPanel } from "@/components/checkout/trust-signals";
 import { GuestCheckoutForm } from "./guest-checkout-form";
 
 // Two-column checkout layout: order summary (what/how much) on the left,
@@ -44,45 +45,47 @@ export function CheckoutCard({
   const [term, setTerm] = useState<BillingTermKey>(initialTerm);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-      <Card className="border-t-4 border-t-primary bg-muted/30 lg:sticky lg:top-20">
-        <CardHeader>
-          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            Order summary
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <PlanTermHeaderFields plan={plan} onPlanChange={setPlan} />
-          <PlanTermDetailFields plan={plan} term={term} onTermChange={setTerm} />
-          <p className="text-xs text-muted-foreground">
-            Recurring monthly charge, billed automatically until cancelled. Taxes may apply at
-            checkout depending on your location. You can cancel anytime from your billing
-            settings once your account is set up.
-          </p>
-          <div className="flex items-start gap-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
-            <span>You&apos;ll be redirected to Stripe to complete payment securely.</span>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        <Card className="border-t-4 border-t-primary bg-muted/30 lg:sticky lg:top-20">
+          <CardHeader>
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Order summary
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <PlanTermHeaderFields plan={plan} onPlanChange={setPlan} />
+            <PlanTermDetailFields plan={plan} term={term} onTermChange={setTerm} />
+            <p className="text-xs text-muted-foreground">
+              Recurring monthly charge, billed automatically each month. Taxes may apply at
+              checkout depending on your location.
+            </p>
+            <div className="flex items-start gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
+              <span>You&apos;ll be redirected to Stripe to complete payment securely.</span>
+            </div>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            Your details
-          </p>
-        </CardHeader>
-        <CardContent>
-          <GuestCheckoutForm
-            planType={plan}
-            billingTerm={term}
-            resumeDraftId={resumeDraftId}
-            initialEmail={initialEmail}
-            initialFullName={initialFullName}
-            initialCompanyName={initialCompanyName}
-          />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Your details
+            </p>
+          </CardHeader>
+          <CardContent>
+            <GuestCheckoutForm
+              planType={plan}
+              billingTerm={term}
+              resumeDraftId={resumeDraftId}
+              initialEmail={initialEmail}
+              initialFullName={initialFullName}
+              initialCompanyName={initialCompanyName}
+            />
+          </CardContent>
+        </Card>
+      </div>
+      <CheckoutTrustPanel wide />
     </div>
   );
 }

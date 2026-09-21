@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { noIndex } from "@/lib/seo";
 import {
   Card,
   CardContent,
@@ -8,6 +9,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
+export const metadata = {
+  title: "Verify your email | YouMimic",
+  robots: noIndex,
+};
 
 export default async function VerifyEmailPage({
   searchParams,
