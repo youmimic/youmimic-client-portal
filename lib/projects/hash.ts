@@ -8,7 +8,12 @@ import { resolveScene } from "@/lib/projects/rules";
 // Scene titles are left out on purpose: renaming a scene doesn't change the
 // video.
 export function projectContentHash(
-  project: ProjectDefaults & { aspectRatio: string; resolution: string | null; engine: string },
+  project: ProjectDefaults & {
+    aspectRatio: string;
+    resolution: string | null;
+    engine: string;
+    captionsEnabled: boolean;
+  },
   scenes: SceneData[],
 ): string {
   const ordered = [...scenes].sort((a, b) => a.orderIndex - b.orderIndex);
@@ -16,14 +21,19 @@ export function projectContentHash(
     aspectRatio: project.aspectRatio,
     resolution: project.resolution,
     engine: project.engine,
+    captionsEnabled: project.captionsEnabled,
     scenes: ordered.map((scene) => {
       const r = resolveScene(scene, project);
       return {
+        kind: scene.kind,
         script: scene.script.trim(),
         avatarId: r.avatarId,
         avatarLookId: r.avatarLookId,
         voiceId: r.voiceId,
         backgroundColor: scene.backgroundColor,
+        mediaUrl: scene.mediaUrl,
+        mediaDurationSeconds: scene.mediaDurationSeconds,
+        motionPrompt: scene.motionPrompt,
       };
     }),
   };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Pause, Play, Search } from "lucide-react";
+import { Check, ChevronDown, Pause, Play, Search, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +13,10 @@ export type VoiceOption = {
   language: string | null;
   gender: string | null;
   preview_audio_url: string | null;
+  // Whether this voice honours a `<break time="1s"/>` pause tag in the
+  // script. Shown as a badge here, at the point of choosing a voice, rather
+  // than trying to re-check it later wherever the script is written.
+  support_pause?: boolean;
 };
 
 export type SelectedVoice = { id: string; name: string } | null;
@@ -171,7 +175,18 @@ export function VoicePicker({
                     )}
                   >
                     <span className="min-w-0">
-                      <span className="block truncate">{voice.name}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate">{voice.name}</span>
+                        {voice.support_pause && (
+                          <span
+                            title="Supports pauses in the script"
+                            className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                          >
+                            <Timer className="h-2.5 w-2.5" aria-hidden="true" />
+                            Pauses
+                          </span>
+                        )}
+                      </span>
                       <span className="block truncate text-xs text-muted-foreground">
                         {[voice.language, voice.gender].filter(Boolean).join(" · ") || "No details"}
                       </span>

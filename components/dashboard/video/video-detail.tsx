@@ -163,6 +163,18 @@ export function VideoDetail({
     }
   }
 
+  // HeyGen's video link is signed and expires after about a week. Rather than
+  // refreshing every video's link up front (see /dashboard/videos, which
+  // heals its thumbnails the same way), this page only refreshes when the
+  // player actually fails to load — once, so a genuinely offline connection
+  // doesn't retry forever.
+  const autoHealed = useRef(false);
+  function handlePlaybackError() {
+    if (autoHealed.current || busy !== null) return;
+    autoHealed.current = true;
+    void refreshUrl();
+  }
+
   async function regenerate() {
     setBusy("regenerate");
     setActionError(null);
@@ -246,6 +258,7 @@ export function VideoDetail({
                 playsInline
                 preload="metadata"
                 poster={video.thumbnailUrl ?? undefined}
+                onError={handlePlaybackError}
                 className={isVertical ? "max-h-[70vh] w-auto max-w-full" : "aspect-video w-full"}
               >
                 <source src={video.videoUrl} type="video/mp4" />

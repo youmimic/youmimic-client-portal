@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { isCheckoutPlanKey, isBillingTermKey } from "@/lib/checkout/plan-keys";
 import { CheckoutCard } from "./checkout-card";
+import { PageHeader } from "@/components/dashboard/page-header";
 
 export const metadata = {
   title: "Confirm your plan | YouMimic Portal",
@@ -24,13 +25,10 @@ export default async function CheckoutPage({
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Confirm your plan</h1>
-        <p className="text-muted-foreground">
-          Review your selection before proceeding to payment. Changed your mind? Pick a
-          different plan or billing term right here.
-        </p>
-      </div>
+      <PageHeader
+        title="Confirm your plan"
+        description="Review your selection before proceeding to payment. Changed your mind? Pick a different plan or billing term right here."
+      />
 
       <CheckoutCard initialPlan={plan} initialTerm={term} />
     </div>

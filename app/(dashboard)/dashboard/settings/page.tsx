@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { InviteForm } from "@/components/dashboard/invite-form";
+import { formatDate } from "@/lib/format";
 
 export const metadata = {
   title: "Settings | YouMimic Portal",
@@ -42,13 +43,6 @@ async function fetchOwnedEnterprise(userId: string) {
   });
 }
 
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(new Date(date));
-}
 
 function FieldRow({
   label,
@@ -170,19 +164,10 @@ export default async function SettingsPage() {
   if (!user) redirect("/login");
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          View your account details and access information.
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        <AccountCard user={user} />
-        <AccessCard user={user} />
-        {enterprise && <TeamCard enterprise={enterprise} />}
-      </div>
+    <div className="space-y-4">
+      <AccountCard user={user} />
+      <AccessCard user={user} />
+      {enterprise && <TeamCard enterprise={enterprise} />}
     </div>
   );
 }

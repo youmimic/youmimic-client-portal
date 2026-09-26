@@ -534,6 +534,11 @@ model VideoProject {
   // hash on the current scenes means the video is out of date.
   lastGeneratedHash String?
 
+  // Burns subtitles into the finished video and also returns a downloadable
+  // .srt file. Confirmed live against the provider (2026-09-26) as a plain
+  // top-level flag on a studio job — see lib/heygen.ts.
+  captionsEnabled Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -545,22 +550,51 @@ model VideoProject {
   @@map("video_projects")
 }
 
+// Confirmed live against the provider (2026-09-26): the "studio" job accepts
+// image and video scenes alongside avatar ones. Unlike avatar_id/voice_id, an
+// image/video source URL is only checked when the provider actually
+// downloads it, so a bad link only ever surfaces as a failed render, the
+// same as any other generation failure.
+enum SceneKind {
+  AVATAR
+  IMAGE
+  VIDEO
+}
+
 model VideoScene {
-  id         String @id @default(cuid())
+  id         String    @id @default(cuid())
   projectId  String
   // 0-based position. Reorders renumber the whole project inside a
   // transaction, which is fine at the 20-scene cap and keeps ordering simple.
   orderIndex Int
-  title      String @default("")
-  script     String @default("")
+  title      String    @default("")
+  script     String    @default("")
+  kind       SceneKind @default(AVATAR)
 
-  // Null means "use the project default".
+  // Null means "use the project default". Unused for IMAGE/VIDEO scenes.
   avatarId        String?
   avatarLookId    String?
+  // Narration voice. For AVATAR scenes this is who speaks; for IMAGE/VIDEO
+  // scenes it only applies if the scene has a script (see mediaUrl below).
   voiceId         String?
   voiceName       String?
   // Solid colour only, which is all the provider supports for avatar scenes.
   backgroundColor String?
+
+  // IMAGE/VIDEO scenes only — a link to an already-hosted image or clip.
+  // There's no file upload here: no storage exists in this app, so a scene's
+  // media has to already live somewhere with a public URL.
+  mediaUrl             String?
+  // IMAGE scenes only, and only when the scene has no script (a silent
+  // scene needs something to say how long it's shown for; a narrated one
+  // takes its length from the voiceover instead, same as an avatar scene).
+  mediaDurationSeconds Float?
+
+  // AVATAR scenes only. Natural-language body motion/gesture direction.
+  // Confirmed schema-valid only for the Avatar V engine on a video avatar —
+  // rejected on other engines per the provider's docs. Not yet exercised
+  // against a real avatar, since only fake ids have been probed so far.
+  motionPrompt String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

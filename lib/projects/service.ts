@@ -48,11 +48,13 @@ export type FinalVideoView = {
 
 export type SnapshotScene = {
   order: number;
+  kind: "AVATAR" | "IMAGE" | "VIDEO";
   title: string;
   script: string;
   avatarName: string | null;
   voiceName: string | null;
   backgroundColor: string | null;
+  mediaUrl: string | null;
 };
 
 export type ProjectView = {
@@ -62,6 +64,7 @@ export type ProjectView = {
   aspectRatio: string;
   resolution: string | null;
   engine: "AVATAR_III" | "AVATAR_IV" | "AVATAR_V";
+  captionsEnabled: boolean;
   defaults: ProjectDefaults;
   version: number;
   scenes: SceneData[];
@@ -77,11 +80,15 @@ const sceneSelect = {
   orderIndex: true,
   title: true,
   script: true,
+  kind: true,
   avatarId: true,
   avatarLookId: true,
   voiceId: true,
   voiceName: true,
   backgroundColor: true,
+  mediaUrl: true,
+  mediaDurationSeconds: true,
+  motionPrompt: true,
 } as const;
 
 type Tx = Prisma.TransactionClient;
@@ -176,6 +183,7 @@ export async function getProjectView(userId: string, projectId: string): Promise
     aspectRatio: project.aspectRatio,
     resolution: project.resolution,
     engine: project.engine,
+    captionsEnabled: project.captionsEnabled,
     defaults: {
       defaultAvatarId: project.defaultAvatarId,
       defaultAvatarLookId: project.defaultAvatarLookId,
@@ -351,19 +359,22 @@ export async function addScene(userId: string, projectId: string, expectedVersio
     const existing = await tx.videoScene.findMany({
       where: { projectId },
       orderBy: { orderIndex: "asc" },
-      select: { id: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true },
+      select: { id: true, kind: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true },
     });
     if (existing.length >= MAX_SCENES) {
       throw new ProjectError("LIMIT", 422, `A video can have up to ${MAX_SCENES} scenes.`);
     }
 
-    // A new scene starts with the same avatar, look and voice as the scene it
-    // follows (or the last scene), which is what people usually want.
+    // A new scene starts with the same kind, avatar, look and voice as the
+    // scene it follows (or the last scene), which is what people usually
+    // want. Content fields (script, media link) are never carried over,
+    // same as a fresh scene never inherits another scene's script.
     const anchor = existing.find((s) => s.id === afterSceneId) ?? existing[existing.length - 1];
     const created = await tx.videoScene.create({
       data: {
         projectId,
         orderIndex: existing.length,
+        kind: anchor?.kind,
         avatarId: anchor?.avatarId ?? null,
         avatarLookId: anchor?.avatarLookId ?? null,
         voiceId: anchor?.voiceId ?? null,
@@ -392,11 +403,15 @@ export async function duplicateScene(userId: string, projectId: string, sceneId:
         orderIndex: scenes.length,
         title: source.title ? `${source.title} (copy)`.slice(0, 80) : "",
         script: source.script,
+        kind: source.kind,
         avatarId: source.avatarId,
         avatarLookId: source.avatarLookId,
         voiceId: source.voiceId,
         voiceName: source.voiceName,
         backgroundColor: source.backgroundColor,
+        mediaUrl: source.mediaUrl,
+        mediaDurationSeconds: source.mediaDurationSeconds,
+        motionPrompt: source.motionPrompt,
       },
       select: { id: true },
     });
@@ -462,20 +477,55 @@ export async function listProjects(userId: string): Promise<ProjectSummary[]> {
       title: true,
       status: true,
       updatedAt: true,
+      defaultAvatarId: true,
+      defaultAvatarLookId: true,
       _count: { select: { scenes: true } },
+      scenes: { orderBy: { orderIndex: "asc" }, take: 1, select: { avatarId: true, avatarLookId: true } },
       generatedVideos: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, thumbnailUrl: true } },
     },
   });
 
-  return rows.map((p) => {
+  // Thumbnail = the look used by the first scene (the project's default look
+  // for older projects whose scenes inherit it). Two batched lookups, both
+  // limited to this user's avatars.
+  const first = rows.map((p) => {
+    const scene = p.scenes[0];
+    const avatarId = scene?.avatarId ?? p.defaultAvatarId ?? null;
+    const lookId = scene?.avatarId ? scene.avatarLookId : p.defaultAvatarLookId;
+    return { avatarId, lookId };
+  });
+  const lookIds = [...new Set(first.map((f) => f.lookId).filter((x): x is string => !!x))];
+  const avatarIds = [...new Set(first.map((f) => f.avatarId).filter((x): x is string => !!x))];
+
+  const [looks, avatars] = await Promise.all([
+    lookIds.length
+      ? prisma.avatarLook.findMany({ where: { id: { in: lookIds }, avatar: { userId } }, select: { id: true, previewUrl: true } })
+      : Promise.resolve([]),
+    avatarIds.length
+      ? prisma.avatar.findMany({
+          where: { id: { in: avatarIds }, userId },
+          select: {
+            id: true,
+            previewUrl: true,
+            looks: { where: { status: "ready" }, orderBy: { name: "asc" }, take: 1, select: { previewUrl: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const lookPreview = new Map(looks.map((l) => [l.id, l.previewUrl]));
+  const avatarPreview = new Map(avatars.map((a) => [a.id, a.looks[0]?.previewUrl ?? a.previewUrl]));
+
+  return rows.map((p, i) => {
     const latest = p.generatedVideos[0];
+    const { avatarId, lookId } = first[i];
+    const lookThumb = (lookId ? lookPreview.get(lookId) : null) ?? (avatarId ? avatarPreview.get(avatarId) : null) ?? null;
     return {
       id: p.id,
       title: p.title,
       status: latest ? mapVideoStatus(latest.status) : p.status === "GENERATING" ? ("DRAFT" as VideoProjectStatus) : p.status,
       sceneCount: p._count.scenes,
       updatedAt: p.updatedAt.toISOString(),
-      thumbnailUrl: latest?.thumbnailUrl ?? null,
+      thumbnailUrl: lookThumb ?? latest?.thumbnailUrl ?? null,
     };
   });
 }
@@ -501,16 +551,21 @@ export async function duplicateProject(userId: string, projectId: string): Promi
         defaultAvatarLookId: source.defaultAvatarLookId,
         defaultVoiceId: source.defaultVoiceId,
         defaultVoiceName: source.defaultVoiceName,
+        captionsEnabled: source.captionsEnabled,
         scenes: {
           create: source.scenes.map((sc, index) => ({
             orderIndex: index,
             title: sc.title,
             script: sc.script,
+            kind: sc.kind,
             avatarId: sc.avatarId,
             avatarLookId: sc.avatarLookId,
             voiceId: sc.voiceId,
             voiceName: sc.voiceName,
             backgroundColor: sc.backgroundColor,
+            mediaUrl: sc.mediaUrl,
+            mediaDurationSeconds: sc.mediaDurationSeconds,
+            motionPrompt: sc.motionPrompt,
           })),
         },
       },

@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { auth } from "@/auth";
 import { fetchPaymentsForUser } from "@/lib/payments";
 import { PaymentHistoryTable } from "@/components/dashboard/payment-history-table";
+import { PageHeader } from "@/components/dashboard/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -32,10 +33,10 @@ export default async function PaymentHistoryPage() {
         <span className="truncate text-foreground font-medium">Payment History</span>
       </nav>
 
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Payment History</h1>
-        <p className="text-muted-foreground">Every payment on your personal and enterprise plans.</p>
-      </div>
+      <PageHeader
+        title="Payment History"
+        description="Every payment on your personal and enterprise plans."
+      />
 
       <PaymentHistoryTable payments={payments} />
     </div>

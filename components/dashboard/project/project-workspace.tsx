@@ -19,6 +19,7 @@ import { FinalView } from "@/components/dashboard/project/final-view";
 import { ProjectStatusBadge } from "@/components/dashboard/project/project-status-badge";
 import { SceneEditor } from "@/components/dashboard/project/scene-editor";
 import { SceneSidebar } from "@/components/dashboard/project/scene-sidebar";
+import { Thumb } from "@/components/dashboard/project/avatar-look-picker";
 import {
   SettingsPanel,
   type ProjectSettingsPatch,
@@ -26,7 +27,7 @@ import {
 } from "@/components/dashboard/project/settings-panel";
 import type { HeyGenEngine } from "@/lib/heygen";
 import { moveItem } from "@/lib/projects/ordering";
-import { evaluateProject, PROJECT_TITLE_MAX, type AvatarOption, type SceneData } from "@/lib/projects/rules";
+import { evaluateProject, PROJECT_TITLE_MAX, resolveScene, type AvatarOption, type SceneData } from "@/lib/projects/rules";
 import type { ProjectView } from "@/lib/projects/service";
 import { formatCents, formatDuration, type VideoEngineValue } from "@/lib/video-display";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,14 @@ export function ProjectWorkspace({ initial, avatars }: { initial: ProjectView; a
   const engineLower = project.engine.toLowerCase() as HeyGenEngine;
   const generating = project.status === "GENERATING";
   const locked = generating;
+
+  // Thumbnail for the whole project: the look used by the first scene.
+  const firstScene = project.scenes[0];
+  const firstResolved = firstScene ? resolveScene(firstScene, project.defaults) : null;
+  const firstAvatar = avatars.find((a) => a.id === firstResolved?.avatarId) ?? null;
+  const firstLook =
+    firstAvatar?.looks.find((l) => l.id === firstResolved?.avatarLookId) ?? firstAvatar?.looks.find((l) => l.ready) ?? null;
+  const projectThumb = firstLook?.previewUrl ?? firstAvatar?.previewUrl ?? null;
 
   const activeIndex = Math.max(0, project.scenes.findIndex((s) => s.id === activeId));
   const activeScene: SceneData | undefined = project.scenes[activeIndex];
@@ -220,6 +229,7 @@ export function ProjectWorkspace({ initial, avatars }: { initial: ProjectView; a
       if (patch.aspectRatio !== undefined) next.aspectRatio = patch.aspectRatio;
       if (patch.resolution !== undefined) next.resolution = patch.resolution;
       if (patch.engine !== undefined) next.engine = patch.engine.toUpperCase() as ProjectView["engine"];
+      if (patch.captionsEnabled !== undefined) next.captionsEnabled = patch.captionsEnabled;
       next.defaults = {
         ...p.defaults,
         defaultVoiceId: patch.defaultVoiceId !== undefined ? patch.defaultVoiceId : p.defaults.defaultVoiceId,
@@ -502,6 +512,11 @@ export function ProjectWorkspace({ initial, avatars }: { initial: ProjectView; a
           Back to videos
         </Link>
         <div className="flex flex-wrap items-center gap-3">
+          <Thumb
+            src={projectThumb}
+            className="h-12 w-12 rounded-lg ring-1 ring-foreground/10"
+            iconClass="h-6 w-6"
+          />
           <div className="min-w-0 flex-1">
             <label htmlFor="project-title" className="sr-only">
               Video title
@@ -696,6 +711,7 @@ export function ProjectWorkspace({ initial, avatars }: { initial: ProjectView; a
                   aspectRatio={project.aspectRatio}
                   resolution={project.resolution}
                   engine={engineLower}
+                  captionsEnabled={project.captionsEnabled}
                   disabled={locked}
                   onSceneChange={(patch) => editSceneSettings(activeScene.id, patch)}
                   onProjectChange={editProject}

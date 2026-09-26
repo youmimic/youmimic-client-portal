@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { Layers, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,12 +25,15 @@ export function ProjectCard({
   status,
   sceneCount,
   updatedAt,
+  thumbnailUrl,
 }: {
   id: string;
   title: string;
   status: ProjectStatusValue;
   sceneCount: number;
   updatedAt: string;
+  // The look used by the first scene.
+  thumbnailUrl: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -59,19 +63,33 @@ export function ProjectCard({
   }
 
   return (
-    <div className="relative rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow focus-within:ring-2 focus-within:ring-primary hover:ring-primary/50">
+    <div className="relative overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow focus-within:ring-2 focus-within:ring-primary hover:ring-primary/50">
       <Link
         href={`/dashboard/videos/projects/${id}`}
-        className="block rounded-xl p-3 pb-10 focus-visible:outline-none"
+        className="group block focus-visible:outline-none"
         aria-label={`Open ${name}`}
       >
-        <div className="flex items-start justify-between gap-2">
-          <p className="truncate text-sm font-medium">{name}</p>
-          <ProjectStatusBadge status={status} />
+        <div className="relative flex aspect-video items-center justify-center bg-muted">
+          {thumbnailUrl ? (
+            <Image
+              src={thumbnailUrl}
+              alt=""
+              fill
+              unoptimized
+              className="object-cover"
+              sizes="(min-width: 1024px) 33vw, 50vw"
+            />
+          ) : (
+            <Layers className="h-8 w-8 text-muted-foreground/30" aria-hidden="true" />
+          )}
+          <ProjectStatusBadge status={status} className="absolute left-2 top-2 shadow-sm" />
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {sceneCount} {sceneCount === 1 ? "scene" : "scenes"} · Edited {formatDateTime(updatedAt)}
-        </p>
+        <div className="space-y-1 p-3 pb-11">
+          <p className="truncate text-sm font-medium group-hover:text-primary">{name}</p>
+          <p className="text-xs text-muted-foreground">
+            {sceneCount} {sceneCount === 1 ? "scene" : "scenes"} · Edited {formatDateTime(updatedAt)}
+          </p>
+        </div>
       </Link>
 
       {canDelete && (

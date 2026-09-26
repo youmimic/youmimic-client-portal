@@ -110,6 +110,7 @@ export default async function VideosPage({
                   status={p.status}
                   sceneCount={p.sceneCount}
                   updatedAt={p.updatedAt}
+                  thumbnailUrl={p.thumbnailUrl}
                 />
               </li>
             ))}

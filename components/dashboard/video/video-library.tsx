@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Film, Video } from "lucide-react";
@@ -44,6 +44,104 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "FAILED", label: "Failed" },
 ];
 
+// One video (or multi-scene project render) as a thumbnail card. Shared by the
+// Videos page and the dashboard home so both look the same.
+// A HeyGen thumbnail link is signed and expires after about a week. Rather
+// than pre-emptively refreshing every video's link on every page load (slow,
+// and redundant with the daily cron in vercel.json), each card heals itself:
+// if the browser can't load the image, it asks the server for a fresh link
+// once, and swaps it in. Only completed videos have a stable link worth
+// refreshing this way.
+function SelfHealingThumb({
+  videoId,
+  status,
+  thumbnailUrl,
+}: {
+  videoId: string;
+  status: VideoStatus;
+  thumbnailUrl: string | null;
+}) {
+  const [src, setSrc] = useState(thumbnailUrl);
+  const [broken, setBroken] = useState(false);
+  const attempted = useRef(false);
+
+  function handleError() {
+    if (attempted.current || status !== "COMPLETED") {
+      setBroken(true);
+      return;
+    }
+    attempted.current = true;
+    fetch(`/api/dashboard/videos/${videoId}/refresh-url`, { method: "POST" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: { thumbnailUrl?: string | null } | null) => {
+        if (json?.thumbnailUrl) setSrc(json.thumbnailUrl);
+        else setBroken(true);
+      })
+      .catch(() => setBroken(true));
+  }
+
+  if (!src || broken) {
+    return <Video className="h-8 w-8 text-muted-foreground/30" aria-hidden="true" />;
+  }
+
+  return (
+    <Image
+      key={src}
+      src={src}
+      alt=""
+      fill
+      unoptimized
+      className="object-cover"
+      sizes="(min-width: 1024px) 33vw, 50vw"
+      onError={handleError}
+    />
+  );
+}
+
+export function VideoCard({ v }: { v: LibraryVideo }) {
+  return (
+    <Link
+      href={
+        v.projectId
+          ? `/dashboard/videos/projects/${v.projectId}`
+          : `/dashboard/videos/${v.id}`
+      }
+      className="group block overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      <div className="relative flex aspect-video items-center justify-center bg-muted">
+        <SelfHealingThumb videoId={v.id} status={v.status} thumbnailUrl={v.thumbnailUrl} />
+        <VideoStatusBadge
+          status={v.status}
+          className="absolute left-2 top-2 shadow-sm"
+        />
+      </div>
+      <div className="space-y-1 p-3">
+        <p className="truncate text-sm font-medium group-hover:text-primary">
+          {v.title}
+        </p>
+        <p className="truncate text-xs text-muted-foreground">
+          {v.projectId ? "Multi-scene · " : ""}
+          {v.avatarName} · {formatDateTime(v.createdAt)}
+        </p>
+        <p className="truncate text-xs text-muted-foreground">
+          {ENGINE_LABEL[v.engine]}
+          {v.aspectRatio &&
+            ` · ${ASPECT_RATIO_LABEL[v.aspectRatio]?.split(" ")[0] ?? v.aspectRatio}`}
+          {v.durationSeconds != null &&
+            ` · ${formatDuration(v.durationSeconds)}`}
+          {v.estimatedCostCents != null &&
+            ` · ~${formatCents(v.estimatedCostCents)}`}
+        </p>
+        {v.status === "FAILED" && v.errorMessage && (
+          <p className="line-clamp-2 text-xs text-destructive">
+            {v.errorMessage}
+          </p>
+        )}
+      </div>
+    </Link>
+  );
+}
+
 export function VideoLibrary({ videos }: { videos: LibraryVideo[] }) {
   const [filter, setFilter] = useState<Filter>("ALL");
 
@@ -58,12 +156,20 @@ export function VideoLibrary({ videos }: { videos: LibraryVideo[] }) {
   );
 
   const visible = videos.filter((v) =>
-    filter === "ALL" ? true : filter === "ACTIVE" ? isInProgress(v.status) : v.status === filter,
+    filter === "ALL"
+      ? true
+      : filter === "ACTIVE"
+        ? isInProgress(v.status)
+        : v.status === filter,
   );
 
   return (
     <div className="space-y-4">
-      <div role="group" aria-label="Filter videos by status" className="flex flex-wrap gap-2">
+      <div
+        role="group"
+        aria-label="Filter videos by status"
+        className="flex flex-wrap gap-2"
+      >
         {FILTERS.map((f) => (
           <button
             key={f.value}
@@ -85,9 +191,18 @@ export function VideoLibrary({ videos }: { videos: LibraryVideo[] }) {
       {visible.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-start gap-3 py-8">
-            <Film className="h-8 w-8 text-muted-foreground/40" aria-hidden="true" />
-            <p className="text-sm text-muted-foreground">No videos match this filter.</p>
-            <Button variant="outline" size="sm" onClick={() => setFilter("ALL")}>
+            <Film
+              className="h-8 w-8 text-muted-foreground/40"
+              aria-hidden="true"
+            />
+            <p className="text-sm text-muted-foreground">
+              No videos match this filter.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setFilter("ALL")}
+            >
               Show all videos
             </Button>
           </CardContent>
@@ -96,42 +211,7 @@ export function VideoLibrary({ videos }: { videos: LibraryVideo[] }) {
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((v) => (
             <li key={v.id}>
-              <Link
-                href={v.projectId ? `/dashboard/videos/projects/${v.projectId}` : `/dashboard/videos/${v.id}`}
-                className="group block overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <div className="relative flex aspect-video items-center justify-center bg-muted">
-                  {v.thumbnailUrl ? (
-                    <Image
-                      src={v.thumbnailUrl}
-                      alt=""
-                      fill
-                      unoptimized
-                      className="object-cover"
-                      sizes="(min-width: 1024px) 33vw, 50vw"
-                    />
-                  ) : (
-                    <Video className="h-8 w-8 text-muted-foreground/30" aria-hidden="true" />
-                  )}
-                  <VideoStatusBadge status={v.status} className="absolute left-2 top-2 shadow-sm" />
-                </div>
-                <div className="space-y-1 p-3">
-                  <p className="truncate text-sm font-medium group-hover:text-primary">{v.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {v.projectId ? "Multi-scene · " : ""}
-                    {v.avatarName} · {formatDateTime(v.createdAt)}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {ENGINE_LABEL[v.engine]}
-                    {v.aspectRatio && ` · ${ASPECT_RATIO_LABEL[v.aspectRatio]?.split(" ")[0] ?? v.aspectRatio}`}
-                    {v.durationSeconds != null && ` · ${formatDuration(v.durationSeconds)}`}
-                    {v.estimatedCostCents != null && ` · ~${formatCents(v.estimatedCostCents)}`}
-                  </p>
-                  {v.status === "FAILED" && v.errorMessage && (
-                    <p className="line-clamp-2 text-xs text-destructive">{v.errorMessage}</p>
-                  )}
-                </div>
-              </Link>
+              <VideoCard v={v} />
             </li>
           ))}
         </ul>

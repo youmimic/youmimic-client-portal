@@ -22,6 +22,8 @@ import { PlanBadge, StatusBadge } from "@/components/billing/status-badges";
 import { AvatarBillingBreakdown } from "@/components/dashboard/avatar-billing";
 import { PaymentHistoryTable } from "@/components/dashboard/payment-history-table";
 import { fetchPaymentsForUser } from "@/lib/payments";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { formatDate } from "@/lib/format";
 
 // Shown as a summary on the main billing page — the full list lives at
 // /dashboard/billing/payments.
@@ -209,13 +211,6 @@ function resolveAction(
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(new Date(date));
-}
 
 // ---------------------------------------------------------------------------
 // Shared card sub-components
@@ -501,12 +496,10 @@ export default async function BillingPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
-        <p className="text-muted-foreground">
-          Manage your subscriptions and billing details.
-        </p>
-      </div>
+      <PageHeader
+        title="Billing"
+        description="Manage your subscriptions and billing details."
+      />
 
       {redirectNotice && (
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">

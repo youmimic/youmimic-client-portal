@@ -8,8 +8,10 @@ import {
   ChevronUp,
   Copy,
   GripVertical,
+  Image as ImageIcon,
   Plus,
   Trash2,
+  Video as VideoIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Thumb } from "@/components/dashboard/project/avatar-look-picker";
@@ -30,6 +32,38 @@ const READINESS_LABEL: Record<SceneReadiness, string> = {
   needs_attention: "Needs attention",
   ready: "Ready",
 };
+
+// An image scene's link is an arbitrary external URL, so it can't go through
+// next/image (which only serves pre-configured hostnames) — a plain tag with
+// an icon fallback if it fails to load. A video scene shows an icon only:
+// grabbing a frame from an arbitrary clip isn't worth the cost in a list.
+function SceneMediaThumb({ kind, mediaUrl }: { kind: "IMAGE" | "VIDEO"; mediaUrl: string | null }) {
+  if (kind === "VIDEO" || !mediaUrl) {
+    return (
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-muted ring-1 ring-foreground/10">
+        {kind === "VIDEO" ? (
+          <VideoIcon className="h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
+        ) : (
+          <ImageIcon className="h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
+        )}
+      </span>
+    );
+  }
+  return (
+    <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted ring-1 ring-foreground/10">
+      <ImageIcon className="absolute h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={mediaUrl}
+        alt=""
+        className="relative h-full w-full object-cover"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+    </span>
+  );
+}
 
 // The scene list. Drag a scene by its handle to reorder it, or use the Move
 // up and Move down buttons, which work from the keyboard and on touch screens.
@@ -95,21 +129,29 @@ export function SceneSidebar({
           const status = readiness[scene.id] ?? "draft";
           const seconds = sceneDurationSeconds(scene, engine);
           const preview = scene.script.trim().replace(/\s+/g, " ");
-          // Which avatar and look this scene will use, shown as a thumbnail so
-          // scenes are easy to tell apart at a glance.
+          // What this scene shows, so scenes are easy to tell apart at a
+          // glance: an avatar's look, an image, or a video clip.
           const resolved = resolveScene(scene, defaults);
-          const avatar =
-            avatars.find((a) => a.id === resolved.avatarId) ?? null;
+          const avatar = scene.kind === "AVATAR" ? (avatars.find((a) => a.id === resolved.avatarId) ?? null) : null;
           const look =
             avatar?.looks.find((l) => l.id === resolved.avatarLookId) ??
             avatar?.looks.find((l) => l.ready) ??
             null;
           const thumbSrc = look?.previewUrl ?? avatar?.previewUrl ?? null;
-          const who = avatar
-            ? look && avatar.looks.length > 1
-              ? `${avatar.name} · ${look.name}`
-              : avatar.name
-            : "No avatar";
+          const who =
+            scene.kind === "AVATAR"
+              ? avatar
+                ? look && avatar.looks.length > 1
+                  ? `${avatar.name} · ${look.name}`
+                  : avatar.name
+                : "No avatar"
+              : scene.kind === "IMAGE"
+                ? scene.script.trim()
+                  ? "Image, narrated"
+                  : "Image"
+                : scene.script.trim()
+                  ? "Video, narrated"
+                  : "Video";
           return (
             <li
               key={scene.id}
@@ -164,23 +206,32 @@ export function SceneSidebar({
                   aria-current={active ? "true" : undefined}
                   className="flex min-w-0 flex-1 items-start gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
-                  <Thumb
-                    src={thumbSrc}
-                    alt={avatar ? `${who}` : ""}
-                    className="h-12 w-12 rounded-md ring-1 ring-foreground/10"
-                    iconClass="h-6 w-6"
-                  />
+                  {scene.kind === "AVATAR" ? (
+                    <Thumb
+                      src={thumbSrc}
+                      alt={avatar ? `${who}` : ""}
+                      className="h-12 w-12 rounded-md ring-1 ring-foreground/10"
+                      iconClass="h-6 w-6"
+                    />
+                  ) : (
+                    <SceneMediaThumb kind={scene.kind} mediaUrl={scene.mediaUrl} />
+                  )}
                   <span className="block min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-medium">
                         {index + 1}. {scene.title.trim() || "Untitled scene"}
                       </span>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {seconds > 0 ? formatDuration(seconds) : "0s"}
+                        {seconds === null ? "—" : seconds > 0 ? formatDuration(seconds) : "0s"}
                       </span>
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {preview || "No script yet"}
+                      {preview ||
+                        (scene.kind === "AVATAR"
+                          ? "No script yet"
+                          : scene.kind === "IMAGE"
+                            ? "Silent title card"
+                            : "Plays at its own length")}
                     </span>
                     <span
                       className={cn(

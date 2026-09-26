@@ -1,5 +1,33 @@
 # HANDOFF.md
 
+## Session: Pause support in scripts — 2026-09-26 (later still)
+
+Corrected an earlier answer given in this session: HeyGen's script field does support one markup tag, `<break time="1s"/>`, gated per-voice by a `support_pause` flag on `GET /v3/voices`. Added `support_pause` to `HeyGenVoice`, a "Pauses" badge in the voice picker, and an "Insert pause" button on every script field (single-scene create page and both script fields in the multi-scene editor), inserting at the cursor via a newly-ref-forwarding `Textarea`. The button is always available with an honest note that it depends on the chosen voice, rather than gating it on cross-component state — flagged as a scope choice in `updates/2026-09-26-pause-support.md`.
+
+Checks: typecheck clean, lint 0 errors, vitest 190 passing (5 new — pure string-splice logic, no component-rendering test infra in this repo), `npx next build` clean. A live probe confirmed a break-tag script still fails safely at the fake-avatar-id step, same as every other probe, and the user then confirmed with a real generation that the pause is genuinely honoured in the finished audio. Fully verified, nothing outstanding.
+
+## Session: Self-healing video links — 2026-09-26 (later)
+
+Asked whether to auto-refresh expired video links on `/dashboard/videos` load. Advised against a blocking refresh-on-request (repeats the avatars page's known blocking-per-item anti-pattern, doesn't scale without pagination, redundant with the existing daily cron, risks HeyGen rate limits) and implemented self-healing on error instead: video/thumbnail elements in `video-library.tsx`, `video-detail.tsx` and `final-view.tsx` now call the existing `/api/dashboard/videos/[id]/refresh-url` endpoint once, only when the browser actually fails to load the link, rather than pre-emptively. No backend changes — reuses the existing refresh route, the daily cron, and the manual "Refresh link" buttons, all unchanged. Detail in `updates/2026-09-26-self-healing-video-links.md`.
+
+Checks: typecheck clean, lint 0 errors, vitest 185 passing (no new tests — client-only wiring around an already-tested endpoint), `npx next build` clean. Not done: a live check against an actually-expired link, and a signed-in browser walkthrough.
+
+## Session: Image/video scenes, captions, motion prompt — 2026-09-26
+
+Added image and video scene types, project-level captions, and an experimental motion-prompt control (Avatar V only) to multi-scene projects. Background image and expressiveness were both investigated and dropped: background image is confirmed rejected by the provider (colour only), and expressiveness is documented "photo avatars only" while every avatar in this app is a digital-twin avatar, so it would likely never work for real content here. Full detail in `updates/2026-09-26-scene-kinds-captions-motion.md`.
+
+**Incident, disclosed at the time:** two safe-probing attempts (image scene with a fake URL, video scene with no playback) behaved differently from every prior avatar/voice-id probe — the provider accepted the job and only failed once it tried to download the fake URL, rather than rejecting it up front. Both jobs were checked (failed at download, no avatar or content involved), deleted, and confirmed gone. Flagged to the user before continuing, per the standing HeyGen safe-probing rule — future probes involving asset URLs should expect this and treat it as "async, not synchronous" validation.
+
+A project must now include at least one avatar scene, since a render still has to link to one of the user's avatars in the database; an all-image/video project is blocked with a clear message. New tables: none (additive columns/enum only, migration `20260926005402_add_scene_kinds_and_captions`, applied to dev).
+
+Checks: typecheck clean, lint 0 errors, vitest 185 passing (35 new), `npx next build` clean, a temporary real-database check of the new fields passed and its throwaway user was removed, and the new PATCH fields still 401 when signed out. Not done: a real generation on an approved test avatar, and a signed-in browser walkthrough.
+
+## Session: Dashboard UI refresh — 2026-09-21 (late)
+
+Applied the avatar and video design standards across `/dashboard`. Detail in `updates/2026-09-21-dashboard-ui-refresh.md`. Highlights: workspace-style home page with drafts and recent videos as thumbnail cards (drafts show the first scene's look), Usage on its own page at `/dashboard/settings/usage` with Account and Usage tabs in Settings, grouped sidebar, skip link, shared `PageHeader` and `EmptyState`, dashboard loading skeleton, and Australian date formatting (four `en-CA` uses fixed). No schema, billing, credit or payment logic changed.
+
+Checks: typecheck clean, lint 0 errors, vitest 170 passing, `npx next build` clean. Not done: a signed-in browser walkthrough (home, settings tabs, mobile).
+
 ## Session: Multi-scene video projects — 2026-09-21 (evening)
 
 Added a scene-by-scene video editor at `/dashboard/videos/projects/[projectId]`. Full detail is in `updates/2026-09-21-multi-scene-video-projects.md`.

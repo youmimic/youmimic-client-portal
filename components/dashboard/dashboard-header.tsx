@@ -1,7 +1,8 @@
 "use client";
 
 import type { RefObject } from "react";
-import { Menu } from "lucide-react";
+import Link from "next/link";
+import { Menu, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SiteLogo } from "@/components/branding/site-logo";
@@ -36,6 +37,12 @@ export function DashboardHeader({
       <SiteLogo className="flex items-center md:hidden" forceVariant="auto" />
 
       <div className="ml-auto flex items-center gap-2">
+        <Button asChild size="sm">
+          <Link href="/dashboard/avatars" aria-label="Create a video">
+            <Video className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Create video</span>
+          </Link>
+        </Button>
         <ThemeToggle />
       </div>
     </header>

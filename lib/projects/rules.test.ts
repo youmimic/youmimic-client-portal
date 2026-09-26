@@ -4,6 +4,7 @@ import { projectContentHash } from "@/lib/projects/hash";
 import {
   evaluateProject,
   resolveScene,
+  sceneDurationSeconds,
   validateScene,
   type AvatarOption,
   type ProjectDefaults,
@@ -36,11 +37,15 @@ function scene(over: Partial<SceneData> & { id: string; orderIndex: number }): S
   return {
     title: "",
     script: "Hello there",
+    kind: "AVATAR",
     avatarId: null,
     avatarLookId: null,
     voiceId: null,
     voiceName: null,
     backgroundColor: null,
+    mediaUrl: null,
+    mediaDurationSeconds: null,
+    motionPrompt: null,
     ...over,
   };
 }
@@ -161,7 +166,7 @@ describe("ordering", () => {
 });
 
 describe("projectContentHash (outdated detection)", () => {
-  const project = { ...defaults, aspectRatio: "16:9", resolution: null, engine: "AVATAR_III" };
+  const project = { ...defaults, aspectRatio: "16:9", resolution: null, engine: "AVATAR_III", captionsEnabled: false };
   const base = [scene({ id: "a", orderIndex: 0 }), scene({ id: "b", orderIndex: 1, script: "Second" })];
 
   it("is stable for the same content and ignores scene titles", () => {
@@ -199,5 +204,108 @@ describe("request schemas", () => {
     expect(updateSceneSchema.safeParse({ expectedVersion: 1, backgroundColor: "#123abc" }).success).toBe(true);
     expect(updateSceneSchema.safeParse({ expectedVersion: 1, backgroundColor: "blue" }).success).toBe(false);
     expect(updateProjectSchema.safeParse({ expectedVersion: 1, aspectRatio: "3:2" }).success).toBe(false);
+  });
+
+  it("accepts the new scene-kind and captions fields", () => {
+    expect(updateSceneSchema.safeParse({ expectedVersion: 1, kind: "IMAGE", mediaUrl: "https://example.com/a.png" }).success).toBe(true);
+    expect(updateSceneSchema.safeParse({ expectedVersion: 1, kind: "SLIDESHOW" }).success).toBe(false);
+    expect(updateSceneSchema.safeParse({ expectedVersion: 1, mediaDurationSeconds: 301 }).success).toBe(false);
+    expect(updateSceneSchema.safeParse({ expectedVersion: 1, mediaDurationSeconds: 10 }).success).toBe(true);
+    expect(updateProjectSchema.safeParse({ expectedVersion: 1, captionsEnabled: true }).success).toBe(true);
+  });
+});
+
+describe("image and video scenes", () => {
+  function mediaScene(kind: "IMAGE" | "VIDEO", over: Partial<SceneData> = {}) {
+    return scene({ id: "m", orderIndex: 0, kind, script: "", ...over });
+  }
+
+  it("requires a media link", () => {
+    const issues = validateScene(mediaScene("IMAGE"), 1, defaults, avatars, "AVATAR_III");
+    expect(issues.some((i) => i.code === "NO_MEDIA")).toBe(true);
+  });
+
+  it("rejects a link that isn't a real URL", () => {
+    const issues = validateScene(mediaScene("IMAGE", { mediaUrl: "not-a-link" }), 1, defaults, avatars, "AVATAR_III");
+    expect(issues.some((i) => i.code === "BAD_MEDIA_URL")).toBe(true);
+  });
+
+  it("an image scene needs either a script or a length", () => {
+    const noDuration = validateScene(mediaScene("IMAGE", { mediaUrl: "https://example.com/a.png" }), 1, defaults, avatars, "AVATAR_III");
+    expect(noDuration.some((i) => i.code === "NO_DURATION")).toBe(true);
+
+    const withDuration = validateScene(
+      mediaScene("IMAGE", { mediaUrl: "https://example.com/a.png", mediaDurationSeconds: 8 }),
+      1,
+      defaults,
+      avatars,
+      "AVATAR_III",
+    );
+    expect(withDuration).toHaveLength(0);
+  });
+
+  it("a video scene needs no duration and is valid silent, as long as it has a link", () => {
+    const issues = validateScene(mediaScene("VIDEO", { mediaUrl: "https://example.com/a.mp4" }), 1, defaults, avatars, "AVATAR_III");
+    expect(issues).toHaveLength(0);
+  });
+
+  it("narration on an image or video scene needs a resolvable voice", () => {
+    const issues = validateScene(
+      mediaScene("IMAGE", { mediaUrl: "https://example.com/a.png", script: "Hello" }),
+      1,
+      { ...defaults, defaultVoiceId: null, defaultVoiceName: null },
+      avatars,
+      "AVATAR_III",
+    );
+    expect(issues.some((i) => i.code === "NO_VOICE")).toBe(true);
+  });
+
+  it("does not require an avatar for image or video scenes", () => {
+    const issues = validateScene(
+      mediaScene("VIDEO", { mediaUrl: "https://example.com/a.mp4", script: "Hello", voiceId: "v-own", voiceName: "Liam" }),
+      1,
+      defaults,
+      avatars,
+      "AVATAR_III",
+    );
+    expect(issues.some((i) => i.code === "NO_AVATAR" || i.code === "AVATAR_NOT_READY")).toBe(false);
+  });
+});
+
+describe("evaluateProject with image/video scenes", () => {
+  it("blocks generation for a project with no avatar scene at all", () => {
+    const scenes = [scene({ id: "a", orderIndex: 0, kind: "IMAGE", script: "", mediaUrl: "https://example.com/a.png", mediaDurationSeconds: 5 })];
+    const r = evaluateProject(scenes, defaults, avatars, "AVATAR_III");
+    expect(r.canGenerate).toBe(false);
+    expect(r.projectIssue).toContain("avatar scene");
+    expect(r.summary).toBe(r.projectIssue);
+  });
+
+  it("allows generation once at least one scene is an avatar scene", () => {
+    const scenes = [
+      scene({ id: "a", orderIndex: 0 }),
+      scene({ id: "b", orderIndex: 1, kind: "IMAGE", script: "", mediaUrl: "https://example.com/a.png", mediaDurationSeconds: 5 }),
+    ];
+    const r = evaluateProject(scenes, defaults, avatars, "AVATAR_III");
+    expect(r.canGenerate).toBe(true);
+    expect(r.projectIssue).toBeNull();
+    expect(r.hasMediaScenes).toBe(true);
+  });
+
+  it("adds a silent image scene's set length to the total, and flags an unknown-length silent video scene", () => {
+    const scenes = [
+      scene({ id: "a", orderIndex: 0, script: "" }),
+      scene({ id: "b", orderIndex: 1, kind: "IMAGE", script: "", mediaUrl: "https://example.com/a.png", mediaDurationSeconds: 8 }),
+      scene({ id: "c", orderIndex: 2, kind: "VIDEO", script: "", mediaUrl: "https://example.com/a.mp4" }),
+    ];
+    // Scene "a" is blank (draft), not an error, so this project is otherwise ready.
+    const r = evaluateProject(scenes, defaults, avatars, "AVATAR_III");
+    expect(r.totalDurationSeconds).toBeGreaterThanOrEqual(8);
+    expect(r.hasUnknownDuration).toBe(true);
+  });
+
+  it("reports a scene-level duration of null for a silent video scene", () => {
+    const v = scene({ id: "c", orderIndex: 0, kind: "VIDEO", script: "", mediaUrl: "https://example.com/a.mp4" });
+    expect(sceneDurationSeconds(v, "AVATAR_III")).toBeNull();
   });
 });

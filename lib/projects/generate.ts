@@ -1,15 +1,21 @@
 import type { VideoEngine, VideoGenerationStatus, VideoProjectStatus } from "@/app/generated/prisma/enums";
 import prisma from "@/lib/prisma";
-import { createHeyGenStudioVideo, getHeyGenAvatarLook, HeyGenApiError, type HeyGenEngine } from "@/lib/heygen";
+import {
+  createHeyGenStudioVideo,
+  getHeyGenAvatarLook,
+  HeyGenApiError,
+  type HeyGenEngine,
+  type HeyGenStudioScene,
+} from "@/lib/heygen";
 import { projectContentHash } from "@/lib/projects/hash";
-import { evaluateProject, resolveScene, sceneLabel, type SceneData, type SceneIssue } from "@/lib/projects/rules";
+import { DEFAULT_MEDIA_DURATION, evaluateProject, resolveScene, sceneLabel, type SceneData, type SceneIssue } from "@/lib/projects/rules";
 import { listAvatarOptions, ProjectError, type SnapshotScene } from "@/lib/projects/service";
 import { releaseReservation, reserveCreditsForGeneration } from "@/lib/usage/ledger";
 
 export type GenerateProjectResult =
   | { ok: true; generatedVideoId: string }
   | { ok: false; code: "NOT_READY"; error: string; issues: SceneIssue[] }
-  | { ok: false; code: "AVATAR_NOT_READY" | "NO_VOICE" | "HEYGEN_ERROR"; error: string }
+  | { ok: false; code: "AVATAR_NOT_READY" | "NO_VOICE" | "BAD_MEDIA" | "HEYGEN_ERROR"; error: string }
   | {
       ok: false;
       code: "OVER_LIMIT";
@@ -78,66 +84,137 @@ export async function generateProject(userId: string, projectId: string, expecte
   const revert = () =>
     prisma.videoProject.updateMany({ where: { id: projectId, userId }, data: { status: previousStatus as VideoProjectStatus } });
 
-  // Resolve each scene to the provider's look and voice ids.
-  const looksById = new Map<string, { heygenLookId: string; avatarId: string }>();
+  // Resolve each AVATAR-kind scene to the provider's look. IMAGE/VIDEO scenes
+  // don't use an avatar at all, so they're left out of this lookup.
   const avatarRows = await prisma.avatar.findMany({
-    where: { userId, id: { in: scenes.map((s) => resolveScene(s, defaults).avatarId).filter((x): x is string => !!x) } },
+    where: {
+      userId,
+      id: {
+        in: scenes
+          .filter((s) => s.kind === "AVATAR")
+          .map((s) => resolveScene(s, defaults).avatarId)
+          .filter((x): x is string => !!x),
+      },
+    },
     select: { id: true, name: true, heygenAvatarId: true, looks: { select: { id: true, heygenLookId: true, status: true }, orderBy: { name: "asc" } } },
   });
-  for (const a of avatarRows) for (const l of a.looks) looksById.set(l.id, { heygenLookId: l.heygenLookId, avatarId: a.id });
 
-  const providerScenes: { avatarId: string; script: string; voiceId: string; backgroundColor: string | null }[] = [];
+  const providerScenes: HeyGenStudioScene[] = [];
   const snapshot: SnapshotScene[] = [];
   const defaultVoiceCache = new Map<string, string | null>();
+  // The first avatar scene's avatar is what this render is linked to
+  // (GeneratedVideo.avatarId is required) — readiness already guarantees
+  // there is at least one, via the "needs at least one avatar scene" check.
+  let firstAvatarId: string | null = null;
 
   try {
     for (const [i, scene] of scenes.entries()) {
       const resolved = resolveScene(scene, defaults);
-      const avatar = avatarRows.find((a) => a.id === resolved.avatarId);
-      if (!avatar) {
-        await revert();
-        return { ok: false, code: "AVATAR_NOT_READY", error: `${sceneLabel(scene, i + 1)} uses an avatar that isn't available.` };
-      }
 
-      let heygenLookId: string | null = null;
-      if (avatar.looks.length > 0) {
-        const look = resolved.avatarLookId
-          ? avatar.looks.find((l) => l.id === resolved.avatarLookId)
-          : avatar.looks.find((l) => l.status === "ready");
-        if (!look || look.status !== "ready") {
+      if (scene.kind === "AVATAR") {
+        const avatar = avatarRows.find((a) => a.id === resolved.avatarId);
+        if (!avatar) {
           await revert();
-          return { ok: false, code: "AVATAR_NOT_READY", error: `${sceneLabel(scene, i + 1)} needs a ready look. Pick one and try again.` };
+          return { ok: false, code: "AVATAR_NOT_READY", error: `${sceneLabel(scene, i + 1)} uses an avatar that isn't available.` };
         }
-        heygenLookId = look.heygenLookId;
-      } else {
-        heygenLookId = avatar.heygenAvatarId;
-      }
-      if (!heygenLookId) {
-        await revert();
-        return { ok: false, code: "AVATAR_NOT_READY", error: `${sceneLabel(scene, i + 1)} uses an avatar that isn't ready yet.` };
+
+        let heygenLookId: string | null = null;
+        if (avatar.looks.length > 0) {
+          const look = resolved.avatarLookId
+            ? avatar.looks.find((l) => l.id === resolved.avatarLookId)
+            : avatar.looks.find((l) => l.status === "ready");
+          if (!look || look.status !== "ready") {
+            await revert();
+            return { ok: false, code: "AVATAR_NOT_READY", error: `${sceneLabel(scene, i + 1)} needs a ready look. Pick one and try again.` };
+          }
+          heygenLookId = look.heygenLookId;
+        } else {
+          heygenLookId = avatar.heygenAvatarId;
+        }
+        if (!heygenLookId) {
+          await revert();
+          return { ok: false, code: "AVATAR_NOT_READY", error: `${sceneLabel(scene, i + 1)} uses an avatar that isn't ready yet.` };
+        }
+
+        let voiceId = resolved.voiceId;
+        if (!voiceId) {
+          if (!defaultVoiceCache.has(heygenLookId)) {
+            const look = await getHeyGenAvatarLook(heygenLookId);
+            defaultVoiceCache.set(heygenLookId, look.default_voice_id);
+          }
+          voiceId = defaultVoiceCache.get(heygenLookId) ?? null;
+        }
+        if (!voiceId) {
+          await revert();
+          return { ok: false, code: "NO_VOICE", error: `${sceneLabel(scene, i + 1)} has no voice. Choose a voice for it or set a project voice.` };
+        }
+
+        if (firstAvatarId === null) firstAvatarId = resolved.avatarId;
+
+        providerScenes.push({
+          kind: "avatar",
+          avatarId: heygenLookId,
+          script: scene.script.trim(),
+          voiceId,
+          backgroundColor: scene.backgroundColor,
+          // Schema-valid only on Avatar V per the provider's docs — sending
+          // it on another engine would be rejected, so it's left out.
+          motionPrompt: engineValue === "AVATAR_V" ? scene.motionPrompt : null,
+        });
+        snapshot.push({
+          order: i + 1,
+          kind: "AVATAR",
+          title: scene.title,
+          script: scene.script.trim(),
+          avatarName: avatar.name,
+          voiceName: resolved.voiceName,
+          backgroundColor: scene.backgroundColor,
+          mediaUrl: null,
+        });
+        continue;
       }
 
-      let voiceId = resolved.voiceId;
-      if (!voiceId) {
-        if (!defaultVoiceCache.has(heygenLookId)) {
-          const look = await getHeyGenAvatarLook(heygenLookId);
-          defaultVoiceCache.set(heygenLookId, look.default_voice_id);
-        }
-        voiceId = defaultVoiceCache.get(heygenLookId) ?? null;
-      }
-      if (!voiceId) {
+      // IMAGE / VIDEO
+      const mediaUrl = (scene.mediaUrl ?? "").trim();
+      if (!mediaUrl) {
         await revert();
-        return { ok: false, code: "NO_VOICE", error: `${sceneLabel(scene, i + 1)} has no voice. Choose a voice for it or set a project voice.` };
+        return { ok: false, code: "BAD_MEDIA", error: `${sceneLabel(scene, i + 1)} is missing its image or video link.` };
+      }
+      const script = scene.script.trim();
+      let voiceId: string | null = null;
+      if (script) {
+        voiceId = resolved.voiceId;
+        if (!voiceId) {
+          await revert();
+          return { ok: false, code: "NO_VOICE", error: `${sceneLabel(scene, i + 1)} needs a voice for its narration.` };
+        }
       }
 
-      providerScenes.push({ avatarId: heygenLookId, script: scene.script.trim(), voiceId, backgroundColor: scene.backgroundColor });
+      providerScenes.push(
+        scene.kind === "IMAGE"
+          ? {
+              kind: "image",
+              mediaUrl,
+              script: script || undefined,
+              voiceId: script ? voiceId : undefined,
+              durationSeconds: script ? undefined : (scene.mediaDurationSeconds ?? DEFAULT_MEDIA_DURATION),
+            }
+          : {
+              kind: "video",
+              mediaUrl,
+              script: script || undefined,
+              voiceId: script ? voiceId : undefined,
+            },
+      );
       snapshot.push({
         order: i + 1,
+        kind: scene.kind,
         title: scene.title,
-        script: scene.script.trim(),
-        avatarName: avatar.name,
-        voiceName: resolved.voiceName,
-        backgroundColor: scene.backgroundColor,
+        script,
+        avatarName: null,
+        voiceName: script ? resolved.voiceName : null,
+        backgroundColor: null,
+        mediaUrl,
       });
     }
   } catch (err) {
@@ -162,10 +239,10 @@ export async function generateProject(userId: string, projectId: string, expecte
     };
   }
 
-  const firstAvatarId = resolveScene(scenes[0], defaults).avatarId as string;
   const baseData = {
     userId,
-    avatarId: firstAvatarId,
+    // Guaranteed non-null: readiness requires at least one avatar scene.
+    avatarId: firstAvatarId as string,
     projectId,
     script: combinedScript,
     engine: engineValue,
@@ -183,6 +260,7 @@ export async function generateProject(userId: string, projectId: string, expecte
       title: project.title.trim() || undefined,
       aspectRatio: project.aspectRatio,
       resolution: project.resolution ?? undefined,
+      captions: project.captionsEnabled,
     });
 
     const video = await prisma.generatedVideo.create({

@@ -56,6 +56,12 @@ export function DashboardShell({ user, enterprise, children }: DashboardShellPro
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground"
+      >
+        Skip to main content
+      </a>
       <AppSidebar
         userName={user.name}
         userEmail={user.email}
@@ -69,8 +75,8 @@ export function DashboardShell({ user, enterprise, children }: DashboardShellPro
           onMobileMenuToggle={() => setMobileOpen((v) => !v)}
           toggleButtonRef={toggleButtonRef}
         />
-        <main className="flex-1 overflow-y-auto">
-          <div className="container mx-auto p-6">{children}</div>
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto outline-none">
+          <div className="container mx-auto p-4 sm:p-6">{children}</div>
         </main>
       </div>
     </div>

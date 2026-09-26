@@ -91,6 +91,8 @@ export function GenerationPanel({
           />
           <p className="pt-1 text-xs text-muted-foreground">
             Estimates come from your script length. The final figure follows the finished video&apos;s actual length.
+            {readiness.hasMediaScenes && " Image and video scenes may add to the real cost, which isn't reflected here."}
+            {readiness.hasUnknownDuration && " A video clip's own length isn't included until it's rendered."}
           </p>
         </dl>
 

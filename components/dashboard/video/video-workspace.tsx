@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InsertPauseButton } from "@/components/dashboard/video/insert-pause-button";
 import {
   Dialog,
   DialogContent,
@@ -203,6 +204,7 @@ export function VideoWorkspace({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<SubmitError | null>(null);
   const [touched, setTouched] = useState(false);
+  const scriptRef = useRef<HTMLTextAreaElement | null>(null);
   const [lookPreviewOpen, setLookPreviewOpen] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
   const [draftHandled, setDraftHandled] = useState(false);
@@ -388,9 +390,18 @@ export function VideoWorkspace({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="video-script">What should {avatarName} say?</Label>
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="video-script">What should {avatarName} say?</Label>
+                <InsertPauseButton
+                  textareaRef={scriptRef}
+                  value={script}
+                  disabled={submitting}
+                  onInsert={setScript}
+                />
+              </div>
               <Textarea
                 id="video-script"
+                ref={scriptRef}
                 value={script}
                 rows={9}
                 maxLength={SCRIPT_MAX}
@@ -420,7 +431,10 @@ export function VideoWorkspace({
                   {scriptError}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">Tip: press Ctrl+Enter (or Cmd+Enter) to generate.</p>
+              <p className="text-xs text-muted-foreground">
+                Tip: press Ctrl+Enter (or Cmd+Enter) to generate. A pause only works if the chosen voice supports it
+                — look for the &quot;Pauses&quot; tag in the voice list.
+              </p>
             </div>
           </CardContent>
         </Card>

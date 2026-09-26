@@ -139,27 +139,98 @@ export async function createHeyGenVideo(params: {
   });
 }
 
+// One scene of a studio job. Confirmed live (2026-09-26), all with
+// deliberately fake ids/URLs per the safe-probing convention:
+//  - avatar: same as before. motionPrompt is schema-valid only on the
+//    Avatar V engine (rejected on III/IV) — not yet exercised on a real
+//    avatar. Background stays colour-only; an "image" background type is
+//    explicitly rejected by the provider, confirmed live.
+//  - image: a hosted image URL, shown either for a fixed duration (silent)
+//    or for as long as its narration takes (voiceId + script). Exactly one
+//    of durationSeconds or script should be set.
+//  - video: a hosted clip URL. With a script, playback.mode is set to fit
+//    the clip to the narration's length — the provider rejects
+//    playback.mode without a voiceover, confirmed live ("requires a
+//    video-scene voiceover... because the voiceover defines the target
+//    scene duration"). Without a script, playback is omitted entirely and
+//    the clip plays at its own natural length — also confirmed live, but
+//    unlike avatar/voice ids, neither URL is checked until the provider
+//    actually downloads it, so a bad link only ever shows up as a failed
+//    render, not an upfront rejection.
+export type HeyGenStudioScene =
+  | {
+      kind: "avatar";
+      avatarId: string;
+      script: string;
+      voiceId: string;
+      backgroundColor?: string | null;
+      motionPrompt?: string | null;
+    }
+  | {
+      kind: "image";
+      mediaUrl: string;
+      durationSeconds?: number | null;
+      script?: string | null;
+      voiceId?: string | null;
+    }
+  | {
+      kind: "video";
+      mediaUrl: string;
+      script?: string | null;
+      voiceId?: string | null;
+    };
+
+function toStudioScene(scene: HeyGenStudioScene, engine: HeyGenEngine) {
+  if (scene.kind === "avatar") {
+    return {
+      type: "avatar_video",
+      input: {
+        type: "avatar",
+        avatar_id: scene.avatarId,
+        script: scene.script,
+        voice_id: scene.voiceId,
+        engine: { type: engine },
+        ...(scene.backgroundColor ? { background: { type: "color", color: scene.backgroundColor } } : {}),
+        ...(scene.motionPrompt ? { motion_prompt: scene.motionPrompt } : {}),
+      },
+    };
+  }
+  if (scene.kind === "image") {
+    return {
+      type: "image",
+      source: { type: "url", url: scene.mediaUrl },
+      ...(scene.script
+        ? { script: scene.script, voice_id: scene.voiceId }
+        : { duration: scene.durationSeconds ?? 5 }),
+    };
+  }
+  return {
+    type: "video",
+    source: { type: "url", url: scene.mediaUrl },
+    ...(scene.script
+      ? { script: scene.script, voice_id: scene.voiceId, playback: { mode: "fit_to_scene" } }
+      : {}),
+  };
+}
+
 // POST /v3/videos with type "studio" — one job that renders an ordered list of
 // scenes into a single video. Confirmed against the live API with a
 // deliberately fake avatar id: the request shape passes validation and only
 // fails at the avatar lookup ("failed at scene index 0"), so nothing was
 // created. The provider returns one video_id for the whole video and no
 // per-scene status, so scenes cannot be rendered or retried individually.
-// Aspect ratio, resolution and engine are global to the job. Scenes are
-// hard cuts (no transitions), and avatar scenes only support a solid colour
-// background.
+// Aspect ratio, resolution and engine are global to the job.
 export async function createHeyGenStudioVideo(params: {
-  scenes: {
-    avatarId: string;
-    script: string;
-    voiceId: string;
-    backgroundColor?: string | null;
-  }[];
+  scenes: HeyGenStudioScene[];
   engine: HeyGenEngine;
   callbackUrl?: string;
   title?: string;
   aspectRatio?: string;
   resolution?: string;
+  // Burns subtitles into the finished video and also returns a downloadable
+  // .srt via the completed video's subtitle_url — confirmed live as a
+  // top-level, schema-valid field on a studio job.
+  captions?: boolean;
 }): Promise<{ video_id: string }> {
   return heygenFetch<{ video_id: string }>(
     "/v3/videos",
@@ -167,21 +238,12 @@ export async function createHeyGenStudioVideo(params: {
       method: "POST",
       body: JSON.stringify({
         type: "studio",
-        scenes: params.scenes.map((scene) => ({
-          type: "avatar_video",
-          input: {
-            type: "avatar",
-            avatar_id: scene.avatarId,
-            script: scene.script,
-            voice_id: scene.voiceId,
-            engine: { type: params.engine },
-            ...(scene.backgroundColor ? { background: { type: "color", color: scene.backgroundColor } } : {}),
-          },
-        })),
+        scenes: params.scenes.map((scene) => toStudioScene(scene, params.engine)),
         ...(params.callbackUrl ? { callback_url: params.callbackUrl } : {}),
         ...(params.title ? { title: params.title } : {}),
         ...(params.aspectRatio ? { aspect_ratio: params.aspectRatio } : {}),
         ...(params.resolution ? { resolution: params.resolution } : {}),
+        ...(params.captions ? { caption: { file_format: "srt", style: "default" } } : {}),
       }),
     },
     20000,
@@ -196,6 +258,11 @@ export interface HeyGenVoice {
   language: string | null;
   gender: string | null;
   preview_audio_url: string | null;
+  // Whether a `<break time="1s"/>` tag in the script is honoured for this
+  // voice — per the provider's docs, the only script markup it supports.
+  // Defaults to false if the provider omits it, so pause support is never
+  // assumed without confirmation.
+  support_pause?: boolean;
   type?: string;
 }
 

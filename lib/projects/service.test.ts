@@ -151,19 +151,22 @@ describe("scene rules", () => {
     expect(tx.videoScene.create).not.toHaveBeenCalled();
   });
 
-  it("starts a new scene with the avatar, look and voice of the scene it follows", async () => {
+  it("starts a new scene with the avatar, look, voice and kind of the scene it follows", async () => {
     tx.videoScene.findMany.mockResolvedValue([
-      { id: "a", avatarId: "av1", avatarLookId: "lk1", voiceId: "v1", voiceName: "Emma" },
-      { id: "b", avatarId: "av2", avatarLookId: "lk2", voiceId: null, voiceName: null },
+      { id: "a", kind: "IMAGE", avatarId: "av1", avatarLookId: "lk1", voiceId: "v1", voiceName: "Emma" },
+      { id: "b", kind: "AVATAR", avatarId: "av2", avatarLookId: "lk2", voiceId: null, voiceName: null },
     ]);
     tx.videoScene.create.mockResolvedValue({ id: "new" });
     await addScene("user-1", "p1", 1, "a");
     expect(tx.videoScene.create.mock.calls[0][0].data).toMatchObject({
+      kind: "IMAGE",
       avatarId: "av1",
       avatarLookId: "lk1",
       voiceId: "v1",
       voiceName: "Emma",
     });
+    // Content fields are never carried over, only structure.
+    expect(tx.videoScene.create.mock.calls[0][0].data.mediaUrl).toBeUndefined();
   });
 
   it("falls back to the last scene when no anchor is given", async () => {
@@ -186,19 +189,36 @@ describe("scene rules", () => {
 
   it("copies every setting when duplicating and places the copy next to the original", async () => {
     tx.videoScene.findMany.mockResolvedValue([
-      { id: "a", title: "Intro", script: "Hi", avatarId: "av", avatarLookId: "lk", voiceId: "v", voiceName: "Emma", backgroundColor: "#111111" },
-      { id: "b", title: "", script: "", avatarId: null, avatarLookId: null, voiceId: null, voiceName: null, backgroundColor: null },
+      {
+        id: "a",
+        title: "Intro",
+        script: "Hi",
+        kind: "IMAGE",
+        avatarId: "av",
+        avatarLookId: "lk",
+        voiceId: "v",
+        voiceName: "Emma",
+        backgroundColor: "#111111",
+        mediaUrl: "https://example.com/a.png",
+        mediaDurationSeconds: 6,
+        motionPrompt: "smiles",
+      },
+      { id: "b", title: "", script: "", kind: "AVATAR", avatarId: null, avatarLookId: null, voiceId: null, voiceName: null, backgroundColor: null, mediaUrl: null, mediaDurationSeconds: null, motionPrompt: null },
     ]);
     tx.videoScene.create.mockResolvedValue({ id: "copy" });
     await duplicateScene("user-1", "p1", "a", 2);
     expect(tx.videoScene.create.mock.calls[0][0].data).toMatchObject({
       title: "Intro (copy)",
       script: "Hi",
+      kind: "IMAGE",
       avatarId: "av",
       avatarLookId: "lk",
       voiceId: "v",
       voiceName: "Emma",
       backgroundColor: "#111111",
+      mediaUrl: "https://example.com/a.png",
+      mediaDurationSeconds: 6,
+      motionPrompt: "smiles",
     });
     expect(tx.videoScene.update.mock.calls.map((c) => c[0].where.id)).toEqual(["a", "copy", "b"]);
   });

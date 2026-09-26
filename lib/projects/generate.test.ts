@@ -48,9 +48,10 @@ function project(over: Record<string, unknown> = {}) {
     defaultVoiceId: null,
     defaultVoiceName: null,
     version: 3,
+    captionsEnabled: false,
     scenes: [
-      { id: "s1", orderIndex: 0, title: "Intro", script: "Welcome to the launch", avatarId: null, avatarLookId: null, voiceId: null, voiceName: null, backgroundColor: null },
-      { id: "s2", orderIndex: 1, title: "", script: "Here is what is new", avatarId: null, avatarLookId: null, voiceId: "v-own", voiceName: "Liam", backgroundColor: "#112233" },
+      { id: "s1", orderIndex: 0, title: "Intro", script: "Welcome to the launch", kind: "AVATAR", avatarId: null, avatarLookId: null, voiceId: null, voiceName: null, backgroundColor: null, mediaUrl: null, mediaDurationSeconds: null, motionPrompt: null },
+      { id: "s2", orderIndex: 1, title: "", script: "Here is what is new", kind: "AVATAR", avatarId: null, avatarLookId: null, voiceId: "v-own", voiceName: "Liam", backgroundColor: "#112233", mediaUrl: null, mediaDurationSeconds: null, motionPrompt: null },
     ],
     ...over,
   };
@@ -75,8 +76,8 @@ describe("generateProject", () => {
     expect(heygen.createHeyGenStudioVideo).toHaveBeenCalledOnce();
     const call = heygen.createHeyGenStudioVideo.mock.calls[0][0];
     expect(call.scenes).toEqual([
-      { avatarId: "hl-1", script: "Welcome to the launch", voiceId: "v-default", backgroundColor: null },
-      { avatarId: "hl-1", script: "Here is what is new", voiceId: "v-own", backgroundColor: "#112233" },
+      { kind: "avatar", avatarId: "hl-1", script: "Welcome to the launch", voiceId: "v-default", backgroundColor: null, motionPrompt: null },
+      { kind: "avatar", avatarId: "hl-1", script: "Here is what is new", voiceId: "v-own", backgroundColor: "#112233", motionPrompt: null },
     ]);
     expect(call).toMatchObject({ engine: "avatar_iii", aspectRatio: "16:9", title: "Launch video" });
 
@@ -159,5 +160,80 @@ describe("generateProject", () => {
     prismaMock.videoProject.findFirst.mockResolvedValue(null);
     await expect(generateProject("intruder", "p1", 3)).rejects.toBeInstanceOf(ProjectError);
     expect(prismaMock.videoProject.findFirst.mock.calls[0][0].where).toMatchObject({ id: "p1", userId: "intruder" });
+  });
+
+  it("refuses a project made only of image/video scenes, since a render must link to an avatar", async () => {
+    prismaMock.videoProject.findFirst.mockResolvedValue(
+      project({
+        scenes: [
+          { id: "s1", orderIndex: 0, title: "", script: "", kind: "IMAGE", avatarId: null, avatarLookId: null, voiceId: null, voiceName: null, backgroundColor: null, mediaUrl: "https://example.com/a.png", mediaDurationSeconds: 5, motionPrompt: null },
+        ],
+      }),
+    );
+    const result = await generateProject("u1", "p1", 3);
+    expect(result).toMatchObject({ ok: false, code: "NOT_READY" });
+    expect(result.ok === false && "error" in result && result.error).toContain("avatar scene");
+    expect(heygen.createHeyGenStudioVideo).not.toHaveBeenCalled();
+  });
+
+  it("sends captions, motion prompt and image/video scenes through to the provider", async () => {
+    prismaMock.videoProject.findFirst.mockResolvedValue(
+      project({
+        engine: "AVATAR_V",
+        captionsEnabled: true,
+        scenes: [
+          { id: "s1", orderIndex: 0, title: "Intro", script: "Welcome", kind: "AVATAR", avatarId: null, avatarLookId: null, voiceId: null, voiceName: null, backgroundColor: null, mediaUrl: null, mediaDurationSeconds: null, motionPrompt: "smiles warmly" },
+          { id: "s2", orderIndex: 1, title: "Logo", script: "", kind: "IMAGE", avatarId: null, avatarLookId: null, voiceId: null, voiceName: null, backgroundColor: null, mediaUrl: "https://example.com/logo.png", mediaDurationSeconds: 4, motionPrompt: null },
+          { id: "s3", orderIndex: 2, title: "Clip", script: "Here's a look at the product", kind: "VIDEO", avatarId: null, avatarLookId: null, voiceId: "v-own", voiceName: "Liam", backgroundColor: null, mediaUrl: "https://example.com/clip.mp4", mediaDurationSeconds: null, motionPrompt: null },
+        ],
+      }),
+    );
+
+    const result = await generateProject("u1", "p1", 3);
+    expect(result).toMatchObject({ ok: true });
+
+    const call = heygen.createHeyGenStudioVideo.mock.calls[0][0];
+    expect(call.captions).toBe(true);
+    expect(call.engine).toBe("avatar_v");
+    expect(call.scenes).toEqual([
+      { kind: "avatar", avatarId: "hl-1", script: "Welcome", voiceId: "v-default", backgroundColor: null, motionPrompt: "smiles warmly" },
+      { kind: "image", mediaUrl: "https://example.com/logo.png", script: undefined, voiceId: undefined, durationSeconds: 4 },
+      { kind: "video", mediaUrl: "https://example.com/clip.mp4", script: "Here's a look at the product", voiceId: "v-own" },
+    ]);
+
+    const created = prismaMock.generatedVideo.create.mock.calls[0][0].data;
+    expect(created.sceneSnapshot).toEqual([
+      { order: 1, kind: "AVATAR", title: "Intro", script: "Welcome", avatarName: "Neil", voiceName: null, backgroundColor: null, mediaUrl: null },
+      { order: 2, kind: "IMAGE", title: "Logo", script: "", avatarName: null, voiceName: null, backgroundColor: null, mediaUrl: "https://example.com/logo.png" },
+      { order: 3, kind: "VIDEO", title: "Clip", script: "Here's a look at the product", avatarName: null, voiceName: "Liam", backgroundColor: null, mediaUrl: "https://example.com/clip.mp4" },
+    ]);
+  });
+
+  it("does not send motion_prompt on an engine other than Avatar V", async () => {
+    prismaMock.videoProject.findFirst.mockResolvedValue(
+      project({
+        scenes: [
+          { id: "s1", orderIndex: 0, title: "", script: "Hello", kind: "AVATAR", avatarId: null, avatarLookId: null, voiceId: null, voiceName: null, backgroundColor: null, mediaUrl: null, mediaDurationSeconds: null, motionPrompt: "smiles warmly" },
+        ],
+      }),
+    );
+    await generateProject("u1", "p1", 3);
+    const call = heygen.createHeyGenStudioVideo.mock.calls[0][0];
+    expect(call.scenes[0].motionPrompt).toBeNull();
+  });
+
+  it("rejects a narrated image scene with no resolvable voice, without spending credits", async () => {
+    prismaMock.videoProject.findFirst.mockResolvedValue(
+      project({
+        defaultVoiceId: null,
+        scenes: [
+          { id: "s1", orderIndex: 0, title: "", script: "Hello", kind: "AVATAR", avatarId: null, avatarLookId: null, voiceId: "v-own", voiceName: "Liam", backgroundColor: null, mediaUrl: null, mediaDurationSeconds: null, motionPrompt: null },
+          { id: "s2", orderIndex: 1, title: "", script: "Narrated image", kind: "IMAGE", avatarId: null, avatarLookId: null, voiceId: null, voiceName: null, backgroundColor: null, mediaUrl: "https://example.com/a.png", mediaDurationSeconds: null, motionPrompt: null },
+        ],
+      }),
+    );
+    const result = await generateProject("u1", "p1", 3);
+    expect(result).toMatchObject({ ok: false, code: "NOT_READY" });
+    expect(ledger.reserveCreditsForGeneration).not.toHaveBeenCalled();
   });
 });

@@ -16,13 +16,29 @@ import SignOutButton from "@/components/auth/sign-out-button";
 import { SiteLogo } from "@/components/branding/site-logo";
 import { MOBILE_SIDEBAR_ID } from "./dashboard-shell";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/dashboard/bookings", label: "Bookings", icon: CalendarDays, exact: false },
-  { href: "/dashboard/avatars", label: "Avatars", icon: UserCircle2, exact: false },
-  { href: "/dashboard/videos", label: "Videos", icon: Video, exact: false },
-  { href: "/dashboard/billing", label: "Billing", icon: CreditCard, exact: false },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings, exact: false },
+type NavItem = { href: string; label: string; icon: typeof Video; exact: boolean };
+
+// Grouped so the everyday creating tools sit apart from account admin.
+const navGroups: { label: string | null; items: NavItem[] }[] = [
+  {
+    label: null,
+    items: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true }],
+  },
+  {
+    label: "Create",
+    items: [
+      { href: "/dashboard/avatars", label: "Avatars", icon: UserCircle2, exact: false },
+      { href: "/dashboard/videos", label: "Videos", icon: Video, exact: false },
+      { href: "/dashboard/bookings", label: "Bookings", icon: CalendarDays, exact: false },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { href: "/dashboard/billing", label: "Billing", icon: CreditCard, exact: false },
+      { href: "/dashboard/settings", label: "Settings", icon: Settings, exact: false },
+    ],
+  },
 ];
 
 // shadcn's focus-visible ring, applied explicitly since these are hand-rolled
@@ -74,33 +90,42 @@ function SidebarContent({
         </div>
       )}
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <ul className="space-y-1" role="list">
-          {navItems.map(({ href, label, icon: Icon, exact }) => {
-            const isActive = exact
-              ? pathname === href
-              : pathname === href || pathname.startsWith(href + "/");
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  onClick={onMobileClose}
-                  aria-current={isActive ? "page" : undefined}
-                  className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    FOCUS_RING,
-                    isActive
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  {label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+      <nav aria-label="Main" className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
+        {navGroups.map((group, index) => (
+          <div key={group.label ?? index}>
+            {group.label && (
+              <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+                {group.label}
+              </p>
+            )}
+            <ul className="space-y-1" role="list">
+              {group.items.map(({ href, label, icon: Icon, exact }) => {
+                const isActive = exact
+                  ? pathname === href
+                  : pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      onClick={onMobileClose}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
+                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        FOCUS_RING,
+                        isActive
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      {label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       <div className="border-t border-sidebar-border p-4 space-y-3">

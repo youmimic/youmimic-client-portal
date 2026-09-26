@@ -4,17 +4,27 @@ import { useState } from "react";
 import { ChevronDown, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { AvatarLookPicker } from "@/components/dashboard/project/avatar-look-picker";
 import { EnginePicker } from "@/components/dashboard/engine-picker";
 import { VoicePicker, type SelectedVoice } from "@/components/dashboard/video/voice-picker";
 import type { HeyGenEngine } from "@/lib/heygen";
 import { VIDEO_ASPECT_RATIOS, VIDEO_RESOLUTIONS } from "@/lib/validations/video";
-import { HEX_COLOR, resolveScene, type AvatarOption, type ProjectDefaults, type SceneData } from "@/lib/projects/rules";
+import {
+  HEX_COLOR,
+  MOTION_PROMPT_MAX,
+  resolveScene,
+  type AvatarOption,
+  type ProjectDefaults,
+  type SceneData,
+} from "@/lib/projects/rules";
 import { ASPECT_RATIO_LABEL } from "@/lib/video-display";
 import { cn } from "@/lib/utils";
 
 export type SceneSettingsPatch = Partial<
-  Pick<SceneData, "avatarId" | "avatarLookId" | "voiceId" | "voiceName" | "backgroundColor">
+  Pick<SceneData, "avatarId" | "avatarLookId" | "voiceId" | "voiceName" | "backgroundColor" | "motionPrompt">
 >;
 
 export type ProjectSettingsPatch = Partial<
@@ -22,6 +32,7 @@ export type ProjectSettingsPatch = Partial<
     aspectRatio: string;
     resolution: string | null;
     engine: HeyGenEngine;
+    captionsEnabled: boolean;
   }
 >;
 
@@ -36,6 +47,7 @@ export function SettingsPanel({
   aspectRatio,
   resolution,
   engine,
+  captionsEnabled,
   disabled,
   onSceneChange,
   onProjectChange,
@@ -47,6 +59,7 @@ export function SettingsPanel({
   aspectRatio: string;
   resolution: string | null;
   engine: HeyGenEngine;
+  captionsEnabled: boolean;
   disabled: boolean;
   onSceneChange: (patch: SceneSettingsPatch) => void;
   onProjectChange: (patch: ProjectSettingsPatch) => void;
@@ -55,6 +68,11 @@ export function SettingsPanel({
   const resolved = resolveScene(scene, defaults);
   const bgOn = scene.backgroundColor !== null;
   const bgValid = scene.backgroundColor === null || HEX_COLOR.test(scene.backgroundColor);
+  const isAvatarScene = scene.kind === "AVATAR";
+  // Confirmed live against the provider: motion_prompt is schema-valid only
+  // on the Avatar V engine — sending it elsewhere is rejected. Not yet
+  // exercised on a real avatar, only fake ones.
+  const motionPromptAvailable = isAvatarScene && engine === "avatar_v";
 
   const voiceValue: SelectedVoice = scene.voiceId ? { id: scene.voiceId, name: scene.voiceName ?? "Chosen voice" } : null;
   const projectVoiceValue: SelectedVoice = defaults.defaultVoiceId
@@ -68,13 +86,15 @@ export function SettingsPanel({
           <CardTitle className="text-base">Scene {sceneNumber} settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <AvatarLookPicker
-            avatars={avatars}
-            avatarId={resolved.avatarId}
-            lookId={resolved.avatarLookId}
-            disabled={disabled}
-            onChange={(avatarId, lookId) => onSceneChange({ avatarId, avatarLookId: lookId })}
-          />
+          {isAvatarScene && (
+            <AvatarLookPicker
+              avatars={avatars}
+              avatarId={resolved.avatarId}
+              lookId={resolved.avatarLookId}
+              disabled={disabled}
+              onChange={(avatarId, lookId) => onSceneChange({ avatarId, avatarLookId: lookId })}
+            />
+          )}
 
           <div className="space-y-2">
             <VoicePicker
@@ -83,10 +103,15 @@ export function SettingsPanel({
               defaultLabel={
                 defaults.defaultVoiceId
                   ? `Using project voice: ${defaults.defaultVoiceName ?? "Chosen voice"}`
-                  : "Avatar's own voice (default)"
+                  : isAvatarScene
+                    ? "Avatar's own voice (default)"
+                    : "No voice chosen"
               }
               onChange={(v) => onSceneChange({ voiceId: v?.id ?? null, voiceName: v?.name ?? null })}
             />
+            {!isAvatarScene && (
+              <p className="text-xs text-muted-foreground">Only used if this scene has narration.</p>
+            )}
             {!resolved.voiceInherited && (
               <Button
                 type="button"
@@ -101,41 +126,62 @@ export function SettingsPanel({
             )}
           </div>
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Background colour</p>
-            {bgOn ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  aria-label="Pick a background colour"
-                  disabled={disabled}
-                  value={bgValid && scene.backgroundColor ? scene.backgroundColor : "#1f2937"}
-                  onChange={(e) => onSceneChange({ backgroundColor: e.target.value })}
-                  className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent p-0.5"
-                />
-                <input
-                  type="text"
-                  aria-label="Background colour hex value"
-                  disabled={disabled}
-                  value={scene.backgroundColor ?? ""}
-                  onChange={(e) => onSceneChange({ backgroundColor: e.target.value })}
-                  aria-invalid={!bgValid ? true : undefined}
-                  className={cn(selectClass, "w-28 font-mono")}
-                  maxLength={7}
-                />
-                <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onSceneChange({ backgroundColor: null })}>
-                  Remove
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">Using the avatar&apos;s own background.</p>
-                <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onSceneChange({ backgroundColor: "#1f2937" })}>
-                  Set a colour
-                </Button>
-              </div>
-            )}
-          </div>
+          {isAvatarScene && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Background colour</p>
+              {bgOn ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    aria-label="Pick a background colour"
+                    disabled={disabled}
+                    value={bgValid && scene.backgroundColor ? scene.backgroundColor : "#1f2937"}
+                    onChange={(e) => onSceneChange({ backgroundColor: e.target.value })}
+                    className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent p-0.5"
+                  />
+                  <input
+                    type="text"
+                    aria-label="Background colour hex value"
+                    disabled={disabled}
+                    value={scene.backgroundColor ?? ""}
+                    onChange={(e) => onSceneChange({ backgroundColor: e.target.value })}
+                    aria-invalid={!bgValid ? true : undefined}
+                    className={cn(selectClass, "w-28 font-mono")}
+                    maxLength={7}
+                  />
+                  <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onSceneChange({ backgroundColor: null })}>
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">Using the avatar&apos;s own background.</p>
+                  <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onSceneChange({ backgroundColor: "#1f2937" })}>
+                    Set a colour
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {motionPromptAvailable && (
+            <div className="space-y-1.5">
+              <Label htmlFor="scene-motion-prompt">Motion and gestures (optional)</Label>
+              <Textarea
+                id="scene-motion-prompt"
+                value={scene.motionPrompt ?? ""}
+                maxLength={MOTION_PROMPT_MAX}
+                disabled={disabled}
+                onChange={(e) => onSceneChange({ motionPrompt: e.target.value || null })}
+                placeholder="e.g. gestures warmly while speaking, calm and steady"
+                className="min-h-20"
+              />
+              <p className="text-xs text-muted-foreground">
+                Describes how animated this scene looks. Only applies with the Avatar V engine, and hasn&apos;t been
+                tried against a real avatar yet, so treat it as experimental.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -148,6 +194,20 @@ export function SettingsPanel({
             Scenes use the project voice unless you choose a different one for a scene. Format and quality apply to
             the whole video.
           </p>
+
+          <label className="group/field flex items-start gap-2.5 text-sm">
+            <Checkbox
+              checked={captionsEnabled}
+              disabled={disabled}
+              onCheckedChange={(checked) => onProjectChange({ captionsEnabled: checked === true })}
+            />
+            <span>
+              <span className="block font-medium">Add captions</span>
+              <span className="block text-xs text-muted-foreground">
+                Burns readable subtitles into the video and gives you a downloadable subtitle file.
+              </span>
+            </span>
+          </label>
 
           <VoicePicker
             value={projectVoiceValue}

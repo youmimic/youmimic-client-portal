@@ -2,14 +2,8 @@ import { Building2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { PaymentStatusBadge } from "@/components/billing/status-badges";
 import type { PaymentRecord } from "@/lib/payments";
+import { formatDate } from "@/lib/format";
 
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(new Date(date));
-}
 
 function formatAmount(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-AU", {

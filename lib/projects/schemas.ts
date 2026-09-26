@@ -1,6 +1,17 @@
 import { z } from "zod";
 import { VIDEO_ASPECT_RATIOS, VIDEO_ENGINES, VIDEO_RESOLUTIONS } from "@/lib/validations/video";
-import { HEX_COLOR, PROJECT_TITLE_MAX, SCENE_SCRIPT_MAX, SCENE_TITLE_MAX } from "@/lib/projects/rules";
+import {
+  HEX_COLOR,
+  MAX_MEDIA_DURATION,
+  MIN_MEDIA_DURATION,
+  MOTION_PROMPT_MAX,
+  PROJECT_TITLE_MAX,
+  SCENE_KINDS,
+  SCENE_SCRIPT_MAX,
+  SCENE_TITLE_MAX,
+} from "@/lib/projects/rules";
+
+const MEDIA_URL_MAX = 2000;
 
 const id = z.string().trim().min(1).max(60);
 const nullableId = id.nullable();
@@ -25,6 +36,7 @@ export const updateProjectSchema = z
     defaultAvatarLookId: nullableId.optional(),
     defaultVoiceId: nullableId.optional(),
     defaultVoiceName: z.string().trim().max(200).nullable().optional(),
+    captionsEnabled: z.boolean().optional(),
   })
   .strict();
 
@@ -41,6 +53,14 @@ export const updateSceneSchema = z
     voiceId: nullableId.optional(),
     voiceName: z.string().trim().max(200).nullable().optional(),
     backgroundColor: z.string().regex(HEX_COLOR, "Use a hex colour like #1f2937").nullable().optional(),
+    kind: z.enum(SCENE_KINDS).optional(),
+    // Not validated as a URL here on purpose: a scene is often saved
+    // mid-typing, before the link is complete. Real validation (a resolvable
+    // http/https link) happens in the readiness check, the same way an empty
+    // script is allowed to autosave but blocks generation.
+    mediaUrl: z.string().trim().max(MEDIA_URL_MAX).nullable().optional(),
+    mediaDurationSeconds: z.number().min(MIN_MEDIA_DURATION).max(MAX_MEDIA_DURATION).nullable().optional(),
+    motionPrompt: z.string().trim().max(MOTION_PROMPT_MAX).nullable().optional(),
   })
   .strict();
 

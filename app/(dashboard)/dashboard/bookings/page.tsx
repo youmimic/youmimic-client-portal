@@ -3,6 +3,9 @@ import { CalendarDays } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { EmptyState } from "@/components/dashboard/empty-state";
+import { formatShortDate as formatDate } from "@/lib/format";
 import { NewBookingDialog } from "@/components/dashboard/new-booking-dialog";
 import {
   BookingActions,
@@ -70,13 +73,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(date));
-}
 
 function formatLocationSummary(booking: BookingRow): string {
   const type = booking.captureLocationType as CaptureLocationType | null;
@@ -208,30 +204,19 @@ export default async function BookingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Bookings</h1>
-          <p className="text-muted-foreground">
-            View and manage your scheduled avatar capture sessions.
-          </p>
-        </div>
-        <NewBookingDialog />
-      </div>
+      <PageHeader
+        title="Bookings"
+        description="View and manage your scheduled avatar capture sessions."
+        actions={<NewBookingDialog />}
+      />
 
       {bookings.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <CalendarDays
-              className="mb-4 h-10 w-10 text-muted-foreground/50"
-              aria-hidden="true"
-            />
-            <p className="text-base font-medium">No bookings yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Your scheduled avatar capture sessions will appear here once
-              bookings are made.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={CalendarDays}
+          title="No bookings yet"
+          description="A capture session is how we record the footage your avatar is made from. Book one and it will show up here."
+          action={<NewBookingDialog />}
+        />
       ) : (
         <BookingsTable bookings={bookings} />
       )}
