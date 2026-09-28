@@ -681,25 +681,26 @@ export default async function HomePage() {
       {awardsItems.length > 0 && (
         <section className="py-16 sm:py-20">
           <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-            <h2 className="text-3xl font-bold tracking-tighter text-foreground sm:text-4xl">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground sm:text-base">
               {awardsHeading}
             </h2>
             {/* True greyscale (not the solid-silhouette brightness-0 used for
                 Featured At/clients, which would flatten these detailed
                 badges into blobs). dark:invert flips the badges' dark
                 text to light so it stays readable on the dark theme. No
-                tile, border or background. */}
-            <div className="mt-10 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
+                tile, border or background. Sized to match Featured At's
+                logo tiles (max-w-40) so the two sections read as a pair. */}
+            <div className="mt-8 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
               {awardsItems.map(({ name, logo }) => (
                 <div
                   key={name}
-                  className="relative mx-auto aspect-square w-full max-w-64"
+                  className="relative mx-auto aspect-square w-full max-w-40"
                 >
                   <NextImage
-                    src={urlForImage(logo!).width(600).url()}
+                    src={urlForImage(logo!).width(320).url()}
                     alt={name}
                     fill
-                    sizes="(min-width: 1024px) 256px, 45vw"
+                    sizes="160px"
                     className="object-contain grayscale dark:invert"
                   />
                 </div>
