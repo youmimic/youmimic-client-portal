@@ -9,7 +9,7 @@ import { VideoLibrary } from "@/components/dashboard/video/video-library";
 import { NewProjectButton } from "@/components/dashboard/project/new-project-button";
 import { ProjectCard } from "@/components/dashboard/project/project-card";
 import { listProjects } from "@/lib/projects/service";
-import { videoTitle } from "@/lib/video-display";
+import { formatDuration, videoTitle } from "@/lib/video-display";
 
 export const metadata = {
   title: "Videos | YouMimic Portal",
@@ -56,6 +56,13 @@ export default async function VideosPage({
     (sum, v) => sum + (v.estimatedCostCents ?? 0),
     0,
   );
+  const totalDurationSeconds = videos.reduce(
+    (sum, v) => sum + (v.durationSeconds ?? 0),
+    0,
+  );
+  // Cost is an internal, billing-facing figure — only admins see it here.
+  // Everyone else sees how much video they've actually produced instead.
+  const isAdmin = !!session.user.adminRole;
 
   return (
     <div className="space-y-6">
@@ -64,12 +71,22 @@ export default async function VideosPage({
           <h1 className="text-2xl font-semibold tracking-tight">Videos</h1>
           <p className="text-muted-foreground">
             Every video generated across all of your avatars, newest first.
-            {totalEstimatedCostCents > 0 && (
+            {isAdmin && totalEstimatedCostCents > 0 && (
               <>
                 {" "}
                 Estimated usage so far:{" "}
                 <span className="font-medium text-foreground">
                   ${(totalEstimatedCostCents / 100).toFixed(2)}
+                </span>
+                .
+              </>
+            )}
+            {!isAdmin && totalDurationSeconds > 0 && (
+              <>
+                {" "}
+                Total video length so far:{" "}
+                <span className="font-medium text-foreground">
+                  {formatDuration(totalDurationSeconds)}
                 </span>
                 .
               </>
