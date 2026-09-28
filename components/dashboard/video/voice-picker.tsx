@@ -19,6 +19,45 @@ export type VoiceOption = {
   support_pause?: boolean;
 };
 
+// Confirmed live against the real voice catalogue (2026-09-28): every value
+// here is an exact match the provider recognises for its `language` filter.
+// This is a curated list rather than free text on purpose — the provider
+// doesn't reject an unrecognised language, it silently falls back to a
+// generic "Multilingual" set, so a typo would look like a real result
+// instead of an error. The raw catalogue also has junk values (blanks,
+// "unknown", stray "en" codes, inconsistent trailing spaces) not worth
+// exposing here.
+const LANGUAGE_OPTIONS = [
+  "Arabic",
+  "Chinese",
+  "Czech",
+  "Danish",
+  "Dutch",
+  "English",
+  "Filipino",
+  "French",
+  "German",
+  "Hindi",
+  "Hungarian",
+  "Indonesian",
+  "Italian",
+  "Japanese",
+  "Korean",
+  "Norwegian",
+  "Polish",
+  "Portuguese",
+  "Romanian",
+  "Russian",
+  "Slovak",
+  "Spanish",
+  "Turkish",
+  "Ukrainian",
+  "Vietnamese",
+] as const;
+
+const selectClass =
+  "h-8 rounded-lg border border-input bg-transparent px-2 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
+
 export type SelectedVoice = { id: string; name: string } | null;
 
 type LoadState =
@@ -48,14 +87,18 @@ export function VoicePicker({
   const [load, setLoad] = useState<LoadState>({ kind: "idle" });
   const [nextToken, setNextToken] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  // "" means every language, same as leaving the filter off entirely.
+  const [language, setLanguage] = useState("");
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const loadVoices = useCallback(async (token?: string) => {
+  const loadVoices = useCallback(async (opts: { token?: string; language?: string } = {}) => {
     setLoad({ kind: "loading" });
     try {
-      const qs = token ? `?token=${encodeURIComponent(token)}` : "";
-      const res = await fetch(`/api/dashboard/voices${qs}`);
+      const qs = new URLSearchParams();
+      if (opts.token) qs.set("token", opts.token);
+      if (opts.language) qs.set("language", opts.language);
+      const res = await fetch(`/api/dashboard/voices${qs.toString() ? `?${qs}` : ""}`);
       const json = (await res.json().catch(() => ({}))) as {
         voices?: VoiceOption[];
         hasMore?: boolean;
@@ -63,13 +106,25 @@ export function VoicePicker({
         error?: string;
       };
       if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
-      setVoices((prev) => (token ? [...prev, ...(json.voices ?? [])] : (json.voices ?? [])));
+      setVoices((prev) => (opts.token ? [...prev, ...(json.voices ?? [])] : (json.voices ?? [])));
       setNextToken(json.hasMore ? (json.nextToken ?? null) : null);
       setLoad({ kind: "ready" });
     } catch (e) {
       setLoad({ kind: "error", message: e instanceof Error ? e.message : "Could not load voices." });
     }
   }, []);
+
+  // Switching language starts a fresh, server-side filtered list rather than
+  // just re-filtering whatever page happened to load already — otherwise a
+  // language spoken further down the catalogue (most of it is English)
+  // would look like it doesn't exist until "Load more" was clicked enough
+  // times to reach it.
+  function handleLanguageChange(next: string) {
+    setLanguage(next);
+    setVoices([]);
+    setNextToken(null);
+    void loadVoices({ language: next || undefined });
+  }
 
   useEffect(() => {
     return () => audioRef.current?.pause();
@@ -125,15 +180,30 @@ export function VoicePicker({
 
       {open && (
         <div id="voice-picker-panel" className="space-y-2 rounded-lg border p-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, language or gender"
-              aria-label="Search voices"
-              className="pl-8"
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name or gender"
+                aria-label="Search voices"
+                className="pl-8"
+              />
+            </div>
+            <select
+              value={language}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+              aria-label="Filter voices by language"
+              className={selectClass}
+            >
+              <option value="">All languages</option>
+              {LANGUAGE_OPTIONS.map((lang) => (
+                <option key={lang} value={lang}>
+                  {lang}
+                </option>
+              ))}
+            </select>
           </div>
 
           <ul className="max-h-64 space-y-1 overflow-y-auto" aria-label="Available voices">
@@ -214,7 +284,11 @@ export function VoicePicker({
 
           {load.kind === "ready" && visible.length === 0 && (
             <p className="px-1 py-2 text-sm text-muted-foreground">
-              {q ? "No voices match your search." : "No voices are available right now."}
+              {q
+                ? "No voices match your search."
+                : language
+                  ? `No ${language} voices are available right now.`
+                  : "No voices are available right now."}
             </p>
           )}
 
@@ -224,7 +298,12 @@ export function VoicePicker({
               className="flex items-center justify-between gap-2 rounded-md bg-destructive/10 px-2.5 py-2 text-sm text-destructive"
             >
               <span>{load.message}</span>
-              <Button type="button" variant="outline" size="xs" onClick={() => void loadVoices()}>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => void loadVoices({ language: language || undefined })}
+              >
                 Try again
               </Button>
             </div>
@@ -236,7 +315,7 @@ export function VoicePicker({
               variant="ghost"
               size="sm"
               className="w-full"
-              onClick={() => void loadVoices(nextToken)}
+              onClick={() => void loadVoices({ token: nextToken, language: language || undefined })}
             >
               Load more voices
             </Button>

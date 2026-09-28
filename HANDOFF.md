@@ -1,5 +1,11 @@
 # HANDOFF.md
 
+## Session: Voice language filter — 2026-09-28
+
+Different-language scenes were already possible (voice choice is already per-scene), but there was no reliable way to find a voice in a given language — the list loads a page at a time (mostly English first) and the search box only filtered what had already loaded. A live check found the provider's own `language` filter silently falls back to a generic "Multilingual" set for any unrecognised value rather than erroring, so a free-text language box would be unreliable; paged through the real catalogue instead to confirm about 25 working language names and built a fixed dropdown from those. Added to the shared `VoicePicker` (used by both the single-scene and multi-scene editors), re-querying the server when a language is chosen rather than just filtering the loaded page. No server-side change — the API route already accepted a `language` filter. Detail in `updates/2026-09-28-voice-language-filter.md`.
+
+Checks: typecheck clean, lint 0 errors, vitest 190 passing, `npx next build` clean.
+
 ## Session: Pause support in scripts — 2026-09-26 (later still)
 
 Corrected an earlier answer given in this session: HeyGen's script field does support one markup tag, `<break time="1s"/>`, gated per-voice by a `support_pause` flag on `GET /v3/voices`. Added `support_pause` to `HeyGenVoice`, a "Pauses" badge in the voice picker, and an "Insert pause" button on every script field (single-scene create page and both script fields in the multi-scene editor), inserting at the cursor via a newly-ref-forwarding `Textarea`. The button is always available with an honest note that it depends on the chosen voice, rather than gating it on cross-component state — flagged as a scope choice in `updates/2026-09-26-pause-support.md`.
