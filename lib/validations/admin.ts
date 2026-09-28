@@ -260,6 +260,19 @@ export const updateAvatarSchema = z.object({
 
 export type UpdateAvatarInput = z.infer<typeof updateAvatarSchema>;
 
+// For avatars HeyGen's own group-import machinery can't see (confirmed live:
+// its legacy /v2/avatar_group endpoints 404 for at least one newer avatar,
+// and the v3 list-looks group_id filter silently returns empty despite
+// HeyGen's docs saying it should work) — lets an admin attach a specific,
+// already-known look id by hand. addAvatarLookFromHeyGen in
+// lib/heygen/sync.ts still verifies the id against HeyGen and that it
+// actually belongs to this avatar's identity before saving it.
+export const addAvatarLookSchema = z.object({
+  heygenLookId: z.string().trim().min(1).max(200),
+});
+
+export type AddAvatarLookInput = z.infer<typeof addAvatarLookSchema>;
+
 // Bulk HeyGen avatar import — defaults to a dry run (preview only) so a
 // caller must explicitly opt into actually writing rows.
 export const heygenImportSchema = z.object({

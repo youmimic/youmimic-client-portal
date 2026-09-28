@@ -1,5 +1,17 @@
 # HANDOFF.md
 
+## Session: Manual look-linking for avatars HeyGen's import can't see — 2026-09-28 (later still)
+
+Follow-up to the same-day avatar-sync fix below. Rachel Scanlon's avatar imported correctly after that fix (`status: "ready"`), but her two individual looks did not — asked to check if look ids `3a3361ff17104c7dbbb0b7bcccba4973` and `c9151042046340a18413cef1f5701df7` were reachable.
+
+Both resolved fine directly via `GET /v3/avatars/looks/{id}` (status "completed", `group_id` matching her avatar). Checked why the app's own import couldn't find them: `lib/heygen/import-avatars.ts`'s bulk/group-link flow is built entirely on HeyGen's legacy `/v2/avatar_group/{id}/avatars` endpoint, which 404s outright for this avatar's group ("Avatar group not found") — confirmed live. Also re-checked the v3 `GET /v3/avatars/looks?group_id=...` filter directly against HeyGen's own documented behavior (fetched via their API reference): the docs say it should return exactly this, but it returns an empty list regardless of `avatar_type`/`ownership`/no filters at all. Both are genuine HeyGen-side gaps for this avatar — no combination of client-side filtering or pagination gets around them, so full automatic look-discovery isn't achievable via their API as it stands.
+
+**Permanent fix, scoped to what's actually achievable**: since the single-look lookup endpoint does reliably resolve a known id, built a proper admin-facing "Add look by ID" flow instead of one-off manual DB edits. New `addAvatarLookFromHeyGen()` (`lib/heygen/sync.ts`) verifies a submitted look id against HeyGen and checks it actually belongs to the avatar's own identity (`look.group_id` must match the avatar's `heygenGroupId`/`heygenAvatarId`) before saving — the one safety check that matters, since without it a copy-pasted wrong id would silently attach a different client's likeness. Wired into a new `POST /api/admin/users/[id]/avatars/[avatarId]/looks` route and an "Add look" button/dialog in the admin avatar panel (`components/admin/avatar-actions.tsx`), shown wherever an avatar already has a HeyGen id linked. This turns "an engineer has to run scripts and hand-insert rows" into a supported, repeatable admin action for the next avatar this happens to.
+
+Used the new function itself (not a raw DB insert) to add Rachel's two confirmed real looks — both now show `status: "ready"` with previews. Confirmed the duplicate-safety check works (re-adding the same id is rejected).
+
+Checks: typecheck clean, lint 0 errors (same 4 pre-existing warnings), vitest 190 passing (no new unit tests — verified live against the real avatar and a real duplicate-rejection case instead, via a temporary immediately-deleted vitest file), `npx next build` clean. Not done: a browser walkthrough of the new "Add look" dialog (verified via the underlying API function directly, not through the UI). Detail in `updates/2026-09-28-manual-look-linking.md`.
+
 ## Session: Fix silent avatar-sync failure for non-look HeyGen ids — 2026-09-28 (later)
 
 Investigated a report that manually linking HeyGen id `6c7681220a6b4718bd69c8c125d4814f` to a new client user (rachel.scanlon@d2legaltech.com) through the admin portal "did not work." First pass wrongly concluded the id didn't exist in HeyGen at all, having checked only two endpoint types (`GET /v3/avatars/looks/{id}` and the v2 avatar-group endpoint, both 404). A live re-check against a third endpoint, `GET /v3/avatars/{id}`, found it's a real, complete, "completed"-status avatar — corrected that earlier answer to the user directly.

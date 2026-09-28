@@ -159,6 +159,75 @@ export async function verifyHeygenAvatarId(heygenAvatarId: string): Promise<{ ok
   }
 }
 
+// Manual look-linking, for avatars HeyGen's own group-import machinery can't
+// see. Confirmed live on 2026-09-28: for at least one newer avatar, the
+// legacy /v2/avatar_group/{id}/avatars endpoint that lib/heygen/import-
+// avatars.ts's bulk import relies on 404s outright ("Avatar group not
+// found"), and the v3 list-looks endpoint's own group_id filter — despite
+// HeyGen's documentation saying it should return exactly this — silently
+// returns an empty list. Both are HeyGen-side gaps, not something more
+// client-side filtering/pagination can work around. GET /v3/avatars/looks/
+// {look_id} (single lookup, not list) does reliably resolve a known look id
+// for this same avatar, so that's the one thing this can lean on: an admin
+// supplies a look id they already have (e.g. from HeyGen's own dashboard),
+// and this fetches + verifies it before saving, rather than trusting it
+// blindly the way a raw DB insert would.
+export async function addAvatarLookFromHeyGen(
+  avatarId: string,
+  heygenLookId: string,
+): Promise<{ ok: true; lookId: string } | { ok: false; error: string }> {
+  const avatar = await prisma.avatar.findUnique({
+    where: { id: avatarId },
+    select: { heygenAvatarId: true, heygenGroupId: true },
+  });
+  if (!avatar) return { ok: false, error: "Avatar not found" };
+
+  const identityId = avatar.heygenGroupId ?? avatar.heygenAvatarId;
+  if (!identityId) {
+    return { ok: false, error: "Link this avatar's own HeyGen id first, then add its looks." };
+  }
+
+  let look: HeyGenAvatarLook;
+  try {
+    look = await getHeyGenAvatarLook(heygenLookId);
+  } catch (err) {
+    if (isNotFound(err)) {
+      return { ok: false, error: "HeyGen doesn't recognise this look id. Double-check it was copied correctly." };
+    }
+    const message = err instanceof HeyGenApiError ? err.message : "Could not reach HeyGen to verify this look.";
+    return { ok: false, error: message };
+  }
+
+  // The one safety check that matters here — without it, a mistyped or
+  // copy-pasted-from-the-wrong-tab id would silently attach a different
+  // client's likeness to this user's avatar.
+  if (look.group_id && look.group_id !== identityId) {
+    return { ok: false, error: "This look belongs to a different avatar identity in HeyGen — refusing to link it here." };
+  }
+
+  try {
+    const created = await prisma.avatarLook.create({
+      data: {
+        avatarId,
+        heygenLookId,
+        name: look.name,
+        status: mapHeyGenStatus(look.status) ?? "pending",
+        previewUrl: look.preview_image_url ?? undefined,
+        videoUrl: look.preview_video_url ?? undefined,
+        defaultVoiceId: look.default_voice_id ?? undefined,
+      },
+      select: { id: true },
+    });
+    return { ok: true, lookId: created.id };
+  } catch (err: unknown) {
+    if (err instanceof Error && "code" in err && (err as { code?: string }).code === "P2002") {
+      return { ok: false, error: "This look is already linked to an avatar." };
+    }
+    const message = err instanceof Error ? err.message : "Unknown error saving this look";
+    return { ok: false, error: message };
+  }
+}
+
 // Only the fields the rollup itself reads — callers (dashboard grid, admin
 // panel) commonly select more (id, name, …) for their own rendering, and a
 // fuller object satisfies this structurally without extra mapping.

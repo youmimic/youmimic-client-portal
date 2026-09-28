@@ -115,6 +115,10 @@ export function UserAvatarsCard({
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<{ avatarId: string; message: string } | null>(null);
 
+  const [addingLookTo, setAddingLookTo] = useState<Avatar | null>(null);
+  const [lookId, setLookId] = useState("");
+  const [lookState, setLookState] = useState<ActionState>(idle);
+
   async function handleSync(avatar: Avatar) {
     setSyncingId(avatar.id);
     setSyncError(null);
@@ -177,6 +181,24 @@ export function UserAvatarsCard({
       router.refresh();
     } catch (e) {
       setState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
+  function openAddLook(avatar: Avatar) {
+    setLookId("");
+    setLookState(idle);
+    setAddingLookTo(avatar);
+  }
+
+  async function handleAddLook() {
+    if (!addingLookTo) return;
+    setLookState({ loading: true, error: null });
+    try {
+      await apiCall(`/api/admin/users/${userId}/avatars/${addingLookTo.id}/looks`, "POST", { heygenLookId: lookId });
+      setAddingLookTo(null);
+      router.refresh();
+    } catch (e) {
+      setLookState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
     }
   }
 
@@ -247,6 +269,11 @@ export function UserAvatarsCard({
                   <Button variant="ghost" size="xs" onClick={() => openEdit(avatar)}>
                     Edit
                   </Button>
+                  {avatar.heygenAvatarId && (
+                    <Button variant="ghost" size="xs" onClick={() => openAddLook(avatar)}>
+                      Add look
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="xs"
@@ -313,6 +340,37 @@ export function UserAvatarsCard({
             <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
             <Button size="sm" disabled={state.loading || name.trim().length === 0} onClick={handleEdit}>
               {state.loading ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add look dialog */}
+      <Dialog open={addingLookTo !== null} onOpenChange={(o) => { if (!o) setAddingLookTo(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Look</DialogTitle>
+            <DialogDescription>
+              For avatars HeyGen&apos;s own import can&apos;t see (a known gap for some newer avatars) —
+              paste a specific look id from HeyGen&apos;s dashboard. It&apos;s verified against HeyGen and
+              checked that it actually belongs to {addingLookTo?.name} before saving.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="look-id">HeyGen look ID</Label>
+            <Input
+              id="look-id"
+              value={lookId}
+              onChange={(e) => setLookId(e.target.value)}
+              placeholder="e.g. c9151042046340a18413cef1f5701df7"
+              className="font-mono text-sm"
+            />
+          </div>
+          {lookState.error && <p className="text-sm text-destructive">{lookState.error}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
+            <Button size="sm" disabled={lookState.loading || lookId.trim().length === 0} onClick={handleAddLook}>
+              {lookState.loading ? "Adding…" : "Add Look"}
             </Button>
           </DialogFooter>
         </DialogContent>
