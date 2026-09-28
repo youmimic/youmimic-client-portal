@@ -144,6 +144,8 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
   const passwordHash = await bcrypt.hash(password, 12);
   const token = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
+  // acceptTerms/acceptPrivacyPolicy were already required true above.
+  const acceptedAt = new Date();
 
   const { user, joinedEnterpriseName } = await prisma.$transaction(async (tx) => {
     const createdUser = await tx.user.create({
@@ -152,6 +154,8 @@ export async function registerUser(rawBody: unknown): Promise<RegisterResult> {
         email,
         passwordHash,
         emailVerified: verifiedViaInvite,
+        termsAcceptedAt: acceptedAt,
+        privacyPolicyAcceptedAt: acceptedAt,
       },
       select: { id: true, email: true, name: true },
     });

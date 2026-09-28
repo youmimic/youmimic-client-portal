@@ -113,6 +113,7 @@ export async function authenticateUser(credentials: unknown, request: Request) {
     name: user.name,
     email: user.email,
     isEmailVerified: user.emailVerified,
+    hasAcceptedLegal: !!user.termsAcceptedAt && !!user.privacyPolicyAcceptedAt,
     roles,
     adminRole: user.adminRole,
     isSuspended: user.isSuspended,

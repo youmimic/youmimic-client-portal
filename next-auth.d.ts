@@ -8,6 +8,7 @@ declare module "next-auth" {
       roles: string[];
       isEmailVerified: boolean;
       hasActiveSubscription: boolean;
+      hasAcceptedLegal: boolean;
       adminRole: string | null;
       isSuspended: boolean;
       isEnterpriseSuspended: boolean;
@@ -19,6 +20,7 @@ declare module "next-auth" {
     id: string;
     roles: string[];
     isEmailVerified: boolean;
+    hasAcceptedLegal: boolean;
     adminRole: string | null;
     isSuspended: boolean;
     isEnterpriseSuspended: boolean;
@@ -32,6 +34,7 @@ declare module "next-auth/jwt" {
     roles?: string[];
     isEmailVerified?: boolean;
     hasActiveSubscription?: boolean;
+    hasAcceptedLegal?: boolean;
     adminRole?: string | null;
     isSuspended?: boolean;
     isEnterpriseSuspended?: boolean;

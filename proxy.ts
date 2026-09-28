@@ -45,6 +45,20 @@ export const proxy = auth(async (req) => {
       return NextResponse.redirect(url);
     }
 
+    // requireAcceptedLegal: every signed-in user must have accepted both the
+    // Terms and the Privacy Policy before reaching any protected route,
+    // regardless of how the account was created. Unlike the two admin
+    // exemptions below, this one applies to admins too — no creation path
+    // (including the admin-created-user flow) has ever collected consent,
+    // so an admin account is just as likely to be missing it. Checked
+    // before the /admin adminRole gate so an admin without an adminRole is
+    // still sent here first rather than bounced to /dashboard and back.
+    if (isProtected && (!user.hasAcceptedLegal)) {
+      const url = new URL("/accept-terms", nextUrl.origin);
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+
     // Admin routes require an adminRole. Authenticated users without one are
     // sent back to their dashboard rather than shown a 404 or an error page.
     if (matchesPrefix(pathname, "/admin") && !user.adminRole) {

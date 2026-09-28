@@ -176,6 +176,7 @@ describe("authenticateUser", () => {
       name: "Test User",
       email: "user@example.com",
       isEmailVerified: true,
+      hasAcceptedLegal: false,
       roles: ["MEMBER", "OWNER"],
       adminRole: null,
       isSuspended: false,
@@ -183,5 +184,31 @@ describe("authenticateUser", () => {
       sessionVersion: 1,
     });
     expect(compare).toHaveBeenCalledWith("CorrectPass123", "hashed");
+  });
+
+  it("reports hasAcceptedLegal true only once both timestamps are set", async () => {
+    findUnique.mockResolvedValue({
+      ...baseUser,
+      userRoles: [],
+      termsAcceptedAt: new Date("2026-01-01"),
+      privacyPolicyAcceptedAt: new Date("2026-01-01"),
+    });
+
+    const result = await authenticateUser(validCredentials, dummyRequest);
+
+    expect(result.hasAcceptedLegal).toBe(true);
+  });
+
+  it("reports hasAcceptedLegal false when only one of the two is set", async () => {
+    findUnique.mockResolvedValue({
+      ...baseUser,
+      userRoles: [],
+      termsAcceptedAt: new Date("2026-01-01"),
+      privacyPolicyAcceptedAt: null,
+    });
+
+    const result = await authenticateUser(validCredentials, dummyRequest);
+
+    expect(result.hasAcceptedLegal).toBe(false);
   });
 });

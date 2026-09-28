@@ -85,6 +85,9 @@ export async function createCheckoutDraft(rawInput: unknown): Promise<CreateDraf
   }
 
   const { planType, billingTerm, email, fullName, companyName } = parsed.data;
+  // The schema already requires both checkboxes true — recorded here as the
+  // real acceptance moment, not fabricated later once a User row exists.
+  const now = new Date();
 
   const priceId = resolveGuestPriceId(planType, billingTerm);
   if (!priceId || priceId === "price_...") {
@@ -124,6 +127,8 @@ export async function createCheckoutDraft(rawInput: unknown): Promise<CreateDraf
       fullName,
       companyName: companyName || null,
       expiresAt: new Date(Date.now() + DRAFT_TTL_MS),
+      termsAcceptedAt: now,
+      privacyPolicyAcceptedAt: now,
     },
     select: { id: true },
   });
@@ -210,7 +215,18 @@ export async function updateCheckoutDraft(
 
   await prisma.checkoutDraft.update({
     where: { id: draftId },
-    data: { planType, billingTerm, email, fullName, companyName: companyName || null },
+    // Re-stamped here too — the schema still requires both checkboxes true
+    // on every resume-and-edit submission, so this reflects them clicking
+    // through it again, not just the original draft's moment.
+    data: {
+      planType,
+      billingTerm,
+      email,
+      fullName,
+      companyName: companyName || null,
+      termsAcceptedAt: new Date(),
+      privacyPolicyAcceptedAt: new Date(),
+    },
   });
 
   return { ok: true, draftId };

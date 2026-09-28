@@ -88,6 +88,11 @@ export async function activateGuestAccountForDraft(
         companyName: draft.companyName,
         passwordHash: unusablePasswordHash,
         emailVerified: false,
+        // Carried over from the draft, not stamped fresh here — this runs
+        // whenever Stripe's webhook happens to fire, which can be well
+        // after the buyer actually accepted on the checkout review page.
+        termsAcceptedAt: draft.termsAcceptedAt,
+        privacyPolicyAcceptedAt: draft.privacyPolicyAcceptedAt,
       },
       select: { id: true, name: true, email: true },
     });

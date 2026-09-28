@@ -93,6 +93,20 @@ model User {
   gocardlessCustomerId    String?
   gocardlessMandateActive Boolean @default(false)
 
+  // Two separate timestamps (not one combined flag) since the two documents
+  // can change independently and each is its own legal record of exactly
+  // when it was accepted. Null on every existing row on purpose: no
+  // creation path before this (including /signup and guest checkout) ever
+  // persisted consent against the account, only validated the checkboxes
+  // at submit time and discarded the result — so there is no reliable
+  // historical value to backfill, not even for users who did click through
+  // them. proxy.ts gates on these being set for every signed-in user
+  // (regardless of how the account was created — self-signup, invite,
+  // guest checkout, or admin-created) until they explicitly accept via
+  // /accept-terms.
+  termsAcceptedAt         DateTime?
+  privacyPolicyAcceptedAt DateTime?
+
   userRoles               UserRole[]
   enterprises             Enterprise[]             @relation("EnterpriseOwner")
   enterpriseMembers       EnterpriseMember[]
@@ -403,6 +417,14 @@ model CheckoutDraft {
   stripeCheckoutSessionId String? @unique
   stripeCustomerId        String?
   stripeSubscriptionId    String? @unique
+
+  // createCheckoutDraftSchema already requires both checkboxes true before a
+  // draft can be created — stamped here so the timestamp reflects when the
+  // buyer actually accepted, not whenever the User row is later created by
+  // activateGuestAccountForDraft (which only runs once Stripe's webhook
+  // fires, possibly well after this draft step).
+  termsAcceptedAt         DateTime?
+  privacyPolicyAcceptedAt DateTime?
 
   // Reminder emails (lib/checkout/process-draft-lifecycle.ts, cron-driven) —
   // set once each has actually been sent, so the daily job never double-sends.

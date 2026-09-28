@@ -27,6 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id;
         token.roles = user.roles ?? [];
         token.isEmailVerified = user.isEmailVerified ?? false;
+        token.hasAcceptedLegal = user.hasAcceptedLegal ?? false;
         token.adminRole = user.adminRole ?? null;
         token.isSuspended = user.isSuspended ?? false;
         token.isEnterpriseSuspended = false;
@@ -61,6 +62,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             adminRole: true,
             isSuspended: true,
             sessionVersion: true,
+            termsAcceptedAt: true,
+            privacyPolicyAcceptedAt: true,
           },
         });
 
@@ -73,6 +76,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         token.adminRole = dbUser.adminRole ?? null;
+        token.hasAcceptedLegal = !!dbUser.termsAcceptedAt && !!dbUser.privacyPolicyAcceptedAt;
         token.isSuspended = dbUser.isSuspended;
         token.isEnterpriseSuspended = dbUser.isSuspended
           ? false // individual suspension already covers the redirect; skip the extra query
@@ -89,6 +93,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.roles = (token.roles as string[]) ?? [];
         session.user.isEmailVerified = Boolean(token.isEmailVerified);
         session.user.hasActiveSubscription = Boolean(token.hasActiveSubscription);
+        session.user.hasAcceptedLegal = Boolean(token.hasAcceptedLegal);
         session.user.adminRole = (token.adminRole as string | null | undefined) ?? null;
         session.user.isSuspended = Boolean(token.isSuspended);
         session.user.isEnterpriseSuspended = Boolean(token.isEnterpriseSuspended);
