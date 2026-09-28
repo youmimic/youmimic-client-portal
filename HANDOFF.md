@@ -1,5 +1,22 @@
 # HANDOFF.md
 
+## Session: One-click "Test avatar" admin action — 2026-09-28 (even later)
+
+Follow-up to the same-day avatar/look fixes below. Testing Rachel Scanlon's avatar for real generation had been done by linking it to Neil McGregor's account (an internal test account, itself a SUPER_ADMIN) — asked whether admins already have a proper way to test any avatar on their own account, then to build a one-click version of it with the script "Hi this is the avatar of \<name\> from \<company\>".
+
+**What already existed**: since `adminRole` is just an optional field on the same `User` row (`prisma/schema.prisma:60-68`), any admin account is already a normal dashboard user with its own `avatars` relation, and `canManageAvatars` isn't scoped to a specific target — so an admin could already use the existing Link Avatar flow on their own account. What was missing was a one-click version, and two real blockers: `proxy.ts`'s email-verification and active-subscription gates on the Avatar Studio route, which would have redirected an admin away from their own test before it could start.
+
+**What was built**:
+- `proxy.ts` — admins (`user.adminRole`) are now exempt from the `requireEmailVerified` and `requireSubscription` gates on `/dashboard/avatars` and `/dashboard/avatars/[id]/studio`. These exist to protect the consumer-facing flow, not to stop staff testing.
+- `getOrCreateTestAvatarLink()` (`lib/heygen/sync.ts`) — verifies a HeyGen id (reusing `verifyHeygenAvatarId`), then finds-or-creates an `Avatar` row named `[Test] <name>` under the *acting admin's own* account (never another user's — there's no `userId` parameter to misuse), and syncs it immediately so it's usable right away instead of sitting on "pending".
+- `POST /api/admin/avatars/test-link` — new route, always targets `session.user.id`, returns `{ avatarId, script }` with the script built as `"Hi this is the avatar of <name> from <company>"` (drops the "from <company>" clause when the avatar has no enterprise).
+- A "Test avatar" button next to Sync/Edit/Add look/Remove in the admin avatar panel (`components/admin/avatar-actions.tsx`) — one click links it to the admin's own account and navigates straight to `/dashboard/avatars/<id>/studio?script=...`.
+- The Avatar Studio page and `VideoWorkspace` now accept a `?script=` query param to prefill just the script field (widened `VideoWorkspace`'s `initial` prop to `Partial<WorkspaceInitialValues>` — every field already had its own `??` default, so this was a type change, not new logic).
+
+**Deliberately left as a manual step**: cleaning up the test `Avatar` row afterward — the existing Remove button already handles it (no billing subscription on a fresh test row, so it's never blocked), and the `[Test]` name prefix makes it identifiable. No auto-delete, to avoid removing something mid-test.
+
+Checks: typecheck clean, lint 0 errors (4 pre-existing warnings, unchanged), vitest 190 passing, `npx next build` clean (new `/api/admin/avatars/test-link` route confirmed in the build output). Live-verified the rejection path (a fake id is cleanly rejected with no stray DB row) via a temporary, immediately-deleted vitest file. Not done: a full click-through with a real avatar id (would create a real test row on a real admin account outside of an actual admin action) and a browser check of the "Test avatar" button/redirect itself. Detail in `updates/2026-09-28-test-avatar-admin-action.md`.
+
 ## Session: Manual look-linking for avatars HeyGen's import can't see — 2026-09-28 (later still)
 
 Follow-up to the same-day avatar-sync fix below. Rachel Scanlon's avatar imported correctly after that fix (`status: "ready"`), but her two individual looks did not — asked to check if look ids `3a3361ff17104c7dbbb0b7bcccba4973` and `c9151042046340a18413cef1f5701df7` were reachable.

@@ -181,7 +181,11 @@ export function VideoWorkspace({
   avatarId: string;
   avatarName: string;
   looks: AvatarLookOption[];
-  initial?: WorkspaceInitialValues;
+  // Partial, not the full type: every field below already falls back to its
+  // own default via `initial?.field ?? default`, so a caller (e.g. the
+  // admin "Test avatar" action, which only has a script to seed) can pass
+  // just the fields it actually has.
+  initial?: Partial<WorkspaceInitialValues>;
   // Shown when the form was prefilled from an earlier video.
   resetFrom?: string;
 }) {

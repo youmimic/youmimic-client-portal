@@ -119,6 +119,9 @@ export function UserAvatarsCard({
   const [lookId, setLookId] = useState("");
   const [lookState, setLookState] = useState<ActionState>(idle);
 
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testError, setTestError] = useState<{ avatarId: string; message: string } | null>(null);
+
   async function handleSync(avatar: Avatar) {
     setSyncingId(avatar.id);
     setSyncError(null);
@@ -181,6 +184,24 @@ export function UserAvatarsCard({
       router.refresh();
     } catch (e) {
       setState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
+  async function handleTestAvatar(avatar: Avatar) {
+    if (!avatar.heygenAvatarId) return;
+    setTestingId(avatar.id);
+    setTestError(null);
+    try {
+      const company = enterpriseOptions.find((e) => e.id === avatar.enterpriseId)?.name ?? null;
+      const json = (await apiCall("/api/admin/avatars/test-link", "POST", {
+        heygenId: avatar.heygenAvatarId,
+        name: avatar.name,
+        company,
+      })) as { avatarId: string; script: string };
+      router.push(`/dashboard/avatars/${json.avatarId}/studio?script=${encodeURIComponent(json.script)}`);
+    } catch (e) {
+      setTestError({ avatarId: avatar.id, message: e instanceof Error ? e.message : "Unknown error" });
+      setTestingId(null);
     }
   }
 
@@ -254,6 +275,9 @@ export function UserAvatarsCard({
                   {syncError?.avatarId === avatar.id && (
                     <p className="text-xs text-destructive">{syncError.message}</p>
                   )}
+                  {testError?.avatarId === avatar.id && (
+                    <p className="text-xs text-destructive">{testError.message}</p>
+                  )}
                 </div>
               </div>
               {canManage && (
@@ -272,6 +296,17 @@ export function UserAvatarsCard({
                   {avatar.heygenAvatarId && (
                     <Button variant="ghost" size="xs" onClick={() => openAddLook(avatar)}>
                       Add look
+                    </Button>
+                  )}
+                  {avatar.heygenAvatarId && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      title="Link this avatar to your own admin account and open the video creator to generate a real test video"
+                      disabled={testingId === avatar.id}
+                      onClick={() => handleTestAvatar(avatar)}
+                    >
+                      {testingId === avatar.id ? "Linking…" : "Test avatar"}
                     </Button>
                   )}
                   <Button

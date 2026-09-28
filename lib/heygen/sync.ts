@@ -228,6 +228,44 @@ export async function addAvatarLookFromHeyGen(
   }
 }
 
+// "Test avatar" — finds or creates an Avatar row under the acting admin's
+// own account for a given HeyGen id, so they can open the real Avatar
+// Studio and generate a real video to confirm it actually works, rather
+// than borrowing a client's account (as happened with Rachel Scanlon's
+// avatar on 2026-09-28) or trusting a read-only status check alone —
+// GET-based checks already proved unreliable as a stand-in for whether
+// generation itself will succeed. Idempotent per (adminUserId, heygenId):
+// repeated clicks reuse the same test row instead of piling up duplicates.
+export async function getOrCreateTestAvatarLink(
+  adminUserId: string,
+  heygenId: string,
+  displayName: string,
+): Promise<{ ok: true; avatarId: string } | { ok: false; error: string }> {
+  const verified = await verifyHeygenAvatarId(heygenId);
+  if (!verified.ok) return verified;
+
+  const existing = await prisma.avatar.findFirst({
+    where: { userId: adminUserId, heygenAvatarId: heygenId },
+    select: { id: true },
+  });
+
+  const avatarId = existing
+    ? existing.id
+    : (
+        await prisma.avatar.create({
+          data: { userId: adminUserId, name: `[Test] ${displayName}`, heygenAvatarId: heygenId },
+          select: { id: true },
+        })
+      ).id;
+
+  // Best-effort: verifyHeygenAvatarId already confirmed the id resolves, so
+  // this should succeed too, but even if it doesn't the row still exists
+  // and can be retried (e.g. via the admin panel's own "Sync now").
+  await syncAvatarFromHeyGen(avatarId, heygenId);
+
+  return { ok: true, avatarId };
+}
+
 // Only the fields the rollup itself reads — callers (dashboard grid, admin
 // panel) commonly select more (id, name, …) for their own rendering, and a
 // fuller object satisfies this structurally without extra mapping.

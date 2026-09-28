@@ -55,11 +55,16 @@ export const proxy = auth(async (req) => {
     // require a verified email address — a video can only exist if it was
     // generated from an avatar, which already required verification, so
     // this is consistency (an unverified user can't have any videos to see
-    // anyway) rather than a new restriction.
+    // anyway) rather than a new restriction. Admins are exempt: these gates
+    // exist to protect the consumer-facing generation flow, not to stop
+    // staff from using the "Test avatar" admin action, which needs to reach
+    // the same Avatar Studio route regardless of the admin's own
+    // verification/billing state.
     if (
       (matchesPrefix(pathname, "/dashboard/avatars") ||
         matchesPrefix(pathname, "/dashboard/videos")) &&
-      !user.isEmailVerified
+      !user.isEmailVerified &&
+      !user.adminRole
     ) {
       const url = new URL("/verify-email", nextUrl.origin);
       url.searchParams.set("next", pathname);
@@ -69,13 +74,14 @@ export const proxy = auth(async (req) => {
     // requireSubscription: /dashboard/bookings and the Avatar Studio
     // (/dashboard/avatars/[id]/studio) both require an active subscription.
     // hasActiveSubscription is written into the JWT at sign-in; undefined on
-    // pre-migration tokens which are treated as false (fail closed).
+    // pre-migration tokens which are treated as false (fail closed). Same
+    // admin exemption as above.
     const requiresSubscription =
       matchesPrefix(pathname, "/dashboard/bookings") ||
       /^\/dashboard\/avatars\/[^/]+\/studio(\/|$)/.test(pathname) ||
       matchesPrefix(pathname, "/dashboard/videos/projects");
 
-    if (requiresSubscription && !user.hasActiveSubscription) {
+    if (requiresSubscription && !user.hasActiveSubscription && !user.adminRole) {
       const url = new URL("/dashboard/billing", nextUrl.origin);
       url.searchParams.set("reason", "subscription-required");
       return NextResponse.redirect(url);

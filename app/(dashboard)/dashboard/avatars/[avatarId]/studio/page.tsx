@@ -28,13 +28,13 @@ export default async function AvatarStudioPage({
   searchParams,
 }: {
   params: Promise<{ avatarId: string }>;
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; script?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
   const { avatarId } = await params;
-  const { from } = await searchParams;
+  const { from, script: scriptParam } = await searchParams;
 
   const avatar = await prisma.avatar.findFirst({
     where: { id: avatarId, userId: session.user.id },
@@ -68,7 +68,8 @@ export default async function AvatarStudioPage({
       : avatar.status === "ready" && !!avatar.heygenAvatarId;
 
   // Duplicate: prefill from one of this user's own videos on this avatar.
-  let initial: WorkspaceInitialValues | undefined;
+  // Or, from the admin "Test avatar" action: prefill just the script.
+  let initial: Partial<WorkspaceInitialValues> | undefined;
   if (from) {
     const source = await prisma.generatedVideo.findFirst({
       where: { id: from, userId: session.user.id, avatarId: avatar.id },
@@ -98,6 +99,11 @@ export default async function AvatarStudioPage({
         voice: source.voiceId ? { id: source.voiceId, name: source.voiceName ?? "Chosen voice" } : null,
       };
     }
+  } else if (scriptParam) {
+    initial = {
+      script: scriptParam,
+      lookId: avatar.looks.find((l) => l.status === "ready")?.id ?? null,
+    };
   }
 
   return (

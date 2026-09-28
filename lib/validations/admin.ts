@@ -273,6 +273,18 @@ export const addAvatarLookSchema = z.object({
 
 export type AddAvatarLookInput = z.infer<typeof addAvatarLookSchema>;
 
+// "Test avatar" — links a known-working HeyGen id to the acting admin's own
+// account (never another user's) so an admin can generate a real video with
+// it and confirm it actually works, without touching the client's own
+// record or borrowing another client's account to do it.
+export const testLinkAvatarSchema = z.object({
+  heygenId: z.string().trim().min(1).max(200),
+  name: z.string().trim().min(1).max(200),
+  company: z.string().trim().min(1).max(200).nullable().optional(),
+});
+
+export type TestLinkAvatarInput = z.infer<typeof testLinkAvatarSchema>;
+
 // Bulk HeyGen avatar import — defaults to a dry run (preview only) so a
 // caller must explicitly opt into actually writing rows.
 export const heygenImportSchema = z.object({
