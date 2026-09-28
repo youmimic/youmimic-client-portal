@@ -1,10 +1,16 @@
 const HEYGEN_API_BASE = "https://api.heygen.com";
 
-// Matches GET /v3/avatars/looks/{look_id} — the "look_id" is the same value
-// stored as Avatar.heygenAvatarId (confirmed against the real HeyGen
-// account: it's identical to the avatar_id returned by the v2 list-avatars
-// endpoint). status is documented as present only for private/custom
-// avatars, which is what every YouMimic client avatar is.
+// Matches GET /v3/avatars/looks/{look_id}. For older avatars, this
+// "look_id" was confirmed identical to Avatar.heygenAvatarId (the v2
+// list-avatars endpoint's avatar_id) — but that stopped holding for at
+// least one newer avatar checked live on 2026-09-28, which has its own
+// top-level avatar id (resolvable via GET /v3/avatars/{id}, HeyGenAvatar
+// below) that does NOT resolve as a look id here. Callers that only have a
+// legacy Avatar.heygenAvatarId, with no way to know in advance which kind
+// of id it is, should fall back to getHeyGenAvatar() if this 404s — see
+// syncAvatarFromHeyGen in lib/heygen/sync.ts. status is documented as
+// present only for private/custom avatars, which is what every YouMimic
+// client avatar is.
 export interface HeyGenAvatarLook {
   id: string;
   name: string;
@@ -15,6 +21,25 @@ export interface HeyGenAvatarLook {
   default_voice_id: string | null;
   status: "processing" | "pending_consent" | "failed" | "completed" | null;
   error: { code: string; message: string } | null;
+}
+
+// Matches GET /v3/avatars/{avatar_id} — the top-level "Avatar" resource
+// (what HeyGen's v3 API calls a "group" elsewhere), distinct from one of
+// its individual looks. Confirmed live: no nested list of the avatar's own
+// looks is returned here (only a count), and there's no documented way to
+// list them filtered by this id — GET /v3/avatars/looks?group_id=... does
+// not return them either, confirmed live against a real avatar with
+// looks_count: 2. So this is a fallback for avatar-level status/preview
+// only, not a way to discover individual look ids.
+export interface HeyGenAvatar {
+  id: string;
+  name: string;
+  gender: string | null;
+  looks_count: number;
+  preview_image_url: string | null;
+  default_voice_id: string | null;
+  consent_status: string | null;
+  status: "processing" | "pending_consent" | "failed" | "completed" | null;
 }
 
 // Matches GET /v3/videos/{video_id} — used both for Avatar Studio's manual
@@ -92,6 +117,10 @@ async function heygenFetch<T>(path: string, init?: RequestInit, timeoutMs?: numb
 
 export async function getHeyGenAvatarLook(lookId: string): Promise<HeyGenAvatarLook> {
   return heygenFetch<HeyGenAvatarLook>(`/v3/avatars/looks/${encodeURIComponent(lookId)}`);
+}
+
+export async function getHeyGenAvatar(avatarId: string): Promise<HeyGenAvatar> {
+  return heygenFetch<HeyGenAvatar>(`/v3/avatars/${encodeURIComponent(avatarId)}`);
 }
 
 export async function getHeyGenVideoStatus(videoId: string): Promise<HeyGenVideoStatus> {

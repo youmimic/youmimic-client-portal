@@ -5,6 +5,7 @@ import type { AdminRole } from "@/app/generated/prisma/client";
 import { canManageAvatars } from "@/lib/admin/rbac";
 import { writeAuditLog, ENTITY_TYPES } from "@/lib/admin/audit";
 import { linkAvatarSchema } from "@/lib/validations/admin";
+import { verifyHeygenAvatarId } from "@/lib/heygen/sync";
 
 export async function POST(
   req: Request,
@@ -43,6 +44,19 @@ export async function POST(
   }
 
   const { name, heygenAvatarId, enterpriseId } = parsed.data;
+
+  // Confirmed live against HeyGen on 2026-09-28 — a manually-typed id that
+  // doesn't resolve as either a look or a plain avatar used to save
+  // silently and sit stuck on "pending" forever with no indication why.
+  if (heygenAvatarId) {
+    const verified = await verifyHeygenAvatarId(heygenAvatarId);
+    if (!verified.ok) {
+      return NextResponse.json(
+        { error: verified.error, fieldErrors: { heygenAvatarId: [verified.error] } },
+        { status: 422 },
+      );
+    }
+  }
 
   // An avatar's enterprise (if any) must be one this user actually owns or
   // belongs to — prevents accidentally linking an avatar to an unrelated

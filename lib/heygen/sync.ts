@@ -1,5 +1,5 @@
 import prisma from "@/lib/prisma";
-import { getHeyGenAvatarLook, HeyGenApiError, type HeyGenAvatarLook } from "@/lib/heygen";
+import { getHeyGenAvatar, getHeyGenAvatarLook, HeyGenApiError, type HeyGenAvatar, type HeyGenAvatarLook } from "@/lib/heygen";
 
 export type AvatarSyncResult =
   | { ok: true; status: string | null; previewUrl: string | null; videoUrl: string | null }
@@ -64,21 +64,55 @@ export async function syncAvatarLookFromHeyGen(
   }
 }
 
+function isNotFound(err: unknown): boolean {
+  return err instanceof HeyGenApiError && (err.status === 404 || err.code === "avatar_not_found");
+}
+
 // Legacy path — avatars linked via the manual admin "Link Avatar" flow have
 // no AvatarLook rows at all and sync directly off Avatar.heygenAvatarId.
+//
+// That field used to always be a look id (confirmed identical to the v2
+// avatar_id for older avatars — see HeyGenAvatarLook's comment in
+// lib/heygen.ts), so trying it as a look id first is still correct for
+// every avatar imported that way. Confirmed live on 2026-09-28 that this
+// stopped holding for at least one newer avatar, whose HeyGen id is a
+// top-level Avatar id instead — a genuine "not found" on the look lookup
+// now falls back to the avatar-level one, rather than leaving the row stuck
+// on its last-known (often still "pending") status forever.
 export async function syncAvatarFromHeyGen(
   avatarId: string,
   heygenAvatarId: string,
 ): Promise<AvatarSyncResult> {
+  let look: HeyGenAvatarLook | HeyGenAvatar;
   try {
-    const look = await getHeyGenAvatarLook(heygenAvatarId);
+    look = await getHeyGenAvatarLook(heygenAvatarId);
+  } catch (lookErr) {
+    if (!isNotFound(lookErr)) {
+      const message = lookErr instanceof HeyGenApiError ? lookErr.message : "Unknown error syncing avatar";
+      console.error(`HeyGen sync failed for avatar ${avatarId} (heygenAvatarId ${heygenAvatarId}):`, message);
+      return { ok: false, error: message };
+    }
+    try {
+      look = await getHeyGenAvatar(heygenAvatarId);
+    } catch (avatarErr) {
+      const message = avatarErr instanceof HeyGenApiError ? avatarErr.message : "Unknown error syncing avatar";
+      console.error(
+        `HeyGen sync failed for avatar ${avatarId} (heygenAvatarId ${heygenAvatarId}) as both a look and a plain avatar:`,
+        message,
+      );
+      return { ok: false, error: message };
+    }
+  }
+
+  try {
     const mappedStatus = mapHeyGenStatus(look.status);
+    const videoUrl = "preview_video_url" in look ? look.preview_video_url : undefined;
 
     await prisma.avatar.update({
       where: { id: avatarId },
       data: {
         previewUrl: look.preview_image_url ?? undefined,
-        videoUrl: look.preview_video_url ?? undefined,
+        videoUrl: videoUrl ?? undefined,
         ...(mappedStatus ? { status: mappedStatus } : {}),
       },
     });
@@ -87,12 +121,41 @@ export async function syncAvatarFromHeyGen(
       ok: true,
       status: mappedStatus,
       previewUrl: look.preview_image_url ?? null,
-      videoUrl: look.preview_video_url ?? null,
+      videoUrl: videoUrl ?? null,
     };
   } catch (err) {
-    const message = err instanceof HeyGenApiError ? err.message : "Unknown error syncing avatar";
-    console.error(`HeyGen sync failed for avatar ${avatarId} (heygenAvatarId ${heygenAvatarId}):`, message);
+    const message = err instanceof Error ? err.message : "Unknown error saving synced avatar";
+    console.error(`Failed to save synced HeyGen data for avatar ${avatarId}:`, message);
     return { ok: false, error: message };
+  }
+}
+
+// Checked from the admin "Link Avatar" form before saving a manually-typed
+// HeyGen id, so a mistyped or wrong-kind-of id is caught immediately with a
+// clear reason instead of silently creating a row that will never sync (see
+// syncAvatarFromHeyGen's comment for the incident that prompted this — a
+// valid id was rejected as "not found" for weeks because it happened to be
+// an avatar id rather than a look id, and nothing checked either way at
+// entry time).
+export async function verifyHeygenAvatarId(heygenAvatarId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await getHeyGenAvatarLook(heygenAvatarId);
+    return { ok: true };
+  } catch (lookErr) {
+    if (!isNotFound(lookErr)) {
+      const message = lookErr instanceof HeyGenApiError ? lookErr.message : "Could not reach HeyGen to verify this id.";
+      return { ok: false, error: message };
+    }
+    try {
+      await getHeyGenAvatar(heygenAvatarId);
+      return { ok: true };
+    } catch (avatarErr) {
+      if (isNotFound(avatarErr)) {
+        return { ok: false, error: "HeyGen doesn't recognise this id, as either an avatar or a look. Double-check it was copied correctly." };
+      }
+      const message = avatarErr instanceof HeyGenApiError ? avatarErr.message : "Could not reach HeyGen to verify this id.";
+      return { ok: false, error: message };
+    }
   }
 }
 

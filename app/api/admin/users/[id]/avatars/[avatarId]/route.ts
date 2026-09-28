@@ -5,6 +5,7 @@ import type { AdminRole } from "@/app/generated/prisma/client";
 import { canManageAvatars } from "@/lib/admin/rbac";
 import { writeAuditLog, ENTITY_TYPES } from "@/lib/admin/audit";
 import { updateAvatarSchema } from "@/lib/validations/admin";
+import { verifyHeygenAvatarId } from "@/lib/heygen/sync";
 
 export async function PATCH(
   req: Request,
@@ -46,6 +47,19 @@ export async function PATCH(
   }
 
   const { name, heygenAvatarId, enterpriseId } = parsed.data;
+
+  // Same live-existence check as the create route — otherwise correcting a
+  // wrong id here can just as easily save a different wrong id with no
+  // feedback that it's wrong.
+  if (heygenAvatarId) {
+    const verified = await verifyHeygenAvatarId(heygenAvatarId);
+    if (!verified.ok) {
+      return NextResponse.json(
+        { error: verified.error, fieldErrors: { heygenAvatarId: [verified.error] } },
+        { status: 422 },
+      );
+    }
+  }
 
   if (enterpriseId) {
     const related = await prisma.enterprise.findFirst({
