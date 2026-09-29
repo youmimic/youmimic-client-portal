@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireDashboardSession } from "@/lib/auth/api-guards";
 import { refreshVideoUrl } from "@/lib/heygen/generate-video";
 
 // Manual "Refresh video" button fallback for an already-COMPLETED video
@@ -11,10 +11,9 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireDashboardSession({ requireEmailVerified: true });
+  if (!guard.ok) return guard.response;
+  const { session } = guard;
 
   const { id } = await params;
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireDashboardSession } from "@/lib/auth/api-guards";
 import { userHasActiveSubscription } from "@/lib/subscription";
 import { generateVideoSchema } from "@/lib/validations/video";
 import { generateAvatarVideo } from "@/lib/heygen/generate-video";
@@ -8,10 +8,9 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ avatarId: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireDashboardSession({ requireEmailVerified: true });
+  if (!guard.ok) return guard.response;
+  const { session } = guard;
 
   // Fresh DB entitlement check — JWT state may be stale after Stripe events.
   const hasActiveSub = await userHasActiveSubscription(session.user.id);

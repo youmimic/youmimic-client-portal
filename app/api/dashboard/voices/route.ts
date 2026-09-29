@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireDashboardSession } from "@/lib/auth/api-guards";
 import { HeyGenApiError, listHeyGenVoices } from "@/lib/heygen";
 
-// Lists provider voices for the voice picker in the video workspace.
-// Read-only, so it only needs a signed-in user. Voices rarely change, so the
-// browser may reuse a response for a few minutes.
+// Lists provider voices for the voice picker in the video workspace and
+// avatar studio — gated the same as those pages (requireEmailVerified),
+// even though it's read-only, for consistency with what the picker is
+// embedded in.
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireDashboardSession({ requireEmailVerified: true });
+  if (!guard.ok) return guard.response;
 
   const { searchParams } = new URL(req.url);
   const language = searchParams.get("language")?.slice(0, 40) || undefined;

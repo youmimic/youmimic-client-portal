@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireDashboardSession } from "@/lib/auth/api-guards";
 import prisma from "@/lib/prisma";
 import { deleteHeyGenVideo, HeyGenApiError } from "@/lib/heygen";
 import { releaseReservationForVideo } from "@/lib/usage/ledger";
@@ -15,10 +15,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireDashboardSession({ requireEmailVerified: true });
+  if (!guard.ok) return guard.response;
+  const { session } = guard;
 
   const { id } = await params;
 

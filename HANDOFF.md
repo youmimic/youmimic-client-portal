@@ -1,8 +1,22 @@
 # HANDOFF.md
 
+## Session: Enforce email-verified/legal-acceptance at the API layer, not just pages — 2026-09-29
+
+A gap surfaced by yesterday's legal-acceptance work: `proxy.ts`'s `requireAcceptedLegal`/`requireEmailVerified` gates only protect page navigation. A direct call to the underlying API route bypassed both entirely, regardless of how the account was created. Investigated first, rather than assuming: subscription entitlement is *not* actually part of this gap — `generate-video`, `bookings`, and project-create routes already each do their own fresh `userHasActiveSubscription` DB check independently of proxy.ts, so that part was already solid.
+
+**Built** `lib/auth/api-guards.ts` — `requireDashboardSession({ requireEmailVerified? })`, meant to replace the bare `const session = await auth(); if (!session?.user) {...}` block already inline in every affected route, not duplicate it. `requireAcceptedLegal` has no admin exemption (mirrors `proxy.ts` exactly — an admin-created account never collects consent, so it's exactly the case this needs to catch); `requireEmailVerified` is opt-in per call site and does exempt admins, matching `proxy.ts`'s own scope precisely (only routes whose page lives under `/dashboard/avatars` or `/dashboard/videos`). Deliberately does **not** fold in subscription checking, to avoid duplicating the checks already done correctly elsewhere.
+
+Hit a real NextAuth v5 type-inference pitfall while building this: `auth` is overloaded (plain session getter / middleware wrapper / handler wrapper), so `ReturnType<typeof auth>` alone resolves to the wrong overload (`NextMiddleware`). Fixed by routing the type extraction through a small wrapper that calls `auth()` with no arguments, which pins down the correct overload.
+
+**Applied to all 17 customer-facing routes it should cover** — the full `/api/dashboard/*` and `/api/bookings/*` surface: `lib/projects/http.ts`'s shared `requireUserId()` was the highest-leverage change, covering all 8 project-module routes (create, update, scenes, reorder, duplicate, generate) in one edit since every one of them already funneled through it; the remaining 9 (avatar generate-video, video detail/refresh/refresh-url, voices, enterprise self-serve avatar billing, and the 3 booking routes) were each updated individually, matching the exact same `requireEmailVerified` scope proxy.ts uses for their corresponding pages.
+
+**Deliberately deferred, not silently skipped**: `/api/admin/*` (~36 route files) was left out of this pass — admins already pass through the identical `requireAcceptedLegal` page gate to reach any admin UI at all, so the direct-API-bypass risk is lower and the actor pool is much smaller/trusted than the customer-facing surface. Worth a dedicated follow-up pass rather than folding into this one and risking a large, harder-to-review sweep across unrelated admin actions.
+
+Checks: typecheck clean (after fixing the overload-inference issue), lint 0 errors (4 pre-existing warnings, unchanged), vitest 198 passing (6 new, in `lib/auth/api-guards.test.ts` — covers the no-session, legal-not-accepted-even-for-admin, email-not-verified, admin-exempted, opt-out-when-not-requested, and fully-compliant cases), `npx next build` clean. Not done: a live end-to-end request against a real unaccepted/unverified account through one of these routes — verified via mocked-session unit tests instead. Detail in `updates/2026-09-29-api-layer-auth-guards.md`.
+
 ## Session: Enforce Terms/Privacy Policy acceptance for every account — 2026-09-28 (latest)
 
-Asked to guarantee every user accepts the Terms and Privacy Policy regardless of how their account was created — admin portal, self-signup, or anywhere else. Investigation found this wasn't true for even the paths that show a checkbox: `/signup` and guest checkout both validate `acceptTerms`/`acceptPrivacyPolicy` client-side at submit time but never persisted the result anywhere, and admin-created users (`app/api/admin/users/route.ts`) never collect consent at all. So no user in the database — old or new — had a durable acceptance record.
+Every user must accept the Terms and Privacy Policy regardless of how their account was created — admin portal, self-signup, or anywhere else. Investigation found this wasn't true for even the paths that show a checkbox: `/signup` and guest checkout both validate `acceptTerms`/`acceptPrivacyPolicy` client-side at submit time but never persisted the result anywhere, and admin-created users (`app/api/admin/users/route.ts`) never collect consent at all. So no user in the database — old or new — had a durable acceptance record.
 
 **Schema** (migration `20260928110242_add_legal_acceptance_tracking`, additive, applied to dev): `User` gains nullable `termsAcceptedAt`/`privacyPolicyAcceptedAt` (two separate timestamps, not one flag, since the two documents can change independently); `CheckoutDraft` gains the same pair so guest checkout's consent is stamped at the moment it's actually given (draft creation) rather than fabricated later when the `User` row is created post-payment.
 
@@ -16,7 +30,7 @@ Checks: typecheck clean (after `prisma generate` picked up the schema change), l
 
 ## Session: One-click "Test avatar" admin action — 2026-09-28 (even later)
 
-Follow-up to the same-day avatar/look fixes below. Testing Rachel Scanlon's avatar for real generation had been done by linking it to Neil McGregor's account (an internal test account, itself a SUPER_ADMIN) — asked whether admins already have a proper way to test any avatar on their own account, then to build a one-click version of it with the script "Hi this is the avatar of \<name\> from \<company\>".
+Follow-up to the same-day avatar/look fixes below. Testing Rachel Scanlon's avatar for real generation had been done by linking it to Neil McGregor's account (an internal test account, itself a SUPER_ADMIN) rather than a proper per-admin testing path. Built a one-click version instead, with the script "Hi this is the avatar of \<name\> from \<company\>".
 
 **What already existed**: since `adminRole` is just an optional field on the same `User` row (`prisma/schema.prisma:60-68`), any admin account is already a normal dashboard user with its own `avatars` relation, and `canManageAvatars` isn't scoped to a specific target — so an admin could already use the existing Link Avatar flow on their own account. What was missing was a one-click version, and two real blockers: `proxy.ts`'s email-verification and active-subscription gates on the Avatar Studio route, which would have redirected an admin away from their own test before it could start.
 
@@ -33,7 +47,7 @@ Checks: typecheck clean, lint 0 errors (4 pre-existing warnings, unchanged), vit
 
 ## Session: Manual look-linking for avatars HeyGen's import can't see — 2026-09-28 (later still)
 
-Follow-up to the same-day avatar-sync fix below. Rachel Scanlon's avatar imported correctly after that fix (`status: "ready"`), but her two individual looks did not — asked to check if look ids `3a3361ff17104c7dbbb0b7bcccba4973` and `c9151042046340a18413cef1f5701df7` were reachable.
+Follow-up to the same-day avatar-sync fix below. Rachel Scanlon's avatar imported correctly after that fix (`status: "ready"`), but her two individual looks did not. Checked whether look ids `3a3361ff17104c7dbbb0b7bcccba4973` and `c9151042046340a18413cef1f5701df7` were reachable.
 
 Both resolved fine directly via `GET /v3/avatars/looks/{id}` (status "completed", `group_id` matching her avatar). Checked why the app's own import couldn't find them: `lib/heygen/import-avatars.ts`'s bulk/group-link flow is built entirely on HeyGen's legacy `/v2/avatar_group/{id}/avatars` endpoint, which 404s outright for this avatar's group ("Avatar group not found") — confirmed live. Also re-checked the v3 `GET /v3/avatars/looks?group_id=...` filter directly against HeyGen's own documented behavior (fetched via their API reference): the docs say it should return exactly this, but it returns an empty list regardless of `avatar_type`/`ownership`/no filters at all. Both are genuine HeyGen-side gaps for this avatar — no combination of client-side filtering or pagination gets around them, so full automatic look-discovery isn't achievable via their API as it stands.
 
