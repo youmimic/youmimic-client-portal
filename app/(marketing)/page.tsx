@@ -681,9 +681,9 @@ export default async function HomePage() {
       {awardsItems.length > 0 && (
         <section className="py-16 sm:py-20">
           <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-            <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground sm:text-base">
+            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
               {awardsHeading}
-            </h2>
+            </p>
             {/* True greyscale (not the solid-silhouette brightness-0 used for
                 Featured At/clients, which would flatten these detailed
                 badges into blobs). dark:invert flips the badges' dark
