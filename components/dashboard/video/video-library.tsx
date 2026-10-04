@@ -100,12 +100,15 @@ function SelfHealingThumb({
 
 export function VideoCard({ v }: { v: LibraryVideo }) {
   return (
+    // Always this specific render's own id, even for a project video — every
+    // past render for the same project previously shared one href (the
+    // project page), which only ever shows the latest, so three cards for
+    // three different renders all opened the exact same (newest) video. The
+    // per-id page itself decides whether to redirect into the live project
+    // editor (only for the project's current render) or show this specific
+    // historical one — see app/(dashboard)/dashboard/videos/[id]/page.tsx.
     <Link
-      href={
-        v.projectId
-          ? `/dashboard/videos/projects/${v.projectId}`
-          : `/dashboard/videos/${v.id}`
-      }
+      href={`/dashboard/videos/${v.id}`}
       className="group block overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <div className="relative flex aspect-video items-center justify-center bg-muted">

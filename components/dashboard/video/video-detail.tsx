@@ -56,6 +56,11 @@ export type VideoDetailData = {
   voiceId: string | null;
   voiceName: string | null;
   avatarLookId: string | null;
+  // Set when this render came from a multi-scene project. Present even for
+  // the project's own current render (the page redirects that case into
+  // the live editor instead — see app/(dashboard)/dashboard/videos/[id]/page.tsx)
+  // so this is only ever non-null here for an earlier, now-historical render.
+  project: { id: string; title: string } | null;
 };
 
 export type RelatedVideo = {
@@ -238,6 +243,17 @@ export function VideoDetail({
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="space-y-4">
+        {video.project && (
+          <p className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+            <span>
+              An earlier render from the project <span className="font-medium text-foreground">{video.project.title}</span>.
+              Editing and generating again there won&apos;t change this one.
+            </span>
+            <Link href={`/dashboard/videos/projects/${video.project.id}`} className="font-medium text-primary underline underline-offset-2 hover:no-underline">
+              View current version
+            </Link>
+          </p>
+        )}
         {justCreated && inProgress && (
           <p
             role="status"
@@ -344,24 +360,31 @@ export function VideoDetail({
               </a>
             </Button>
           )}
-          {video.status === "FAILED" && (
+          {/* Regenerate/duplicate-and-edit both assume a single-scene video
+              (they post to the avatar-studio generate-video endpoint) — wrong
+              for a project render, which must go through the project's own
+              multi-scene generate flow instead. The banner above already
+              links there. */}
+          {!video.project && video.status === "FAILED" && (
             <Button type="button" onClick={() => setRegenOpen(true)} disabled={busy !== null}>
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Try again
             </Button>
           )}
-          {video.status === "COMPLETED" && (
+          {!video.project && video.status === "COMPLETED" && (
             <Button type="button" variant="outline" onClick={() => setRegenOpen(true)} disabled={busy !== null}>
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Regenerate
             </Button>
           )}
-          <Button asChild variant="outline">
-            <Link href={studioHref}>
-              <Copy className="h-4 w-4" aria-hidden="true" />
-              {video.status === "FAILED" ? "Edit script" : "Duplicate and edit"}
-            </Link>
-          </Button>
+          {!video.project && (
+            <Button asChild variant="outline">
+              <Link href={studioHref}>
+                <Copy className="h-4 w-4" aria-hidden="true" />
+                {video.status === "FAILED" ? "Edit script" : "Duplicate and edit"}
+              </Link>
+            </Button>
+          )}
           {video.status === "COMPLETED" && (
             <Button type="button" variant="outline" onClick={refreshUrl} disabled={busy !== null}>
               <RefreshCw className={`h-4 w-4 ${busy === "refresh-url" ? "animate-spin" : ""}`} aria-hidden="true" />

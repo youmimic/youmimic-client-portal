@@ -119,7 +119,10 @@ export default async function UsagePage() {
               {usage.recent.map((v) => (
                 <Link
                   key={v.id}
-                  href={v.projectId ? `/dashboard/videos/projects/${v.projectId}` : `/dashboard/videos/${v.id}`}
+                  // Always this render's own id (see video-library.tsx's
+                  // VideoCard for why) — the per-id page itself decides
+                  // whether to redirect into the project editor.
+                  href={`/dashboard/videos/${v.id}`}
                   className="flex items-center justify-between gap-3 py-2.5 text-sm hover:text-primary"
                 >
                   <span className="min-w-0">

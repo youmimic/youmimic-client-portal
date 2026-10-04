@@ -27,10 +27,27 @@ export default async function VideoPage({
 
   const video = await prisma.generatedVideo.findFirst({
     where: { id, userId: session.user.id },
-    include: { avatar: { select: { id: true, name: true } } },
+    include: { avatar: { select: { id: true, name: true } }, project: { select: { id: true, title: true } } },
   });
   if (!video) notFound();
-  if (video.projectId) redirect(`/dashboard/videos/projects/${video.projectId}`);
+
+  // Only the project's current (most recent) render redirects into the live
+  // editor — that's the one page meant to show "the" video for a project.
+  // An older render (from before the project was edited and regenerated)
+  // gets its own stable page here instead, so editing+regenerating a
+  // project never leaves an earlier render unreachable — see VideoDetail's
+  // own regenerate() for the equivalent, already-correct behavior on
+  // non-project videos (always creates a new row/URL, never overwrites).
+  if (video.projectId) {
+    const latest = await prisma.generatedVideo.findFirst({
+      where: { projectId: video.projectId, userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    if (latest?.id === video.id) {
+      redirect(`/dashboard/videos/projects/${video.projectId}`);
+    }
+  }
 
   // Other videos made from the same script on this avatar, i.e. earlier or
   // later regenerations and duplicates.
@@ -83,6 +100,9 @@ export default async function VideoPage({
           voiceId: video.voiceId,
           voiceName: video.voiceName,
           avatarLookId: video.avatarLookId,
+          project: video.project
+            ? { id: video.project.id, title: video.project.title.trim() || "Untitled video" }
+            : null,
         }}
       />
     </div>
