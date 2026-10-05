@@ -20,6 +20,7 @@ import {
   sendPaymentFailedEmail,
 } from "@/lib/mailer";
 import { activateGuestAccountForDraft } from "@/lib/checkout/activate-guest-account";
+import { AVATAR_BILLING_SETUP_KIND, provisionLegacyAvatarSubscriptions } from "@/lib/stripe/avatar-billing";
 
 const PLAN_LABELS: Record<string, string> = {
   FREE: "Free",
@@ -90,6 +91,21 @@ export function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const details = invoice.parent?.subscription_details?.subscription;
   if (!details) return null;
   return typeof details === "string" ? details : details.id;
+}
+
+// Session metadata values are always flat strings — avatarIds travels as a
+// comma-joined list (see lib/stripe/avatar-billing.ts's
+// createAvatarBillingSetupSession, which writes it). Returns null for
+// anything missing/malformed rather than throwing, so a bad/tampered event
+// degrades to a logged error (see the AVATAR_BILLING_SETUP_KIND branch in
+// handleCheckoutCompleted) instead of crashing webhook processing.
+export function parseAvatarBillingSetupMetadata(
+  metadata: Record<string, string> | null | undefined,
+): { enterpriseId: string; avatarIds: string[] } | null {
+  const enterpriseId = metadata?.enterpriseId;
+  const avatarIds = metadata?.avatarIds?.split(",").filter(Boolean) ?? [];
+  if (!enterpriseId || avatarIds.length === 0) return null;
+  return { enterpriseId, avatarIds };
 }
 
 // Phase 2 avatar billing broke the one-customer-one-subscription assumption
@@ -260,10 +276,87 @@ async function notifyPaymentFailed(subscriptionId: string, eventId: string) {
 // Handler helpers
 // ---------------------------------------------------------------------------
 
+// A legacy/sales-assisted enterprise's avatar-billing-setup Checkout
+// Session (mode: "setup" — see lib/stripe/avatar-billing.ts) completed: the
+// client just saved a card, no subscription exists yet. Create one real
+// $99/month subscription per avatar now, using that card, and tell billing
+// admins the outcome — including a partial failure, which is exactly the
+// case they need to know about (see provisionLegacyAvatarSubscriptions'
+// per-avatar ProvisionResult). Deliberately no customer-facing email here —
+// an admin sent the original link and decides what, if anything, to tell
+// the client.
+async function handleAvatarBillingSetupCompleted(
+  session: Stripe.Checkout.Session,
+  enterpriseId: string,
+  avatarIds: string[],
+  eventId: string,
+) {
+  const cid = customerId(session.customer);
+  const setupIntentId =
+    typeof session.setup_intent === "string" ? session.setup_intent : session.setup_intent?.id;
+  if (!cid || !setupIntentId) {
+    console.error(`Avatar billing setup session ${session.id} completed with no customer/setup_intent — cannot provision.`);
+    return;
+  }
+
+  const setupIntent = await stripeClient.setupIntents.retrieve(setupIntentId);
+  const paymentMethodId =
+    typeof setupIntent.payment_method === "string" ? setupIntent.payment_method : setupIntent.payment_method?.id;
+  if (!paymentMethodId) {
+    console.error(`Avatar billing setup session ${session.id} completed with no payment method on its setup intent.`);
+    return;
+  }
+
+  // Also set as the customer's default so a future live lookup (Phase 2's
+  // resolveDefaultPaymentMethod, the retry cron) finds it without needing
+  // this session again.
+  await stripeClient.customers.update(cid, {
+    invoice_settings: { default_payment_method: paymentMethodId },
+  });
+
+  const results = await provisionLegacyAvatarSubscriptions(enterpriseId, avatarIds, cid, paymentMethodId);
+  const failed = results.filter((r) => !r.result.ok);
+
+  const enterprise = await prisma.enterprise.findUnique({ where: { id: enterpriseId }, select: { name: true } });
+  const summary =
+    failed.length === 0
+      ? `All ${results.length} avatar subscription(s) for ${enterprise?.name ?? enterpriseId} were created successfully.`
+      : `${results.length - failed.length}/${results.length} avatar subscription(s) for ${enterprise?.name ?? enterpriseId} succeeded — ${failed.length} failed and need attention.`;
+
+  await recordSystemEvent({
+    type: SYSTEM_EVENT_TYPE.AVATAR_BILLING_SETUP_COMPLETED,
+    source: "stripe_webhook",
+    message: summary,
+    metadata: { enterpriseId, results: results.map((r) => ({ avatarId: r.avatarId, ok: r.result.ok })) },
+    enterpriseId,
+  });
+
+  try {
+    await notifyBillingAdmins({
+      eventLabel: SYSTEM_EVENT_LABEL[SYSTEM_EVENT_TYPE.AVATAR_BILLING_SETUP_COMPLETED],
+      summary,
+      detailsUrl: adminActivityUrl(),
+      idempotencyKey: `admin-avatar-billing-setup/${eventId}`,
+    });
+  } catch (err) {
+    console.error("admin avatar-billing-setup notification failed:", err);
+  }
+}
+
 async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session,
   eventId: string,
 ) {
+  if (session.metadata?.kind === AVATAR_BILLING_SETUP_KIND) {
+    const parsed = parseAvatarBillingSetupMetadata(session.metadata);
+    if (parsed) {
+      await handleAvatarBillingSetupCompleted(session, parsed.enterpriseId, parsed.avatarIds, eventId);
+    } else {
+      console.error(`Avatar billing setup session ${session.id} completed with missing/malformed metadata.`);
+    }
+    return;
+  }
+
   const cid = customerId(session.customer);
   if (!cid) return;
 

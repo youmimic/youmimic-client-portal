@@ -224,6 +224,18 @@ export type UpdateAvatarStorageSubscriptionInput = z.infer<
   typeof updateAvatarStorageSubscriptionSchema
 >;
 
+// One Stripe Checkout Session (setup mode) covering every avatar selected —
+// see lib/stripe/avatar-billing.ts's createAvatarBillingSetupSession. For
+// SALES_ASSISTED/legacy enterprises with no existing Stripe customer at
+// all, as an alternative to Phase 2 self-serve (which requires one).
+export const createAvatarBillingSetupSessionSchema = z.object({
+  avatarIds: z.array(z.string().trim().min(1)).min(1, "Select at least one avatar"),
+});
+
+export type CreateAvatarBillingSetupSessionInput = z.infer<
+  typeof createAvatarBillingSetupSessionSchema
+>;
+
 // ---------------------------------------------------------------------------
 // Enterprise avatar billing (Phase 2 — automated Stripe writes for
 // self-serve enterprises)

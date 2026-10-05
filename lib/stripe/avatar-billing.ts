@@ -4,18 +4,34 @@ import prisma from "@/lib/prisma";
 import {
   BillingComponent,
   SubscriptionStatus,
+  type PlanType,
 } from "@/app/generated/prisma/enums";
 
 const AVATAR_STORAGE_UNIT_AMOUNT_CENTS = 9900;
 const AVATAR_STORAGE_CURRENCY = "AUD";
 
+// Metadata key used to recognise an avatar-billing-setup Checkout Session in
+// the webhook (app/api/stripe/webhook/route.ts) — distinct from every other
+// session kind, which either carries a real subscription already (plan
+// checkout) or a checkoutDraftId (guest checkout). Session metadata values
+// must be strings, so avatarIds travels as a comma-joined list.
+export const AVATAR_BILLING_SETUP_KIND = "avatar_storage_setup";
+
 type ProvisionResult =
   | { ok: true; subscriptionId: string; stripeSubscriptionId: string }
-  | { ok: false; code: "NOT_SELF_SERVE" | "NO_PAYMENT_METHOD" | "ALREADY_EXISTS" | "STRIPE_ERROR"; error: string };
+  | {
+      ok: false;
+      code: "NOT_SELF_SERVE" | "NO_PAYMENT_METHOD" | "ALREADY_EXISTS" | "STRIPE_ERROR" | "NOT_FOUND";
+      error: string;
+    };
 
 type CancelResult =
   | { ok: true }
   | { ok: false; code: "NOT_FOUND" | "STRIPE_ERROR"; error: string };
+
+type SetupSessionResult =
+  | { ok: true; url: string }
+  | { ok: false; code: "NOT_FOUND" | "ALREADY_EXISTS" | "STRIPE_ERROR"; error: string };
 
 // STANDARD is the enterprise's actual paid-plan subscription, created at
 // checkout time (app/api/stripe/checkout-session/route.ts) — it's the only
@@ -56,20 +72,22 @@ function periodFromItem(item: Stripe.SubscriptionItem | undefined) {
   };
 }
 
-// Provisions a single, independent $99 AUD/month Stripe Subscription for one
-// avatar. Only reachable for SELF_SERVE enterprises — SALES_ASSISTED
-// enterprises keep using Phase 1's manual admin routes untouched.
-export async function provisionAvatarStorageSubscription(
-  enterpriseId: string,
-  avatarId: string,
-): Promise<ProvisionResult> {
-  const enterprise = await prisma.enterprise.findUnique({
-    where: { id: enterpriseId },
-    select: { id: true, provisioningMode: true },
-  });
-  if (!enterprise || enterprise.provisioningMode !== "SELF_SERVE") {
-    return { ok: false, code: "NOT_SELF_SERVE", error: "This enterprise is not set up for self-serve avatar billing." };
-  }
+// Shared core: given a known Stripe customer + payment method, creates one
+// avatar's independent $99 AUD/month Stripe Subscription and writes/updates
+// its local row. Used by both provisionAvatarStorageSubscription (Phase 2
+// self-serve, below) and provisionLegacyAvatarSubscriptions (the setup-mode
+// Checkout flow for SALES_ASSISTED/legacy enterprises) — the only real
+// difference between the two call sites is how the customer/payment method
+// and planType are sourced, not how the Stripe subscription itself gets
+// created.
+async function createAvatarStripeSubscription(params: {
+  enterpriseId: string;
+  avatarId: string;
+  stripeCustomerId: string;
+  paymentMethodId: string;
+  planType: PlanType;
+}): Promise<ProvisionResult> {
+  const { enterpriseId, avatarId, stripeCustomerId, paymentMethodId, planType } = params;
 
   const existing = await prisma.subscription.findUnique({
     where: { avatarId },
@@ -77,24 +95,6 @@ export async function provisionAvatarStorageSubscription(
   });
   if (existing?.stripeSubscriptionId) {
     return { ok: false, code: "ALREADY_EXISTS", error: "This avatar already has a storage subscription." };
-  }
-
-  const stripeCustomerId = await resolveEnterpriseStripeCustomerId(enterpriseId);
-  if (!stripeCustomerId) {
-    return {
-      ok: false,
-      code: "NO_PAYMENT_METHOD",
-      error: "No Stripe customer found for this enterprise yet — subscribe to an Enterprise plan first.",
-    };
-  }
-
-  const paymentMethodId = await resolveDefaultPaymentMethod(stripeCustomerId);
-  if (!paymentMethodId) {
-    return {
-      ok: false,
-      code: "NO_PAYMENT_METHOD",
-      error: "No payment method on file. Add one via the billing portal before adding an avatar.",
-    };
   }
 
   const priceId = process.env.STRIPE_AVATAR_STORAGE_PRICE_ID;
@@ -128,7 +128,7 @@ export async function provisionAvatarStorageSubscription(
       unitAmountCents: AVATAR_STORAGE_UNIT_AMOUNT_CENTS,
       currency: AVATAR_STORAGE_CURRENCY,
       status: SubscriptionStatus.ACTIVE,
-      planType: "ENTERPRISE" as const,
+      planType,
       currentPeriodStart: start,
       currentPeriodEnd: end,
       provisioningFailedAt: null,
@@ -147,10 +147,15 @@ export async function provisionAvatarStorageSubscription(
 
     // Never leave the avatar silently unbilled — record the failure on a
     // (possibly newly created) placeholder row rather than swallowing it.
+    // stripeCustomerId is stored even on this failure path (not just on
+    // success) — the retry cron (retry-failed-provisioning/route.ts) needs
+    // it to know which customer/payment method to retry against for a
+    // legacy enterprise, which has no STANDARD-plan row to re-resolve it
+    // from the way Phase 2 self-serve can.
     if (existing) {
       await prisma.subscription.update({
         where: { id: existing.id },
-        data: { provisioningFailedAt: new Date(), provisioningFailureMsg: message },
+        data: { stripeCustomerId, provisioningFailedAt: new Date(), provisioningFailureMsg: message },
       });
     } else {
       await prisma.subscription.create({
@@ -160,10 +165,11 @@ export async function provisionAvatarStorageSubscription(
           ownerType: "ENTERPRISE",
           billingComponent: BillingComponent.AVATAR_STORAGE,
           billingProvider: "STRIPE",
+          stripeCustomerId,
           unitAmountCents: AVATAR_STORAGE_UNIT_AMOUNT_CENTS,
           currency: AVATAR_STORAGE_CURRENCY,
           status: SubscriptionStatus.INCOMPLETE,
-          planType: "ENTERPRISE",
+          planType,
           provisioningFailedAt: new Date(),
           provisioningFailureMsg: message,
         },
@@ -172,6 +178,163 @@ export async function provisionAvatarStorageSubscription(
 
     return { ok: false, code: "STRIPE_ERROR", error: message };
   }
+}
+
+// Provisions a single, independent $99 AUD/month Stripe Subscription for one
+// avatar. Only reachable for SELF_SERVE enterprises — SALES_ASSISTED
+// enterprises keep using Phase 1's manual admin routes, or the setup-mode
+// Checkout flow below, untouched.
+export async function provisionAvatarStorageSubscription(
+  enterpriseId: string,
+  avatarId: string,
+): Promise<ProvisionResult> {
+  const enterprise = await prisma.enterprise.findUnique({
+    where: { id: enterpriseId },
+    select: { id: true, provisioningMode: true },
+  });
+  if (!enterprise || enterprise.provisioningMode !== "SELF_SERVE") {
+    return { ok: false, code: "NOT_SELF_SERVE", error: "This enterprise is not set up for self-serve avatar billing." };
+  }
+
+  const stripeCustomerId = await resolveEnterpriseStripeCustomerId(enterpriseId);
+  if (!stripeCustomerId) {
+    return {
+      ok: false,
+      code: "NO_PAYMENT_METHOD",
+      error: "No Stripe customer found for this enterprise yet — subscribe to an Enterprise plan first.",
+    };
+  }
+
+  const paymentMethodId = await resolveDefaultPaymentMethod(stripeCustomerId);
+  if (!paymentMethodId) {
+    return {
+      ok: false,
+      code: "NO_PAYMENT_METHOD",
+      error: "No payment method on file. Add one via the billing portal before adding an avatar.",
+    };
+  }
+
+  return createAvatarStripeSubscription({
+    enterpriseId,
+    avatarId,
+    stripeCustomerId,
+    paymentMethodId,
+    // Preserves this function's existing (pre-existing, unchanged) behavior
+    // — not touched by the LEGACY plan-type work, since Phase 2 self-serve
+    // is for genuine self-serve customers, not manually-tracked legacy ones.
+    planType: "ENTERPRISE",
+  });
+}
+
+// One Stripe Checkout Session in "setup" mode (collects and saves a card,
+// charges nothing) for a SALES_ASSISTED/legacy enterprise with no existing
+// Stripe customer or payment method at all — Phase 2 self-serve above can't
+// provision these, since resolveEnterpriseStripeCustomerId requires an
+// existing real STANDARD-plan Stripe customer. Once the client completes
+// it, the webhook (app/api/stripe/webhook/route.ts) calls
+// provisionLegacyAvatarSubscriptions below to actually create each avatar's
+// $99/month subscription using the card just saved.
+export async function createAvatarBillingSetupSession(
+  enterpriseId: string,
+  avatarIds: string[],
+): Promise<SetupSessionResult> {
+  const enterprise = await prisma.enterprise.findUnique({
+    where: { id: enterpriseId },
+    select: {
+      id: true,
+      name: true,
+      contacts: { where: { type: "BILLING" }, select: { email: true }, take: 1 },
+    },
+  });
+  if (!enterprise) {
+    return { ok: false, code: "NOT_FOUND", error: "Enterprise not found." };
+  }
+
+  const avatars = await prisma.avatar.findMany({
+    where: { id: { in: avatarIds }, enterpriseId },
+    select: { id: true, name: true, subscriptions: { select: { stripeSubscriptionId: true } } },
+  });
+  if (avatars.length !== avatarIds.length) {
+    return { ok: false, code: "NOT_FOUND", error: "One or more avatars were not found on this enterprise." };
+  }
+  const alreadyBilled = avatars.find((a) => a.subscriptions.some((s) => s.stripeSubscriptionId));
+  if (alreadyBilled) {
+    return {
+      ok: false,
+      code: "ALREADY_EXISTS",
+      error: `"${alreadyBilled.name}" already has a real Stripe storage subscription.`,
+    };
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+  try {
+    const billingEmail = enterprise.contacts[0]?.email ?? undefined;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "setup",
+      payment_method_types: ["card"],
+      ...(billingEmail ? { customer_email: billingEmail } : {}),
+      success_url: `${appUrl}/billing-setup/complete`,
+      cancel_url: `${appUrl}/billing-setup/complete?cancelled=1`,
+      metadata: {
+        kind: AVATAR_BILLING_SETUP_KIND,
+        enterpriseId,
+        avatarIds: avatarIds.join(","),
+      },
+    });
+    if (!session.url) {
+      return { ok: false, code: "STRIPE_ERROR", error: "Stripe did not return a checkout URL." };
+    }
+    return { ok: true, url: session.url };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown Stripe error";
+    return { ok: false, code: "STRIPE_ERROR", error: message };
+  }
+}
+
+// Called from the webhook once the setup session above completes — creates
+// one independent $99/month subscription per avatar using the card just
+// saved, same core as Phase 2's provisionAvatarStorageSubscription but with
+// a known customer/payment method (no existing STANDARD-plan subscription
+// to resolve them from) and planType: LEGACY (see PlanType's schema
+// comment — this is manually-tracked billing graduating to a real Stripe
+// subscription, not a genuine self-serve Enterprise-tier purchase).
+// For the daily retry cron (retry-failed-provisioning/route.ts): retries one
+// legacy avatar's subscription using the stripeCustomerId already recorded
+// on its (failed) row — see createAvatarStripeSubscription's failure path
+// above for why that's always present. Re-resolves the payment method live
+// rather than trusting a possibly-stale local copy, same as Phase 2.
+export async function retryLegacyAvatarSubscription(
+  enterpriseId: string,
+  avatarId: string,
+  stripeCustomerId: string,
+): Promise<ProvisionResult> {
+  const paymentMethodId = await resolveDefaultPaymentMethod(stripeCustomerId);
+  if (!paymentMethodId) {
+    return { ok: false, code: "NO_PAYMENT_METHOD", error: "No payment method on file for this customer." };
+  }
+  return createAvatarStripeSubscription({ enterpriseId, avatarId, stripeCustomerId, paymentMethodId, planType: "LEGACY" });
+}
+
+export async function provisionLegacyAvatarSubscriptions(
+  enterpriseId: string,
+  avatarIds: string[],
+  stripeCustomerId: string,
+  paymentMethodId: string,
+): Promise<{ avatarId: string; result: ProvisionResult }[]> {
+  const results: { avatarId: string; result: ProvisionResult }[] = [];
+  for (const avatarId of avatarIds) {
+    const result = await createAvatarStripeSubscription({
+      enterpriseId,
+      avatarId,
+      stripeCustomerId,
+      paymentMethodId,
+      planType: "LEGACY",
+    });
+    results.push({ avatarId, result });
+  }
+  return results;
 }
 
 // Always cancels at period end, never immediately — consistent with Phase

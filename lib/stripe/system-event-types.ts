@@ -17,6 +17,12 @@ export const SYSTEM_EVENT_TYPE = {
   // this app writes has one canonical constant and label, even though that
   // call site isn't wired up to send a notification email.
   AMBIGUOUS_INVOICE: "stripe_webhook_ambiguous_invoice",
+  // A legacy/sales-assisted enterprise's avatar-billing-setup Checkout
+  // Session (lib/stripe/avatar-billing.ts's createAvatarBillingSetupSession)
+  // completed — written regardless of whether every avatar's subscription
+  // actually succeeded, since a partial failure is exactly the case an
+  // admin needs to be told about (see the webhook's own handling).
+  AVATAR_BILLING_SETUP_COMPLETED: "stripe_avatar_billing_setup_completed",
 } as const;
 
 export type SystemEventType =
@@ -30,4 +36,5 @@ export const SYSTEM_EVENT_LABEL: Record<SystemEventType, string> = {
   [SYSTEM_EVENT_TYPE.SUBSCRIPTION_CANCELED]: "Subscription canceled",
   [SYSTEM_EVENT_TYPE.PAYMENT_FAILED]: "Payment failed",
   [SYSTEM_EVENT_TYPE.AMBIGUOUS_INVOICE]: "Ambiguous invoice event",
+  [SYSTEM_EVENT_TYPE.AVATAR_BILLING_SETUP_COMPLETED]: "Avatar billing setup completed",
 };

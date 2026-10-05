@@ -6,6 +6,7 @@ import {
   toPlanType,
   customerId,
   invoiceSubscriptionId,
+  parseAvatarBillingSetupMetadata,
 } from "@/app/api/stripe/webhook/route";
 
 const constructEvent = vi.fn();
@@ -161,5 +162,34 @@ describe("invoiceSubscriptionId", () => {
       parent: { subscription_details: { subscription: { id: "sub_456" } } },
     };
     expect(invoiceSubscriptionId(invoice as never)).toBe("sub_456");
+  });
+});
+
+describe("parseAvatarBillingSetupMetadata", () => {
+  it("parses a comma-joined avatarIds list alongside enterpriseId", () => {
+    expect(
+      parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", avatarIds: "av_1,av_2" }),
+    ).toEqual({ enterpriseId: "ent_1", avatarIds: ["av_1", "av_2"] });
+  });
+
+  it("handles a single avatarId with no comma", () => {
+    expect(parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", avatarIds: "av_1" })).toEqual({
+      enterpriseId: "ent_1",
+      avatarIds: ["av_1"],
+    });
+  });
+
+  it("returns null when enterpriseId is missing", () => {
+    expect(parseAvatarBillingSetupMetadata({ avatarIds: "av_1" })).toBeNull();
+  });
+
+  it("returns null when avatarIds is missing or empty", () => {
+    expect(parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1" })).toBeNull();
+    expect(parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", avatarIds: "" })).toBeNull();
+  });
+
+  it("returns null for null/undefined metadata", () => {
+    expect(parseAvatarBillingSetupMetadata(null)).toBeNull();
+    expect(parseAvatarBillingSetupMetadata(undefined)).toBeNull();
   });
 });

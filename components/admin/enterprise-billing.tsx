@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ENGINE_CREDITS_PER_SECOND_MILLI } from "@/lib/heygen/credits";
 import {
   Select,
@@ -416,6 +417,7 @@ type AvatarRow = {
     currentPeriodEnd: string | null;
     provisioningFailedAt?: string | null;
     provisioningFailureMsg?: string | null;
+    stripeSubscriptionId?: string | null;
   } | null;
 };
 
@@ -455,6 +457,58 @@ export function EnterpriseBillingBreakdownCard({
   const [subStatus, setSubStatus] = useState<AvatarRow["billingStatus"]>("ACTIVE");
   const [subPeriodEnd, setSubPeriodEnd] = useState("");
   const [subState, setSubState] = useState<ActionState>(idle);
+
+  // One Stripe Checkout (setup mode) link covering several avatars at once —
+  // for a legacy enterprise with no existing Stripe customer. See
+  // lib/stripe/avatar-billing.ts's createAvatarBillingSetupSession.
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupSelected, setSetupSelected] = useState<Set<string>>(new Set());
+  const [setupState, setSetupState] = useState<ActionState>(idle);
+  const [setupUrl, setSetupUrl] = useState<string | null>(null);
+  const [setupCopied, setSetupCopied] = useState(false);
+
+  const unbilledAvatars = avatars.filter((a) => !a.subscription?.stripeSubscriptionId);
+
+  function openSetup() {
+    setSetupSelected(new Set());
+    setSetupState(idle);
+    setSetupUrl(null);
+    setSetupCopied(false);
+    setSetupOpen(true);
+  }
+
+  function toggleSetupAvatar(avatarId: string) {
+    setSetupSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(avatarId)) next.delete(avatarId);
+      else next.add(avatarId);
+      return next;
+    });
+  }
+
+  async function handleCreateSetupLink() {
+    setSetupState({ loading: true, error: null });
+    try {
+      const json = (await apiCall(`/api/admin/enterprises/${enterpriseId}/avatar-billing-setup`, "POST", {
+        avatarIds: [...setupSelected],
+      })) as { url: string };
+      setSetupUrl(json.url);
+      setSetupState(idle);
+    } catch (e) {
+      setSetupState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
+  async function copySetupUrl() {
+    if (!setupUrl) return;
+    try {
+      await navigator.clipboard.writeText(setupUrl);
+      setSetupCopied(true);
+    } catch {
+      // Clipboard access can be denied/unavailable — the link is still
+      // shown in the input below, selectable by hand either way.
+    }
+  }
 
   async function handleSetFee() {
     setFeeState({ loading: true, error: null });
@@ -606,6 +660,14 @@ export function EnterpriseBillingBreakdownCard({
           <span className="font-semibold">Monthly total</span>
           <span className="font-semibold tabular-nums">{formatAmount(totalCents, currency)}</span>
         </div>
+
+        {canManage && unbilledAvatars.length > 0 && (
+          <div className="pt-3">
+            <Button variant="outline" size="sm" onClick={openSetup}>
+              Set up avatar billing (Stripe link)
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Platform fee dialog */}
@@ -710,6 +772,65 @@ export function EnterpriseBillingBreakdownCard({
               {subState.loading ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Avatar billing setup (Stripe link) dialog */}
+      <Dialog open={setupOpen} onOpenChange={(o) => { if (!o) setSetupOpen(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set Up Avatar Billing</DialogTitle>
+            <DialogDescription>
+              Creates one link for the client to save a card — each avatar selected becomes its own
+              real $99/month Stripe subscription once they complete it, billed immediately. Nothing is
+              charged by generating the link itself.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!setupUrl ? (
+            <>
+              <div className="space-y-2">
+                {unbilledAvatars.map((avatar) => (
+                  <label key={avatar.id} className="flex items-center gap-2.5 text-sm">
+                    <Checkbox
+                      checked={setupSelected.has(avatar.id)}
+                      onCheckedChange={() => toggleSetupAvatar(avatar.id)}
+                    />
+                    <span>{avatar.name}</span>
+                  </label>
+                ))}
+              </div>
+              {setupState.error && <p className="text-sm text-destructive">{setupState.error}</p>}
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
+                <Button
+                  size="sm"
+                  disabled={setupState.loading || setupSelected.size === 0}
+                  onClick={handleCreateSetupLink}
+                >
+                  {setupState.loading ? "Creating link…" : "Create link"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="setup-url">Send this link to the client</Label>
+                <Input id="setup-url" readOnly value={setupUrl} onFocus={(e) => e.currentTarget.select()} />
+                <p className="text-xs text-muted-foreground">
+                  It only works once a card is saved — billing starts as soon as they complete it, so send it
+                  with context (e.g. &quot;click to set up your {setupSelected.size === 1 ? "avatar" : "avatars"}{" "}
+                  billing at $99/month each&quot;).
+                </p>
+              </div>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" size="sm" />}>Close</DialogClose>
+                <Button size="sm" onClick={copySetupUrl}>
+                  {setupCopied ? "Copied" : "Copy link"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>
