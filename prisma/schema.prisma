@@ -266,6 +266,20 @@ enum BillingProvider {
   GOCARDLESS
 }
 
+// How often a Subscription's unitAmountCents actually recurs. Defaults to
+// MONTH so every existing row (every one created before this field existed
+// was, in fact, monthly — Phase 1 manual entry, Phase 2 self-serve, and
+// every plan checkout) stays correctly labeled with no backfill needed.
+// Added because a real yearly avatar-storage price (e.g. $1,188 AUD/year)
+// can now be used by the avatar-billing-setup Stripe flow — without this,
+// its amount would get summed straight into a total implicitly labeled
+// "monthly," overstating it 12x. See EnterpriseBillingBreakdownCard, which
+// now shows separate Monthly/Yearly totals rather than one blended number.
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
 // Enterprise avatar billing (Phase 1 — data model + manual/admin-driven
 // billing, no live Stripe writes). STANDARD is the default so every
 // pre-existing row (plan-level subscriptions) is unaffected. PLATFORM_FEE is
@@ -324,6 +338,7 @@ model Subscription {
   avatar           Avatar?          @relation(fields: [avatarId], references: [id])
   unitAmountCents  Int?
   currency         String           @default("AUD")
+  billingInterval  BillingInterval  @default(MONTH)
 
   // Per-subscription override of PLAN_CREDIT_LIMITS_MILLI
   // (lib/heygen/credits.ts), in millicredits. Null = use the shared

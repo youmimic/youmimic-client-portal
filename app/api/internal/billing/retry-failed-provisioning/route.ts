@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       avatarId: { not: null },
       enterpriseId: { not: null },
     },
-    select: { id: true, avatarId: true, enterpriseId: true, stripeCustomerId: true },
+    select: { id: true, avatarId: true, enterpriseId: true, stripeCustomerId: true, stripePriceId: true },
   });
 
   const results = [];
@@ -53,9 +53,13 @@ export async function POST(req: Request) {
     const result =
       enterprise?.provisioningMode === "SELF_SERVE"
         ? await provisionAvatarStorageSubscription(row.enterpriseId, row.avatarId)
-        : row.stripeCustomerId
-          ? await retryLegacyAvatarSubscription(row.enterpriseId, row.avatarId, row.stripeCustomerId)
-          : { ok: false as const, code: "NO_PAYMENT_METHOD" as const, error: "No stripeCustomerId recorded to retry against." };
+        : row.stripeCustomerId && row.stripePriceId
+          ? await retryLegacyAvatarSubscription(row.enterpriseId, row.avatarId, row.stripeCustomerId, row.stripePriceId)
+          : {
+              ok: false as const,
+              code: "NO_PAYMENT_METHOD" as const,
+              error: "No stripeCustomerId/stripePriceId recorded to retry against.",
+            };
 
     results.push({ subscriptionId: row.id, avatarId: row.avatarId, ok: result.ok });
   }

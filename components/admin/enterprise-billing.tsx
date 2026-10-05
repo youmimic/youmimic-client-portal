@@ -418,8 +418,15 @@ type AvatarRow = {
     provisioningFailedAt?: string | null;
     provisioningFailureMsg?: string | null;
     stripeSubscriptionId?: string | null;
+    // Defaults to MONTH for every row created before this field existed —
+    // see Subscription.billingInterval's schema comment. Only ever YEAR for
+    // a real Stripe subscription created against a yearly price (the
+    // avatar-billing-setup flow); Phase 1's manual entry is always monthly.
+    billingInterval?: "MONTH" | "YEAR";
   } | null;
 };
+
+const INTERVAL_SUFFIX: Record<"MONTH" | "YEAR", string> = { MONTH: "/mo", YEAR: "/yr" };
 
 function isIncludedInTotal(avatar: AvatarRow): boolean {
   if (!avatar.subscription || avatar.subscription.unitAmountCents === null) return false;
@@ -460,9 +467,14 @@ export function EnterpriseBillingBreakdownCard({
 
   // One Stripe Checkout (setup mode) link covering several avatars at once —
   // for a legacy enterprise with no existing Stripe customer. See
-  // lib/stripe/avatar-billing.ts's createAvatarBillingSetupSession.
+  // lib/stripe/avatar-billing.ts's createAvatarBillingSetupSession. MONTH
+  // and YEAR are the two standard, named "Avatar Storage Subscription"
+  // prices (reusable for any client on that term); CUSTOM is for a genuine
+  // one-off deal, entered as a raw Stripe price id.
   const [setupOpen, setSetupOpen] = useState(false);
   const [setupSelected, setSetupSelected] = useState<Set<string>>(new Set());
+  const [setupTerm, setSetupTerm] = useState<"MONTH" | "YEAR" | "CUSTOM">("MONTH");
+  const [setupPriceId, setSetupPriceId] = useState("");
   const [setupState, setSetupState] = useState<ActionState>(idle);
   const [setupUrl, setSetupUrl] = useState<string | null>(null);
   const [setupCopied, setSetupCopied] = useState(false);
@@ -471,6 +483,8 @@ export function EnterpriseBillingBreakdownCard({
 
   function openSetup() {
     setSetupSelected(new Set());
+    setSetupTerm("MONTH");
+    setSetupPriceId("");
     setSetupState(idle);
     setSetupUrl(null);
     setSetupCopied(false);
@@ -491,6 +505,7 @@ export function EnterpriseBillingBreakdownCard({
     try {
       const json = (await apiCall(`/api/admin/enterprises/${enterpriseId}/avatar-billing-setup`, "POST", {
         avatarIds: [...setupSelected],
+        ...(setupTerm === "CUSTOM" ? { stripePriceId: setupPriceId.trim() } : { billingInterval: setupTerm }),
       })) as { url: string };
       setSetupUrl(json.url);
       setSetupState(idle);
@@ -573,12 +588,22 @@ export function EnterpriseBillingBreakdownCard({
   }
 
   const currency = platformFee?.currency ?? "AUD";
-  const totalCents =
+  // Platform Fee is always monthly (Phase 1's manual entry has no interval
+  // concept) — split by each avatar's own real billingInterval so a yearly
+  // avatar subscription is never silently summed into a number labeled
+  // "Monthly total" (see Subscription.billingInterval's schema comment).
+  const monthlyTotalCents =
     (platformFee?.unitAmountCents ?? 0) +
     avatars.reduce((sum, a) => {
       if (!isIncludedInTotal(a) || a.subscription?.unitAmountCents == null) return sum;
+      if ((a.subscription.billingInterval ?? "MONTH") !== "MONTH") return sum;
       return sum + a.subscription.unitAmountCents;
     }, 0);
+  const yearlyTotalCents = avatars.reduce((sum, a) => {
+    if (!isIncludedInTotal(a) || a.subscription?.unitAmountCents == null) return sum;
+    if (a.subscription.billingInterval !== "YEAR") return sum;
+    return sum + a.subscription.unitAmountCents;
+  }, 0);
 
   return (
     <>
@@ -636,7 +661,7 @@ export function EnterpriseBillingBreakdownCard({
                   <div className="flex items-center gap-2">
                     <span className="tabular-nums font-medium">
                       {avatar.subscription?.unitAmountCents !== null && avatar.subscription?.unitAmountCents !== undefined
-                        ? formatAmount(avatar.subscription.unitAmountCents, avatar.subscription.currency)
+                        ? `${formatAmount(avatar.subscription.unitAmountCents, avatar.subscription.currency)}${INTERVAL_SUFFIX[avatar.subscription.billingInterval ?? "MONTH"]}`
                         : "Not priced"}
                     </span>
                     {canManage && (
@@ -658,8 +683,14 @@ export function EnterpriseBillingBreakdownCard({
 
         <div className="flex items-center justify-between pt-3">
           <span className="font-semibold">Monthly total</span>
-          <span className="font-semibold tabular-nums">{formatAmount(totalCents, currency)}</span>
+          <span className="font-semibold tabular-nums">{formatAmount(monthlyTotalCents, currency)}</span>
         </div>
+        {yearlyTotalCents > 0 && (
+          <div className="flex items-center justify-between pt-1">
+            <span className="font-semibold">Yearly total</span>
+            <span className="font-semibold tabular-nums">{formatAmount(yearlyTotalCents, currency)}</span>
+          </div>
+        )}
 
         {canManage && unbilledAvatars.length > 0 && (
           <div className="pt-3">
@@ -782,8 +813,8 @@ export function EnterpriseBillingBreakdownCard({
             <DialogTitle>Set Up Avatar Billing</DialogTitle>
             <DialogDescription>
               Creates one link for the client to save a card — each avatar selected becomes its own
-              real $99/month Stripe subscription once they complete it, billed immediately. Nothing is
-              charged by generating the link itself.
+              real Stripe subscription once they complete it, billed immediately. Nothing is charged
+              by generating the link itself.
             </DialogDescription>
           </DialogHeader>
 
@@ -800,12 +831,46 @@ export function EnterpriseBillingBreakdownCard({
                   </label>
                 ))}
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="setup-term">Billing term</Label>
+                <Select
+                  value={setupTerm}
+                  onValueChange={(v) => setSetupTerm((v ?? "MONTH") as "MONTH" | "YEAR" | "CUSTOM")}
+                  name="setup-term"
+                >
+                  <SelectTrigger id="setup-term"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MONTH">Monthly — $99/month</SelectItem>
+                    <SelectItem value="YEAR">Yearly — $1,188/year</SelectItem>
+                    <SelectItem value="CUSTOM">Custom price ID…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {setupTerm === "CUSTOM" && (
+                  <>
+                    <Input
+                      id="setup-price-id"
+                      placeholder="price_..."
+                      value={setupPriceId}
+                      onChange={(e) => setSetupPriceId(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      For a one-off deal that isn&apos;t the standard monthly or yearly rate — checked
+                      against Stripe before the link is created.
+                    </p>
+                  </>
+                )}
+              </div>
               {setupState.error && <p className="text-sm text-destructive">{setupState.error}</p>}
               <DialogFooter>
                 <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
                 <Button
                   size="sm"
-                  disabled={setupState.loading || setupSelected.size === 0}
+                  disabled={
+                    setupState.loading ||
+                    setupSelected.size === 0 ||
+                    (setupTerm === "CUSTOM" && setupPriceId.trim() === "")
+                  }
                   onClick={handleCreateSetupLink}
                 >
                   {setupState.loading ? "Creating link…" : "Create link"}

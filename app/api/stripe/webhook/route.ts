@@ -101,11 +101,12 @@ export function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
 // handleCheckoutCompleted) instead of crashing webhook processing.
 export function parseAvatarBillingSetupMetadata(
   metadata: Record<string, string> | null | undefined,
-): { enterpriseId: string; avatarIds: string[] } | null {
+): { enterpriseId: string; avatarIds: string[]; stripePriceId: string } | null {
   const enterpriseId = metadata?.enterpriseId;
   const avatarIds = metadata?.avatarIds?.split(",").filter(Boolean) ?? [];
-  if (!enterpriseId || avatarIds.length === 0) return null;
-  return { enterpriseId, avatarIds };
+  const stripePriceId = metadata?.stripePriceId;
+  if (!enterpriseId || avatarIds.length === 0 || !stripePriceId) return null;
+  return { enterpriseId, avatarIds, stripePriceId };
 }
 
 // Phase 2 avatar billing broke the one-customer-one-subscription assumption
@@ -289,6 +290,7 @@ async function handleAvatarBillingSetupCompleted(
   session: Stripe.Checkout.Session,
   enterpriseId: string,
   avatarIds: string[],
+  stripePriceId: string,
   eventId: string,
 ) {
   const cid = customerId(session.customer);
@@ -314,7 +316,7 @@ async function handleAvatarBillingSetupCompleted(
     invoice_settings: { default_payment_method: paymentMethodId },
   });
 
-  const results = await provisionLegacyAvatarSubscriptions(enterpriseId, avatarIds, cid, paymentMethodId);
+  const results = await provisionLegacyAvatarSubscriptions(enterpriseId, avatarIds, cid, paymentMethodId, stripePriceId);
   const failed = results.filter((r) => !r.result.ok);
 
   const enterprise = await prisma.enterprise.findUnique({ where: { id: enterpriseId }, select: { name: true } });
@@ -350,7 +352,7 @@ async function handleCheckoutCompleted(
   if (session.metadata?.kind === AVATAR_BILLING_SETUP_KIND) {
     const parsed = parseAvatarBillingSetupMetadata(session.metadata);
     if (parsed) {
-      await handleAvatarBillingSetupCompleted(session, parsed.enterpriseId, parsed.avatarIds, eventId);
+      await handleAvatarBillingSetupCompleted(session, parsed.enterpriseId, parsed.avatarIds, parsed.stripePriceId, eventId);
     } else {
       console.error(`Avatar billing setup session ${session.id} completed with missing/malformed metadata.`);
     }

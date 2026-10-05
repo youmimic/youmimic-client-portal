@@ -42,7 +42,10 @@ export async function POST(
     );
   }
 
-  const result = await createAvatarBillingSetupSession(enterpriseId, parsed.data.avatarIds);
+  const result = await createAvatarBillingSetupSession(enterpriseId, parsed.data.avatarIds, {
+    stripePriceId: parsed.data.stripePriceId,
+    billingInterval: parsed.data.billingInterval,
+  });
   if (!result.ok) {
     const status = result.code === "NOT_FOUND" ? 404 : result.code === "ALREADY_EXISTS" ? 409 : 502;
     return NextResponse.json({ error: result.error, code: result.code }, { status });
@@ -53,7 +56,12 @@ export async function POST(
     action: "create_avatar_billing_setup_session",
     entityType: ENTITY_TYPES.SUBSCRIPTION,
     entityId: enterpriseId,
-    metadata: { enterpriseId, avatarIds: parsed.data.avatarIds },
+    metadata: {
+      enterpriseId,
+      avatarIds: parsed.data.avatarIds,
+      billingInterval: parsed.data.billingInterval ?? "MONTH",
+      stripePriceId: parsed.data.stripePriceId ?? null,
+    },
   });
 
   return NextResponse.json({ url: result.url }, { status: 201 });

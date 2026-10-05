@@ -100,6 +100,7 @@ export default async function AdminEnterpriseDetailPage({
               provisioningFailedAt: true,
               provisioningFailureMsg: true,
               stripeSubscriptionId: true,
+              billingInterval: true,
             },
             take: 1,
           },
@@ -334,6 +335,7 @@ export default async function AdminEnterpriseDetailPage({
                         avatar.subscriptions[0].provisioningFailedAt?.toISOString() ?? null,
                       provisioningFailureMsg: avatar.subscriptions[0].provisioningFailureMsg,
                       stripeSubscriptionId: avatar.subscriptions[0].stripeSubscriptionId,
+                      billingInterval: avatar.subscriptions[0].billingInterval,
                     }
                   : null,
               }))}

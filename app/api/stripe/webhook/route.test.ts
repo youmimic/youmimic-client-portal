@@ -166,26 +166,35 @@ describe("invoiceSubscriptionId", () => {
 });
 
 describe("parseAvatarBillingSetupMetadata", () => {
-  it("parses a comma-joined avatarIds list alongside enterpriseId", () => {
+  it("parses a comma-joined avatarIds list alongside enterpriseId and stripePriceId", () => {
     expect(
-      parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", avatarIds: "av_1,av_2" }),
-    ).toEqual({ enterpriseId: "ent_1", avatarIds: ["av_1", "av_2"] });
+      parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", avatarIds: "av_1,av_2", stripePriceId: "price_1" }),
+    ).toEqual({ enterpriseId: "ent_1", avatarIds: ["av_1", "av_2"], stripePriceId: "price_1" });
   });
 
   it("handles a single avatarId with no comma", () => {
-    expect(parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", avatarIds: "av_1" })).toEqual({
+    expect(
+      parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", avatarIds: "av_1", stripePriceId: "price_1" }),
+    ).toEqual({
       enterpriseId: "ent_1",
       avatarIds: ["av_1"],
+      stripePriceId: "price_1",
     });
   });
 
   it("returns null when enterpriseId is missing", () => {
-    expect(parseAvatarBillingSetupMetadata({ avatarIds: "av_1" })).toBeNull();
+    expect(parseAvatarBillingSetupMetadata({ avatarIds: "av_1", stripePriceId: "price_1" })).toBeNull();
   });
 
   it("returns null when avatarIds is missing or empty", () => {
-    expect(parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1" })).toBeNull();
-    expect(parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", avatarIds: "" })).toBeNull();
+    expect(parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", stripePriceId: "price_1" })).toBeNull();
+    expect(
+      parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", avatarIds: "", stripePriceId: "price_1" }),
+    ).toBeNull();
+  });
+
+  it("returns null when stripePriceId is missing", () => {
+    expect(parseAvatarBillingSetupMetadata({ enterpriseId: "ent_1", avatarIds: "av_1" })).toBeNull();
   });
 
   it("returns null for null/undefined metadata", () => {

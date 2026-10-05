@@ -230,6 +230,13 @@ export type UpdateAvatarStorageSubscriptionInput = z.infer<
 // all, as an alternative to Phase 2 self-serve (which requires one).
 export const createAvatarBillingSetupSessionSchema = z.object({
   avatarIds: z.array(z.string().trim().min(1)).min(1, "Select at least one avatar"),
+  // Both optional, and mutually exclusive in practice (see
+  // createAvatarBillingSetupSession's resolveStandardOrCustomPriceId):
+  // billingInterval picks between the two standard, named prices (MONTH
+  // default, or YEAR); stripePriceId overrides either for a genuine one-off
+  // custom deal. Any price is verified live before the link is generated.
+  billingInterval: z.enum(["MONTH", "YEAR"]).optional(),
+  stripePriceId: z.string().trim().min(1).optional(),
 });
 
 export type CreateAvatarBillingSetupSessionInput = z.infer<
