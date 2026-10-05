@@ -182,6 +182,10 @@ export const setPlatformFeeSchema = z.object({
   billingProvider: z.enum(BILLING_PROVIDERS).default("STRIPE"),
   stripeCustomerId: z.string().trim().min(1).optional(),
   gocardlessCustomerId: z.string().trim().min(1).optional(),
+  // Required (not .optional()) since this route is a full create-or-replace,
+  // same reasoning as unitAmountCents above — every caller must say either a
+  // real number or explicit null ("no cap"), never silently omit it.
+  creditsLimitMilliOverride: z.number().int().positive().nullable(),
 });
 
 export type SetPlatformFeeInput = z.infer<typeof setPlatformFeeSchema>;

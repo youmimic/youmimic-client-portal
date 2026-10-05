@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { ENGINE_CREDITS_PER_SECOND_MILLI } from "@/lib/heygen/credits";
 import {
   Select,
   SelectContent,
@@ -399,6 +400,7 @@ type PlatformFee = {
   unitAmountCents: number | null;
   currency: string;
   billingProvider: string;
+  creditsLimitMilliOverride: number | null;
 } | null;
 
 type AvatarRow = {
@@ -443,6 +445,9 @@ export function EnterpriseBillingBreakdownCard({
       ? String(platformFee.unitAmountCents / 100)
       : "0",
   );
+  const [feeOverride, setFeeOverride] = useState(
+    platformFee?.creditsLimitMilliOverride != null ? String(platformFee.creditsLimitMilliOverride) : "",
+  );
   const [feeState, setFeeState] = useState<ActionState>(idle);
 
   const [subTarget, setSubTarget] = useState<AvatarRow | null>(null);
@@ -454,11 +459,13 @@ export function EnterpriseBillingBreakdownCard({
   async function handleSetFee() {
     setFeeState({ loading: true, error: null });
     const cents = Math.round(parseFloat(feeAmount || "0") * 100);
+    const overrideMilli = feeOverride.trim() === "" ? null : parseInt(feeOverride, 10);
     try {
       await apiCall(`/api/admin/enterprises/${enterpriseId}/platform-fee`, "PUT", {
         unitAmountCents: cents,
         currency: platformFee?.currency ?? "AUD",
         billingProvider: platformFee?.billingProvider ?? "STRIPE",
+        creditsLimitMilliOverride: overrideMilli,
       });
       setFeeOpen(false);
       router.refresh();
@@ -621,6 +628,23 @@ export function EnterpriseBillingBreakdownCard({
               value={feeAmount}
               onChange={(e) => setFeeAmount(e.target.value)}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="platform-fee-override">Monthly credit cap override (optional)</Label>
+            <Input
+              id="platform-fee-override"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="No cap"
+              value={feeOverride}
+              onChange={(e) => setFeeOverride(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {feeOverride.trim() === "" || Number.isNaN(Number(feeOverride))
+                ? "Leave blank for no cap — this account uses the standard (currently unlimited) plan limit."
+                : `≈ ${(Number(feeOverride) / ENGINE_CREDITS_PER_SECOND_MILLI.AVATAR_III / 60).toFixed(1)} min of Avatar III per month.`}
+            </p>
           </div>
           {feeState.error && <p className="text-sm text-destructive">{feeState.error}</p>}
           <DialogFooter>

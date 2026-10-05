@@ -19,6 +19,10 @@ export interface BillingPeriod {
   planType: PlanType;
   periodStart: Date;
   periodEnd: Date;
+  // From the resolved subscription's own creditsLimitMilliOverride — null
+  // for every account without one, which falls back to the shared
+  // PLAN_CREDIT_LIMITS_MILLI table exactly as before (see reserveCredits).
+  creditsLimitMilliOverride: number | null;
 }
 
 // Resolves which billing period a user's usage should be counted against,
@@ -44,6 +48,7 @@ export async function resolveBillingPeriod(
       planType: PlanType.FREE,
       periodStart: startOfCalendarMonth(now),
       periodEnd: startOfNextCalendarMonth(now),
+      creditsLimitMilliOverride: null,
     };
   }
 
@@ -53,6 +58,7 @@ export async function resolveBillingPeriod(
       planType: subscription.planType,
       periodStart: subscription.currentPeriodStart,
       periodEnd: subscription.currentPeriodEnd,
+      creditsLimitMilliOverride: subscription.creditsLimitMilliOverride,
     };
   }
 
@@ -62,6 +68,7 @@ export async function resolveBillingPeriod(
   return {
     subscriptionId: subscription.id,
     planType: subscription.planType,
+    creditsLimitMilliOverride: subscription.creditsLimitMilliOverride,
     periodStart: startOfCalendarMonth(now),
     periodEnd: startOfNextCalendarMonth(now),
   };
@@ -125,9 +132,10 @@ export async function reserveCredits(
   params: { userId: string; engine: VideoEngine; script: string },
 ): Promise<ReserveCreditsResult> {
   const { userId, engine, script } = params;
-  const { subscriptionId, planType, periodStart, periodEnd } = await resolveBillingPeriod(tx, userId);
+  const { subscriptionId, planType, periodStart, periodEnd, creditsLimitMilliOverride } =
+    await resolveBillingPeriod(tx, userId);
 
-  const limitMilli = PLAN_CREDIT_LIMITS_MILLI[planType];
+  const limitMilli = creditsLimitMilliOverride ?? PLAN_CREDIT_LIMITS_MILLI[planType];
   const usedMilli = await usedCreditsMilliForPeriod(tx, userId, periodStart, periodEnd);
 
   const estimatedDurationSeconds = estimateDurationSeconds(script);

@@ -112,7 +112,7 @@ export default async function AdminEnterpriseDetailPage({
 
   const platformFeeSubscription = await prisma.subscription.findFirst({
     where: { enterpriseId: id, billingComponent: "PLATFORM_FEE" },
-    select: { id: true, unitAmountCents: true, currency: true, billingProvider: true },
+    select: { id: true, unitAmountCents: true, currency: true, billingProvider: true, creditsLimitMilliOverride: true },
   });
 
   const canManage = canManageEnterprises(actorRole);

@@ -45,7 +45,7 @@ export async function PUT(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { unitAmountCents, currency, billingProvider, stripeCustomerId, gocardlessCustomerId } =
+  const { unitAmountCents, currency, billingProvider, stripeCustomerId, gocardlessCustomerId, creditsLimitMilliOverride } =
     parsed.data;
 
   // Exactly one PLATFORM_FEE row per enterprise — update it if it exists,
@@ -55,7 +55,7 @@ export async function PUT(
   // explicit find-then-write rather than a real upsert().
   const existing = await prisma.subscription.findFirst({
     where: { enterpriseId, billingComponent: "PLATFORM_FEE" },
-    select: { id: true },
+    select: { id: true, creditsLimitMilliOverride: true },
   });
 
   const data = {
@@ -66,20 +66,24 @@ export async function PUT(
     currency,
     billingProvider: billingProvider as BillingProvider,
     status: "ACTIVE" as const,
-    planType: "ENTERPRISE" as const,
+    // Manually-tracked Phase 1 billing — never the real self-serve
+    // ENTERPRISE plan (that's billingComponent STANDARD). See PlanType's
+    // schema comment.
+    planType: "LEGACY" as const,
     stripeCustomerId: stripeCustomerId ?? null,
     gocardlessCustomerId: gocardlessCustomerId ?? null,
+    creditsLimitMilliOverride,
   };
 
   const subscription = existing
     ? await prisma.subscription.update({
         where: { id: existing.id },
         data,
-        select: { id: true, unitAmountCents: true, currency: true, billingProvider: true },
+        select: { id: true, unitAmountCents: true, currency: true, billingProvider: true, creditsLimitMilliOverride: true },
       })
     : await prisma.subscription.create({
         data,
-        select: { id: true, unitAmountCents: true, currency: true, billingProvider: true },
+        select: { id: true, unitAmountCents: true, currency: true, billingProvider: true, creditsLimitMilliOverride: true },
       });
 
   await writeAuditLog({
@@ -87,7 +91,14 @@ export async function PUT(
     action: "set_enterprise_platform_fee",
     entityType: ENTITY_TYPES.SUBSCRIPTION,
     entityId: subscription.id,
-    metadata: { enterpriseId, unitAmountCents, currency, billingProvider },
+    metadata: {
+      enterpriseId,
+      unitAmountCents,
+      currency,
+      billingProvider,
+      creditsLimitMilliOverride,
+      previousCreditsLimitMilliOverride: existing?.creditsLimitMilliOverride ?? null,
+    },
   });
 
   return NextResponse.json({ subscription });

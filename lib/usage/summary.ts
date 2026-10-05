@@ -7,6 +7,11 @@ export type UsageSummary = {
   periodStart: Date;
   periodEnd: Date;
   planType: string;
+  // Millicredits are the ledger's unit; the page shows credits. Null means
+  // no real cap applies (the shared per-plan placeholder is effectively
+  // unlimited) — only set when the resolved subscription carries a real
+  // creditsLimitMilliOverride (see lib/usage/ledger.ts).
+  creditsLimit: number | null;
   // Millicredits are the ledger's unit; the page shows credits.
   creditsUsed: number;
   videosStarted: number;
@@ -93,6 +98,7 @@ export async function getUsageSummary(userId: string): Promise<UsageSummary> {
     periodStart,
     periodEnd,
     planType: period.planType,
+    creditsLimit: period.creditsLimitMilliOverride != null ? period.creditsLimitMilliOverride / 1000 : null,
     creditsUsed: creditsMilli / 1000,
     videosStarted: videos.filter((v) => v.status !== "FAILED").length,
     videosCompleted,

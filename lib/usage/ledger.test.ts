@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const subscriptionFindFirst = vi.fn();
+const subscriptionFindMany = vi.fn();
 const ledgerGroupBy = vi.fn();
 const ledgerCreate = vi.fn();
 const ledgerUpdate = vi.fn();
@@ -13,7 +13,7 @@ const transaction = vi.fn();
 // Vitest hoists vi.mock calls above all imports in this file.
 vi.mock("@/lib/prisma", () => ({
   default: {
-    subscription: { findFirst: (...args: unknown[]) => subscriptionFindFirst(...args) },
+    subscription: { findMany: (...args: unknown[]) => subscriptionFindMany(...args) },
     usageLedgerEntry: {
       groupBy: (...args: unknown[]) => ledgerGroupBy(...args),
       create: (...args: unknown[]) => ledgerCreate(...args),
@@ -39,15 +39,26 @@ import type { Prisma } from "@/app/generated/prisma/client";
 // resolveBillingPeriod/reserveCredits, which only ever call methods through
 // their `tx` parameter — never the module-level `prisma` singleton.
 const fakeTx = {
-  subscription: { findFirst: (...args: unknown[]) => subscriptionFindFirst(...args) },
+  subscription: { findMany: (...args: unknown[]) => subscriptionFindMany(...args) },
   usageLedgerEntry: {
     groupBy: (...args: unknown[]) => ledgerGroupBy(...args),
     create: (...args: unknown[]) => ledgerCreate(...args),
   },
 } as unknown as Prisma.TransactionClient;
 
+// Minimal shape getApplicableSubscription's sort needs beyond the fields a
+// given test actually cares about — billingComponent for priority,
+// createdAt/id for the tiebreak. Merged with per-test overrides.
+function fakeSub(overrides: Record<string, unknown>) {
+  return {
+    billingComponent: "STANDARD",
+    createdAt: new Date("2026-01-01"),
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
-  subscriptionFindFirst.mockReset();
+  subscriptionFindMany.mockReset();
   ledgerGroupBy.mockReset();
   ledgerCreate.mockReset();
   ledgerUpdate.mockReset();
@@ -59,12 +70,15 @@ describe("resolveBillingPeriod", () => {
   it("uses the subscription's real currentPeriodStart/End when present", async () => {
     const periodStart = new Date("2026-08-01");
     const periodEnd = new Date("2026-09-01");
-    subscriptionFindFirst.mockResolvedValueOnce({
-      id: "sub_1",
-      planType: PlanType.CREATOR,
-      currentPeriodStart: periodStart,
-      currentPeriodEnd: periodEnd,
-    });
+    subscriptionFindMany.mockResolvedValueOnce([
+      fakeSub({
+        id: "sub_1",
+        planType: PlanType.CREATOR,
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        creditsLimitMilliOverride: null,
+      }),
+    ]);
 
     const result = await resolveBillingPeriod(fakeTx, "user_1");
 
@@ -73,33 +87,57 @@ describe("resolveBillingPeriod", () => {
       planType: PlanType.CREATOR,
       periodStart,
       periodEnd,
+      creditsLimitMilliOverride: null,
     });
   });
 
   it("falls back to a calendar-month window when no subscription applies", async () => {
-    subscriptionFindFirst.mockResolvedValue(null); // both the personal and enterprise-owner lookups
+    subscriptionFindMany.mockResolvedValue([]); // both the personal and enterprise-owner lookups
 
     const result = await resolveBillingPeriod(fakeTx, "user_2");
 
     expect(result.subscriptionId).toBeNull();
     expect(result.planType).toBe(PlanType.FREE);
+    expect(result.creditsLimitMilliOverride).toBeNull();
     expect(result.periodStart.getDate()).toBe(1);
     expect(result.periodEnd.getTime()).toBeGreaterThan(result.periodStart.getTime());
   });
 
   it("falls back to a calendar-month window when the subscription has no period fields", async () => {
-    subscriptionFindFirst.mockResolvedValueOnce({
-      id: "sub_2",
-      planType: PlanType.ENTERPRISE,
-      currentPeriodStart: null,
-      currentPeriodEnd: null,
-    });
+    subscriptionFindMany.mockResolvedValueOnce([
+      fakeSub({
+        id: "sub_2",
+        planType: PlanType.ENTERPRISE,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        creditsLimitMilliOverride: null,
+      }),
+    ]);
 
     const result = await resolveBillingPeriod(fakeTx, "user_3");
 
     expect(result.subscriptionId).toBe("sub_2");
     expect(result.planType).toBe(PlanType.ENTERPRISE);
     expect(result.periodStart.getDate()).toBe(1);
+  });
+
+  it("passes a non-null creditsLimitMilliOverride through unchanged", async () => {
+    const periodStart = new Date("2026-08-01");
+    const periodEnd = new Date("2026-09-01");
+    subscriptionFindMany.mockResolvedValueOnce([
+      fakeSub({
+        id: "sub_legacy",
+        planType: PlanType.LEGACY,
+        billingComponent: "PLATFORM_FEE",
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        creditsLimitMilliOverride: 20040,
+      }),
+    ]);
+
+    const result = await resolveBillingPeriod(fakeTx, "user_legacy");
+
+    expect(result.creditsLimitMilliOverride).toBe(20040);
   });
 });
 
@@ -108,12 +146,15 @@ describe("reserveCredits", () => {
   const periodEnd = new Date("2026-09-01");
 
   beforeEach(() => {
-    subscriptionFindFirst.mockResolvedValueOnce({
-      id: "sub_1",
-      planType: PlanType.CREATOR,
-      currentPeriodStart: periodStart,
-      currentPeriodEnd: periodEnd,
-    });
+    subscriptionFindMany.mockResolvedValueOnce([
+      fakeSub({
+        id: "sub_1",
+        planType: PlanType.CREATOR,
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        creditsLimitMilliOverride: null,
+      }),
+    ]);
   });
 
   it("reserves credits and creates a RESERVED row when under the limit", async () => {
@@ -158,8 +199,8 @@ describe("reserveCredits", () => {
     // Override the outer beforeEach's CREATOR mock — no subscription
     // resolves to a FREE fallback, which has a 0 credit limit (see
     // lib/heygen/credits.ts), so any non-zero estimate is over.
-    subscriptionFindFirst.mockReset();
-    subscriptionFindFirst.mockResolvedValue(null);
+    subscriptionFindMany.mockReset();
+    subscriptionFindMany.mockResolvedValue([]);
     ledgerGroupBy.mockResolvedValue([]);
 
     const result = await reserveCredits(fakeTx, {
@@ -174,17 +215,50 @@ describe("reserveCredits", () => {
     }
     expect(ledgerCreate).not.toHaveBeenCalled();
   });
+
+  it("honors a non-null creditsLimitMilliOverride instead of the plan's placeholder limit", async () => {
+    // CREATOR's placeholder limit is effectively unlimited (see
+    // lib/heygen/credits.ts) — an override must still be enforced over it.
+    subscriptionFindMany.mockReset();
+    subscriptionFindMany.mockResolvedValueOnce([
+      fakeSub({
+        id: "sub_capped",
+        planType: PlanType.LEGACY,
+        billingComponent: "PLATFORM_FEE",
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        creditsLimitMilliOverride: 100, // far below what a long script would need
+      }),
+    ]);
+    ledgerGroupBy.mockResolvedValue([]);
+
+    const result = await reserveCredits(fakeTx, {
+      userId: "user_capped",
+      engine: "AVATAR_III" as never,
+      script: "a script long enough that its estimated duration costs well over 100 millicredits on Avatar III",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("OVER_LIMIT");
+      expect(result.creditsLimitMilli).toBe(100);
+    }
+    expect(ledgerCreate).not.toHaveBeenCalled();
+  });
 });
 
 describe("reserveCreditsForGeneration", () => {
   it("opens a transaction and delegates to reserveCredits", async () => {
     transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(fakeTx));
-    subscriptionFindFirst.mockResolvedValueOnce({
-      id: "sub_1",
-      planType: PlanType.CREATOR,
-      currentPeriodStart: new Date("2026-08-01"),
-      currentPeriodEnd: new Date("2026-09-01"),
-    });
+    subscriptionFindMany.mockResolvedValueOnce([
+      fakeSub({
+        id: "sub_1",
+        planType: PlanType.CREATOR,
+        currentPeriodStart: new Date("2026-08-01"),
+        currentPeriodEnd: new Date("2026-09-01"),
+        creditsLimitMilliOverride: null,
+      }),
+    ]);
     ledgerGroupBy.mockResolvedValue([]);
     ledgerCreate.mockResolvedValue({ id: "ledger_3" });
 

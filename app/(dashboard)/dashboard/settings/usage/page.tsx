@@ -57,10 +57,21 @@ export default async function UsagePage() {
           <Stat label="Credits used" value={usage.creditsUsed.toFixed(1)} hint="Includes videos still being made" />
         </dl>
 
-        <p className="text-sm text-muted-foreground">
-          There is no monthly credit limit on your plan at the moment, so nothing is blocked. If that changes, your
-          remaining balance will show here.
-        </p>
+        {usage.creditsLimit != null ? (
+          <p className="text-sm text-muted-foreground">
+            You&apos;ve used <span className="font-medium text-foreground">{usage.creditsUsed.toFixed(1)}</span> of{" "}
+            <span className="font-medium text-foreground">{usage.creditsLimit.toFixed(1)}</span> credits this period —{" "}
+            <span className="font-medium text-foreground">
+              {Math.max(0, usage.creditsLimit - usage.creditsUsed).toFixed(1)}
+            </span>{" "}
+            remaining.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            There is no monthly credit limit on your plan at the moment, so nothing is blocked. If that changes, your
+            remaining balance will show here.
+          </p>
+        )}
       </section>
 
       {empty ? (

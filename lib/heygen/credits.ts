@@ -33,6 +33,11 @@ export const PLAN_CREDIT_LIMITS_MILLI: Record<PlanType, number> = {
   FREE: 0,
   CREATOR: PLACEHOLDER_HIGH_LIMIT_MILLI,
   ENTERPRISE: PLACEHOLDER_HIGH_LIMIT_MILLI,
+  // Fallback only — a LEGACY row with no explicit creditsLimitMilliOverride
+  // (see Subscription's schema comment) still gets this same effectively-
+  // unlimited placeholder. A real per-client cap (e.g. D2 Legal's 20,040)
+  // always comes from that override, never from this shared constant.
+  LEGACY: PLACEHOLDER_HIGH_LIMIT_MILLI,
   MID_MARKET: PLACEHOLDER_HIGH_LIMIT_MILLI,
   SMALL_BUSINESS: PLACEHOLDER_HIGH_LIMIT_MILLI,
 };

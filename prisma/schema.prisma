@@ -17,6 +17,13 @@ enum PlanType {
   FREE
   CREATOR
   ENTERPRISE
+  // Manually-tracked Phase 1 admin billing (PLATFORM_FEE / AVATAR_STORAGE
+  // Subscription rows created via app/api/admin/enterprises/.../platform-fee
+  // and .../storage-subscription) — distinct from ENTERPRISE, which is the
+  // real self-serve Enterprise-tier plan (billingComponent STANDARD). Every
+  // row of this kind was previously mis-tagged ENTERPRISE; backfilled to
+  // LEGACY on 2026-10-05 (see lib/zz-backfill-legacy-plan-type.test.ts).
+  LEGACY
   // Self-serve marketing-pricing-page tiers (distinct from the personal
   // CREATOR plan and the sales-assisted ENTERPRISE plan) — see
   // components/marketing/pricing-plans.tsx. Corporate (the third public
@@ -317,6 +324,16 @@ model Subscription {
   avatar           Avatar?          @relation(fields: [avatarId], references: [id])
   unitAmountCents  Int?
   currency         String           @default("AUD")
+
+  // Per-subscription override of PLAN_CREDIT_LIMITS_MILLI
+  // (lib/heygen/credits.ts), in millicredits. Null = use the shared
+  // per-plan-type placeholder limit (the default for every row today, since
+  // no plan has a real finalized limit yet). Only ever set on the
+  // STANDARD/PLATFORM_FEE (access-governing) row for an account — never on
+  // an AVATAR_STORAGE row, enforced by that route's schema simply never
+  // accepting this field. See lib/subscription.ts's getApplicableSubscription
+  // for why only one row's value is ever actually read.
+  creditsLimitMilliOverride Int?
 
   // Phase 2 avatar billing automation — set when a self-serve Stripe
   // provision/cancel call fails, so the row is never silently left unbilled.

@@ -83,7 +83,9 @@ export async function POST(
       currency,
       billingProvider: billingProvider as BillingProvider,
       status: "ACTIVE",
-      planType: "ENTERPRISE",
+      // Manually-tracked Phase 1 billing, not the real self-serve ENTERPRISE
+      // plan (billingComponent STANDARD) — see PlanType's schema comment.
+      planType: "LEGACY",
       stripeCustomerId: stripeCustomerId ?? null,
       stripeSubscriptionId: stripeSubscriptionId ?? null,
       gocardlessCustomerId: gocardlessCustomerId ?? null,
