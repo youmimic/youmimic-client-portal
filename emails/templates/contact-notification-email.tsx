@@ -27,7 +27,7 @@ export function ContactNotificationEmail({
     <Html>
       <Head />
       <Preview>
-        New demo inquiry from {name} at {companyName}
+        New enquiry from {name} at {companyName}
       </Preview>
       <Body
         style={{
@@ -60,7 +60,7 @@ export function ContactNotificationEmail({
                 margin: 0,
               }}
             >
-              New demo inquiry
+              New enquiry
             </Text>
             <Text
               style={{

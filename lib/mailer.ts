@@ -137,7 +137,7 @@ export async function sendContactNotificationEmail(data: ContactInput) {
   const { data: emailData, error } = await resend.emails.send({
     from,
     to: [to],
-    subject: `New demo inquiry from ${data.name} (${data.companyName})`,
+    subject: `New enquiry from the contact page: ${data.name} (${data.companyName})`,
     react: ContactNotificationEmail(data),
     tags: [{ name: "category", value: "contact_inquiry" }],
   });
