@@ -445,6 +445,11 @@ export function EnterpriseMembersTable({
   const [reason, setReason] = useState("");
   const [state, setState] = useState<ActionState>(idle);
 
+  const [addOpen, setAddOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [addState, setAddState] = useState<ActionState>(idle);
+
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
       setTarget(null);
@@ -470,13 +475,46 @@ export function EnterpriseMembersTable({
     }
   }
 
-  if (members.length === 0) {
-    return <p className="text-sm text-muted-foreground">No members.</p>;
+  function handleAddOpenChange(nextOpen: boolean) {
+    setAddOpen(nextOpen);
+    if (!nextOpen) {
+      setNewName("");
+      setNewEmail("");
+      setAddState(idle);
+    }
+  }
+
+  async function handleAddClient() {
+    setAddState({ loading: true, error: null });
+    try {
+      await postAction(enterpriseId, "create-member", {
+        name: newName.trim(),
+        email: newEmail.trim(),
+      });
+      setAddOpen(false);
+      setNewName("");
+      setNewEmail("");
+      setAddState(idle);
+      router.refresh();
+    } catch (e) {
+      setAddState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+    }
   }
 
   return (
     <>
-      <div className="overflow-x-auto">
+      {canManage && (
+        <div className="mb-3">
+          <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
+            Add Client
+          </Button>
+        </div>
+      )}
+
+      {members.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No members.</p>
+      ) : (
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left">
@@ -514,7 +552,54 @@ export function EnterpriseMembersTable({
             ))}
           </tbody>
         </table>
-      </div>
+        </div>
+      )}
+
+      <Dialog open={addOpen} onOpenChange={handleAddOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Client</DialogTitle>
+            <DialogDescription>
+              Creates a new account under this enterprise and emails them a
+              link to set their password — no invite-acceptance step needed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="new-client-name">Name</Label>
+              <Input
+                id="new-client-name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-client-email">Email</Label>
+              <Input
+                id="new-client-email"
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+              />
+            </div>
+          </div>
+          {addState.error && <p className="text-sm text-destructive">{addState.error}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
+            <Button
+              size="sm"
+              disabled={
+                addState.loading ||
+                newName.trim().length === 0 ||
+                newEmail.trim().length === 0
+              }
+              onClick={handleAddClient}
+            >
+              {addState.loading ? "Adding…" : "Add Client"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={target !== null} onOpenChange={handleOpenChange}>
         <DialogContent>
