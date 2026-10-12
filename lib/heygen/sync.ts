@@ -228,24 +228,75 @@ export async function addAvatarLookFromHeyGen(
   }
 }
 
+// Generation always needs a real look id, not a group/avatar-level id —
+// Avatar.heygenAvatarId being storable as either (see syncAvatarFromHeyGen's
+// comment) is exactly what broke video generation for a test avatar created
+// from a group id with no look of its own: generateAvatarVideo's "no looks
+// recorded, fall back to Avatar.heygenAvatarId" path sent the group id to
+// HeyGen as a look_id and got "avatar look not found" back (confirmed live
+// against Rachel Scanlon's avatar on 2026-10-12, the same one the "Test
+// avatar" feature below was built for). If the supplied id turns out to be a
+// group id, this looks for a look id already known for it elsewhere in our
+// own DB (e.g. one an admin added via "Add look" on the real client avatar)
+// rather than storing an id the test avatar could never actually generate
+// with.
+async function resolveUsableLookId(
+  heygenId: string,
+): Promise<{ ok: true; lookId: string } | { ok: false; error: string }> {
+  try {
+    await getHeyGenAvatarLook(heygenId);
+    return { ok: true, lookId: heygenId };
+  } catch (lookErr) {
+    if (!isNotFound(lookErr)) {
+      const message = lookErr instanceof HeyGenApiError ? lookErr.message : "Could not reach HeyGen to verify this id.";
+      return { ok: false, error: message };
+    }
+  }
+
+  try {
+    await getHeyGenAvatar(heygenId);
+  } catch (avatarErr) {
+    if (isNotFound(avatarErr)) {
+      return { ok: false, error: "HeyGen doesn't recognise this id, as either an avatar or a look. Double-check it was copied correctly." };
+    }
+    const message = avatarErr instanceof HeyGenApiError ? avatarErr.message : "Could not reach HeyGen to verify this id.";
+    return { ok: false, error: message };
+  }
+
+  const sourceAvatar = await prisma.avatar.findFirst({
+    where: { heygenAvatarId: heygenId },
+    select: { looks: { where: { status: "ready" }, select: { heygenLookId: true }, take: 1 } },
+  });
+  const knownLookId = sourceAvatar?.looks[0]?.heygenLookId;
+  if (!knownLookId) {
+    return {
+      ok: false,
+      error:
+        "This id is a HeyGen avatar group, not a specific look — add a real look id to the client's avatar first (via \"Add look\"), then test again.",
+    };
+  }
+  return { ok: true, lookId: knownLookId };
+}
+
 // "Test avatar" — finds or creates an Avatar row under the acting admin's
 // own account for a given HeyGen id, so they can open the real Avatar
 // Studio and generate a real video to confirm it actually works, rather
 // than borrowing a client's account (as happened with Rachel Scanlon's
 // avatar on 2026-09-28) or trusting a read-only status check alone —
 // GET-based checks already proved unreliable as a stand-in for whether
-// generation itself will succeed. Idempotent per (adminUserId, heygenId):
-// repeated clicks reuse the same test row instead of piling up duplicates.
+// generation itself will succeed. Idempotent per (adminUserId, resolved look
+// id): repeated clicks reuse the same test row instead of piling up
+// duplicates.
 export async function getOrCreateTestAvatarLink(
   adminUserId: string,
   heygenId: string,
   displayName: string,
 ): Promise<{ ok: true; avatarId: string } | { ok: false; error: string }> {
-  const verified = await verifyHeygenAvatarId(heygenId);
-  if (!verified.ok) return verified;
+  const resolved = await resolveUsableLookId(heygenId);
+  if (!resolved.ok) return resolved;
 
   const existing = await prisma.avatar.findFirst({
-    where: { userId: adminUserId, heygenAvatarId: heygenId },
+    where: { userId: adminUserId, heygenAvatarId: resolved.lookId },
     select: { id: true },
   });
 
@@ -253,15 +304,15 @@ export async function getOrCreateTestAvatarLink(
     ? existing.id
     : (
         await prisma.avatar.create({
-          data: { userId: adminUserId, name: `[Test] ${displayName}`, heygenAvatarId: heygenId },
+          data: { userId: adminUserId, name: `[Test] ${displayName}`, heygenAvatarId: resolved.lookId },
           select: { id: true },
         })
       ).id;
 
-  // Best-effort: verifyHeygenAvatarId already confirmed the id resolves, so
+  // Best-effort: resolveUsableLookId already confirmed the id resolves, so
   // this should succeed too, but even if it doesn't the row still exists
   // and can be retried (e.g. via the admin panel's own "Sync now").
-  await syncAvatarFromHeyGen(avatarId, heygenId);
+  await syncAvatarFromHeyGen(avatarId, resolved.lookId);
 
   return { ok: true, avatarId };
 }
