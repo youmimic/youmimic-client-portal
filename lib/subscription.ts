@@ -53,11 +53,17 @@ function pickApplicable(subs: Subscription[]): Subscription | null {
 // one row was ever active at once, but not once an account can genuinely
 // have several (see BILLING_COMPONENT_PRIORITY's comment).
 //
-// Note: this only resolves a subscription for the user themselves or an
-// enterprise they *own* — an enterprise member who isn't the owner has no
-// applicable subscription here. That matches every existing caller's actual
-// access-control needs; there's no live path today where a non-owner member
-// reaches code gated by this function.
+// Resolution order: the user's own personal subscription, then an
+// enterprise they *own*, then — since 2026-10-12 — an enterprise they're
+// merely a *member* of. That last branch was deliberately left out
+// originally ("no live path today where a non-owner member reaches code
+// gated by this function" — see HANDOFF.md's 2026-08 bookings-gate note,
+// which flagged this as a pending product decision rather than a bug) until
+// a real member of a real enterprise (CourseRebel) hit it: blocked from
+// Avatar Studio and redirected to billing despite their enterprise having a
+// perfectly active subscription, solely because they weren't its owner. A
+// member inherits the same access as the owner here — they share the same
+// billing entity and features, just not who manages payment.
 export async function getApplicableSubscription(
   userId: string,
   client: SubscriptionQueryClient = prisma,
@@ -68,13 +74,22 @@ export async function getApplicableSubscription(
   const personalSub = pickApplicable(personalSubs);
   if (personalSub) return personalSub;
 
-  const enterpriseSubs = await client.subscription.findMany({
+  const ownedEnterpriseSubs = await client.subscription.findMany({
     where: {
       enterprise: { ownerUserId: userId },
       status: { in: ACTIVE_STATUSES },
     },
   });
-  return pickApplicable(enterpriseSubs);
+  const ownedSub = pickApplicable(ownedEnterpriseSubs);
+  if (ownedSub) return ownedSub;
+
+  const memberEnterpriseSubs = await client.subscription.findMany({
+    where: {
+      enterprise: { members: { some: { userId } } },
+      status: { in: ACTIVE_STATUSES },
+    },
+  });
+  return pickApplicable(memberEnterpriseSubs);
 }
 
 export async function userHasActiveSubscription(userId: string): Promise<boolean> {

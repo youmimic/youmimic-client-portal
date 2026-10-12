@@ -49,7 +49,7 @@ export default async function UsagePage() {
       <section aria-labelledby="usage-period" className="space-y-3">
         <div>
           <h2 id="usage-period" className="text-base font-semibold tracking-tight">
-            This billing period
+            Your usage this billing period
           </h2>
           <p className="text-sm text-muted-foreground">
             {formatShortDate(usage.periodStart)} to {formatShortDate(usage.periodEnd)}. Figures are estimates based on
@@ -70,35 +70,82 @@ export default async function UsagePage() {
           <Stat label="Credits used" value={usage.creditsUsed.toFixed(1)} hint="Includes videos still being made" />
         </dl>
 
-        {usage.creditsLimit != null ? (
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                <span className="font-medium text-foreground">{usage.creditsUsed.toFixed(1)}</span> of{" "}
-                <span className="font-medium text-foreground">{usage.creditsLimit.toFixed(1)}</span> credits used
-              </span>
-              <span className="font-medium text-foreground">
-                {Math.max(0, usage.creditsLimit - usage.creditsUsed).toFixed(1)} remaining
-              </span>
+        {/* The cap is enterprise-wide, not personal — shown once in the
+            Enterprise usage section below instead of here, where "X of 30"
+            would misleadingly read as this person's own allowance. */}
+        {!usage.enterprise &&
+          (usage.creditsLimit != null ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  <span className="font-medium text-foreground">{usage.creditsUsed.toFixed(1)}</span> of{" "}
+                  <span className="font-medium text-foreground">{usage.creditsLimit.toFixed(1)}</span> credits used
+                </span>
+                <span className="font-medium text-foreground">
+                  {Math.max(0, usage.creditsLimit - usage.creditsUsed).toFixed(1)} remaining
+                </span>
+              </div>
+              <Progress
+                value={creditsPct}
+                indicatorClassName={
+                  creditsPct >= 90
+                    ? "bg-destructive"
+                    : creditsPct >= 70
+                      ? "bg-amber-500"
+                      : "bg-primary"
+                }
+              />
             </div>
-            <Progress
-              value={creditsPct}
-              indicatorClassName={
-                creditsPct >= 90
-                  ? "bg-destructive"
-                  : creditsPct >= 70
-                    ? "bg-amber-500"
-                    : "bg-primary"
-              }
-            />
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            There is no monthly credit limit on your plan at the moment, so nothing is blocked. If that changes, your
-            remaining balance will show here.
-          </p>
-        )}
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              There is no monthly credit limit on your plan at the moment, so nothing is blocked. If that changes,
+              your remaining balance will show here.
+            </p>
+          ))}
       </section>
+
+      {usage.enterprise && (
+        <section aria-labelledby="enterprise-usage" className="space-y-3">
+          <div>
+            <h2 id="enterprise-usage" className="text-base font-semibold tracking-tight">
+              Enterprise usage
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Shared across everyone on your enterprise&apos;s plan — the same cap and total every member sees, not
+              just your own activity above.
+            </p>
+          </div>
+          {usage.creditsLimit != null ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  <span className="font-medium text-foreground">{usage.enterprise.creditsUsed.toFixed(1)}</span> of{" "}
+                  <span className="font-medium text-foreground">{usage.creditsLimit.toFixed(1)}</span> credits used
+                </span>
+                <span className="font-medium text-foreground">
+                  {Math.max(0, usage.creditsLimit - usage.enterprise.creditsUsed).toFixed(1)} remaining
+                </span>
+              </div>
+              <Progress
+                value={
+                  usage.creditsLimit > 0 ? Math.min(100, (usage.enterprise.creditsUsed / usage.creditsLimit) * 100) : 100
+                }
+                indicatorClassName={
+                  usage.creditsLimit > 0 && usage.enterprise.creditsUsed / usage.creditsLimit >= 0.9
+                    ? "bg-destructive"
+                    : usage.creditsLimit > 0 && usage.enterprise.creditsUsed / usage.creditsLimit >= 0.7
+                      ? "bg-amber-500"
+                      : "bg-primary"
+                }
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              There is no monthly credit limit on your enterprise&apos;s plan at the moment, so nothing is blocked.
+            </p>
+          )}
+        </section>
+      )}
 
       {empty ? (
         <EmptyState

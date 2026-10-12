@@ -7,12 +7,17 @@ export type UsageSummary = {
   periodStart: Date;
   periodEnd: Date;
   planType: string;
+  // The cap — personal for an individual account, or the enterprise's
+  // shared cap (same number for every member) for an enterprise one.
   // Millicredits are the ledger's unit; the page shows credits. Null means
   // no real cap applies (the shared per-plan placeholder is effectively
   // unlimited) — only set when the resolved subscription carries a real
   // creditsLimitMilliOverride (see lib/usage/ledger.ts).
   creditsLimit: number | null;
-  // Millicredits are the ledger's unit; the page shows credits.
+  // This viewer's own credits used this period. For a personal account this
+  // is the whole picture against creditsLimit above. For an enterprise
+  // account it's just this person's share of the shared pool — see
+  // `enterprise` below for the pool's actual total against that same cap.
   creditsUsed: number;
   videosStarted: number;
   videosCompleted: number;
@@ -30,17 +35,29 @@ export type UsageSummary = {
     estimatedCostCents: number | null;
     projectId: string | null;
   }[];
+  // Set only for an enterprise account (owner or member — see
+  // lib/subscription.ts) — the shared pool every member draws against
+  // (against the same creditsLimit above), same number regardless of who's
+  // viewing. Null for a personal account, which has no separate pool to
+  // report beyond creditsUsed/creditsLimit above.
+  enterprise: { creditsUsed: number } | null;
 };
 
-// What the Usage page shows: this billing period's activity for one user. All
-// figures are estimates. Cost is derived from finished video length, and
-// credits come from the usage ledger (reserved amounts until a video
-// finishes, then the final charge).
+// What the Usage page shows: this billing period's activity. The headline
+// stats (videos made, length, cost, credits used, recent videos) are always
+// this viewer's own — someone's personal "Videos made" card showing a
+// teammate's videos instead of their own was more confusing than useful,
+// and the per-video page is owner-scoped anyway so a teammate's row in
+// "recent" couldn't even be opened. The credit *pool* is the one number
+// that's genuinely shared on an enterprise account (lib/usage/ledger.ts
+// enforces the cap pooled by subscriptionId, not per member), so that's
+// reported separately via `enterprise` rather than blended into the
+// personal figures above it.
 export async function getUsageSummary(userId: string): Promise<UsageSummary> {
   const period = await prisma.$transaction((tx) => resolveBillingPeriod(tx, userId));
-  const { periodStart, periodEnd } = period;
+  const { periodStart, periodEnd, subscriptionId, enterpriseId, creditsLimitMilliOverride } = period;
 
-  const [ledger, videos] = await Promise.all([
+  const [personalLedger, enterpriseLedger, videos] = await Promise.all([
     prisma.usageLedgerEntry.groupBy({
       by: ["engine", "status"],
       where: {
@@ -51,6 +68,20 @@ export async function getUsageSummary(userId: string): Promise<UsageSummary> {
       },
       _sum: { creditsReservedMilli: true, creditsChargedMilli: true },
     }),
+    // Only needed for an enterprise account — matches lib/usage/ledger.ts's
+    // own enforcement scoping (pooled by subscriptionId, not userId).
+    enterpriseId && subscriptionId
+      ? prisma.usageLedgerEntry.groupBy({
+          by: ["status"],
+          where: {
+            subscriptionId,
+            periodStart,
+            periodEnd,
+            status: { in: [UsageLedgerStatus.RESERVED, UsageLedgerStatus.RECONCILED] },
+          },
+          _sum: { creditsReservedMilli: true, creditsChargedMilli: true },
+        })
+      : null,
     prisma.generatedVideo.findMany({
       where: { userId, createdAt: { gte: periodStart, lt: periodEnd } },
       orderBy: { createdAt: "desc" },
@@ -70,7 +101,7 @@ export async function getUsageSummary(userId: string): Promise<UsageSummary> {
 
   const creditsByEngine = new Map<VideoEngine, number>();
   let creditsMilli = 0;
-  for (const g of ledger) {
+  for (const g of personalLedger) {
     const milli = g.status === UsageLedgerStatus.RESERVED ? (g._sum.creditsReservedMilli ?? 0) : (g._sum.creditsChargedMilli ?? 0);
     creditsMilli += milli;
     creditsByEngine.set(g.engine, (creditsByEngine.get(g.engine) ?? 0) + milli);
@@ -94,11 +125,20 @@ export async function getUsageSummary(userId: string): Promise<UsageSummary> {
     engines.set(v.engine, row);
   }
 
+  let enterpriseSummary: UsageSummary["enterprise"] = null;
+  if (enterpriseLedger) {
+    let enterpriseMilli = 0;
+    for (const g of enterpriseLedger) {
+      enterpriseMilli += g.status === UsageLedgerStatus.RESERVED ? (g._sum.creditsReservedMilli ?? 0) : (g._sum.creditsChargedMilli ?? 0);
+    }
+    enterpriseSummary = { creditsUsed: enterpriseMilli / 1000 };
+  }
+
   return {
     periodStart,
     periodEnd,
     planType: period.planType,
-    creditsLimit: period.creditsLimitMilliOverride != null ? period.creditsLimitMilliOverride / 1000 : null,
+    creditsLimit: creditsLimitMilliOverride != null ? creditsLimitMilliOverride / 1000 : null,
     creditsUsed: creditsMilli / 1000,
     videosStarted: videos.filter((v) => v.status !== "FAILED").length,
     videosCompleted,
@@ -110,5 +150,6 @@ export async function getUsageSummary(userId: string): Promise<UsageSummary> {
       credits: (creditsByEngine.get(engine) ?? 0) / 1000,
     })),
     recent: videos.slice(0, 8),
+    enterprise: enterpriseSummary,
   };
 }

@@ -23,6 +23,11 @@ export interface BillingPeriod {
   // for every account without one, which falls back to the shared
   // PLAN_CREDIT_LIMITS_MILLI table exactly as before (see reserveCredits).
   creditsLimitMilliOverride: number | null;
+  // Set when the resolved subscription belongs to an enterprise (owned or
+  // merely a member of — see lib/subscription.ts) rather than a personal
+  // account. lib/usage/summary.ts uses this to pool usage display across
+  // every member sharing the subscription, not just the viewer.
+  enterpriseId: string | null;
 }
 
 // Resolves which billing period a user's usage should be counted against,
@@ -49,6 +54,7 @@ export async function resolveBillingPeriod(
       periodStart: startOfCalendarMonth(now),
       periodEnd: startOfNextCalendarMonth(now),
       creditsLimitMilliOverride: null,
+      enterpriseId: null,
     };
   }
 
@@ -59,6 +65,7 @@ export async function resolveBillingPeriod(
       periodStart: subscription.currentPeriodStart,
       periodEnd: subscription.currentPeriodEnd,
       creditsLimitMilliOverride: subscription.creditsLimitMilliOverride,
+      enterpriseId: subscription.enterpriseId,
     };
   }
 
@@ -69,6 +76,7 @@ export async function resolveBillingPeriod(
     subscriptionId: subscription.id,
     planType: subscription.planType,
     creditsLimitMilliOverride: subscription.creditsLimitMilliOverride,
+    enterpriseId: subscription.enterpriseId,
     periodStart: startOfCalendarMonth(now),
     periodEnd: startOfNextCalendarMonth(now),
   };
@@ -76,6 +84,7 @@ export async function resolveBillingPeriod(
 
 async function usedCreditsMilliForPeriod(
   tx: Prisma.TransactionClient,
+  subscriptionId: string | null,
   userId: string,
   periodStart: Date,
   periodEnd: Date,
@@ -85,10 +94,18 @@ async function usedCreditsMilliForPeriod(
   // entries count their final charged amount instead, since that's the
   // authoritative figure once known — a single grouped query rather than
   // two separate aggregates.
+  //
+  // Pooled by subscriptionId, not userId: credits are a shared allowance on
+  // the subscription itself (e.g. one enterprise-wide cap), not a separate
+  // per-person allowance for every member who happens to share it — three
+  // members of the same capped enterprise must draw from one pool, not each
+  // get their own full cap. Falls back to userId only when there's no
+  // applicable subscription at all (subscriptionId null), where there's
+  // nothing to pool against anyway.
   const grouped = await tx.usageLedgerEntry.groupBy({
     by: ["status"],
     where: {
-      userId,
+      ...(subscriptionId ? { subscriptionId } : { userId }),
       periodStart,
       periodEnd,
       status: { in: [UsageLedgerStatus.RESERVED, UsageLedgerStatus.RECONCILED] },
@@ -136,7 +153,7 @@ export async function reserveCredits(
     await resolveBillingPeriod(tx, userId);
 
   const limitMilli = creditsLimitMilliOverride ?? PLAN_CREDIT_LIMITS_MILLI[planType];
-  const usedMilli = await usedCreditsMilliForPeriod(tx, userId, periodStart, periodEnd);
+  const usedMilli = await usedCreditsMilliForPeriod(tx, subscriptionId, userId, periodStart, periodEnd);
 
   const estimatedDurationSeconds = estimateDurationSeconds(script);
   const creditsReservedMilli = creditsForDurationMilli(engine, estimatedDurationSeconds);

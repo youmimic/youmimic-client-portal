@@ -491,6 +491,12 @@ export default async function BillingPage({
     await fetchBillingData(session.user.id);
 
   const isEnterpriseOwner = ownedEnterprises.length > 0;
+  // A member's access comes entirely through their enterprise's own
+  // subscription (see lib/subscription.ts's getApplicableSubscription) — an
+  // unrelated "Subscribe" CTA for a personal plan they'd never use is
+  // actively misleading, not just redundant, so this is suppressed the same
+  // way it already is for owners.
+  const hasEnterpriseAffiliation = isEnterpriseOwner || memberEnterprises.length > 0;
   const { reason } = await searchParams;
   const redirectNotice = (reason && REDIRECT_NOTICES[reason]) ?? null;
 
@@ -508,8 +514,8 @@ export default async function BillingPage({
         </div>
       )}
 
-      {/* Personal plan — hidden for enterprise-owner accounts */}
-      {!isEnterpriseOwner && (
+      {/* Personal plan — hidden for enterprise-owner and enterprise-member accounts */}
+      {!hasEnterpriseAffiliation && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Personal plan

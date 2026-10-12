@@ -53,6 +53,7 @@ function fakeSub(overrides: Record<string, unknown>) {
   return {
     billingComponent: "STANDARD",
     createdAt: new Date("2026-01-01"),
+    enterpriseId: null,
     ...overrides,
   };
 }
@@ -88,6 +89,7 @@ describe("resolveBillingPeriod", () => {
       periodStart,
       periodEnd,
       creditsLimitMilliOverride: null,
+      enterpriseId: null,
     });
   });
 
@@ -214,6 +216,47 @@ describe("reserveCredits", () => {
       expect(result.code).toBe("OVER_LIMIT");
     }
     expect(ledgerCreate).not.toHaveBeenCalled();
+  });
+
+  it("pools usage by subscriptionId, not userId — three members sharing one capped enterprise subscription draw from one pool", async () => {
+    // Same enterprise subscription "sub_1" resolves for both members (via
+    // getApplicableSubscription's member fallback — see lib/subscription.ts).
+    // Usage must be summed against that shared subscriptionId, not each
+    // member's own userId, or each would effectively get their own full cap.
+    ledgerGroupBy.mockResolvedValue([]);
+    ledgerCreate.mockResolvedValue({ id: "ledger_pooled" });
+
+    await reserveCredits(fakeTx, { userId: "user_1", engine: "AVATAR_III" as never, script: "hello" });
+
+    expect(ledgerGroupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ subscriptionId: "sub_1" }),
+      }),
+    );
+    // Never falls back to filtering by userId when a subscription applies.
+    const call = ledgerGroupBy.mock.calls[0][0];
+    expect(call.where.userId).toBeUndefined();
+  });
+
+  it("falls back to filtering by userId when no subscription applies at all", async () => {
+    subscriptionFindMany.mockReset();
+    subscriptionFindMany.mockResolvedValue([]); // no applicable subscription — subscriptionId is null
+    ledgerGroupBy.mockResolvedValue([]);
+
+    const result = await reserveCredits(fakeTx, {
+      userId: "user_no_sub",
+      engine: "AVATAR_III" as never,
+      script: "any script",
+    });
+
+    // FREE plan's placeholder limit is 0, so this is expected to be over —
+    // the point of this test is the groupBy call shape, not the outcome.
+    expect(result.ok).toBe(false);
+    expect(ledgerGroupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: "user_no_sub" }),
+      }),
+    );
   });
 
   it("honors a non-null creditsLimitMilliOverride instead of the plan's placeholder limit", async () => {
