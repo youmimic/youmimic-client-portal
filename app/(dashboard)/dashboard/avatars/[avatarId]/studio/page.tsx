@@ -139,6 +139,7 @@ export default async function AvatarStudioPage({
           looks={avatar.looks}
           initial={initial}
           resetFrom={initial ? from : undefined}
+          canViewCost={!!session.user.adminRole}
         />
       ) : (
         <Card>

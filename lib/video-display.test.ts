@@ -64,6 +64,18 @@ describe("generateVideoSchema", () => {
 
   it("rejects unsupported formats", () => {
     expect(generateVideoSchema.safeParse({ script: "Hi", aspectRatio: "3:2" }).success).toBe(false);
-    expect(generateVideoSchema.safeParse({ script: "Hi", resolution: "4k" }).success).toBe(false);
+  });
+
+  it("accepts 4k with the default engine (Avatar III)", () => {
+    expect(generateVideoSchema.safeParse({ script: "Hi", resolution: "4k" }).success).toBe(true);
+  });
+
+  it("rejects 4k paired with any engine other than Avatar III", () => {
+    expect(
+      generateVideoSchema.safeParse({ script: "Hi", resolution: "4k", engine: "avatar_iv" }).success,
+    ).toBe(false);
+    expect(
+      generateVideoSchema.safeParse({ script: "Hi", resolution: "4k", engine: "avatar_v" }).success,
+    ).toBe(false);
   });
 });

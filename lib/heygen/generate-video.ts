@@ -217,7 +217,7 @@ export type RefreshResult =
 export async function refreshGeneratedVideoStatus(generatedVideoId: string, userId: string): Promise<RefreshResult> {
   const row = await prisma.generatedVideo.findFirst({
     where: { id: generatedVideoId, userId },
-    select: { id: true, heygenVideoId: true, status: true, engine: true },
+    select: { id: true, heygenVideoId: true, status: true, engine: true, resolution: true },
   });
 
   if (!row) return { ok: false, code: "NOT_FOUND", error: "Not found" };
@@ -246,7 +246,7 @@ export async function refreshGeneratedVideoStatus(generatedVideoId: string, user
         durationSeconds,
         estimatedCostCents:
           durationSeconds !== undefined
-            ? estimatedCostCents(row.engine, durationSeconds)
+            ? estimatedCostCents(row.engine, durationSeconds, row.resolution)
             : undefined,
       },
       select: { status: true, videoUrl: true },

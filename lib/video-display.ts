@@ -69,13 +69,17 @@ export type GenerationEstimate = {
 // Same inputs the server uses to reserve credits (see lib/usage/ledger.ts),
 // so what the user sees before submitting matches what gets reserved. The
 // wait range is a rough guide only: the provider gives no queue-time figure.
-export function estimateGeneration(script: string, engine: VideoEngineValue): GenerationEstimate {
+export function estimateGeneration(
+  script: string,
+  engine: VideoEngineValue,
+  resolution?: string | null,
+): GenerationEstimate {
   const durationSeconds = estimateDurationSeconds(script);
   const minutes = durationSeconds / 60;
   return {
     durationSeconds,
     credits: creditsForDurationMilli(engine as VideoEngine, durationSeconds) / 1000,
-    costCents: estimatedCostCents(engine as VideoEngine, durationSeconds),
+    costCents: estimatedCostCents(engine as VideoEngine, durationSeconds, resolution),
     waitMinutesLow: Math.max(1, Math.ceil(minutes)),
     waitMinutesHigh: Math.max(3, Math.ceil(minutes * 4)),
   };

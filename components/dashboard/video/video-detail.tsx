@@ -150,7 +150,7 @@ export function VideoDetail({
   const { pollError, checkedAt, checkNow } = useStatusPolling(video, onChange);
   const elapsed = useElapsed(video.createdAt, inProgress);
 
-  const estimate = estimateGeneration(video.script, video.engine);
+  const estimate = estimateGeneration(video.script, video.engine, video.resolution);
   const studioHref = `/dashboard/avatars/${video.avatarId}/studio?from=${video.id}`;
 
   async function refreshUrl() {
@@ -470,7 +470,8 @@ export function VideoDetail({
             <DialogTitle>{video.status === "FAILED" ? "Try this video again?" : "Regenerate this video?"}</DialogTitle>
             <DialogDescription>
               This creates a new video from the same script and settings. Your current video stays as it is. It will use
-              about {estimate.credits.toFixed(1)} credits (around {formatCents(estimate.costCents)}).
+              about {estimate.credits.toFixed(1)} credits
+              {canViewCost && <> (around {formatCents(estimate.costCents)})</>}.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

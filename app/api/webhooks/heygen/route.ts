@@ -88,7 +88,7 @@ export async function POST(req: Request) {
 
   const local = await prisma.generatedVideo.findUnique({
     where: { heygenVideoId: videoId },
-    select: { id: true, lastWebhookEventId: true, engine: true },
+    select: { id: true, lastWebhookEventId: true, engine: true, resolution: true },
   });
   if (!local) {
     return NextResponse.json({ received: true });
@@ -130,7 +130,7 @@ export async function POST(req: Request) {
         durationSeconds,
         estimatedCostCents:
           durationSeconds !== undefined
-            ? estimatedCostCents(local.engine, durationSeconds)
+            ? estimatedCostCents(local.engine, durationSeconds, local.resolution)
             : undefined,
       },
     });

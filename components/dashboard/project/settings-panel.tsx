@@ -51,6 +51,7 @@ export function SettingsPanel({
   disabled,
   onSceneChange,
   onProjectChange,
+  canViewCost,
 }: {
   scene: SceneData;
   sceneNumber: number;
@@ -63,6 +64,7 @@ export function SettingsPanel({
   disabled: boolean;
   onSceneChange: (patch: SceneSettingsPatch) => void;
   onProjectChange: (patch: ProjectSettingsPatch) => void;
+  canViewCost: boolean;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const resolved = resolveScene(scene, defaults);
@@ -256,24 +258,35 @@ export function SettingsPanel({
                     Resolution
                   </p>
                   <div role="group" aria-labelledby="project-resolution" className="grid grid-cols-3 gap-2">
-                    {[null, ...VIDEO_RESOLUTIONS].map((r) => (
-                      <button
-                        key={r ?? "default"}
-                        type="button"
-                        disabled={disabled}
-                        aria-pressed={resolution === r}
-                        onClick={() => onProjectChange({ resolution: r })}
-                        className={cn(
-                          "rounded-md border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
-                          resolution === r ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
-                        )}
-                      >
-                        {r ?? "Standard"}
-                      </button>
-                    ))}
+                    {[null, ...VIDEO_RESOLUTIONS]
+                      .filter((r) => r !== "4k" || engine === "avatar_iii")
+                      .map((r) => (
+                        <button
+                          key={r ?? "default"}
+                          type="button"
+                          disabled={disabled}
+                          aria-pressed={resolution === r}
+                          onClick={() => onProjectChange({ resolution: r })}
+                          className={cn(
+                            "rounded-md border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
+                            resolution === r ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
+                          )}
+                        >
+                          {r === "4k" ? "4K" : r ?? "Standard"}
+                        </button>
+                      ))}
                   </div>
                 </div>
-                <EnginePicker value={engine} onChange={(e) => onProjectChange({ engine: e })} />
+                <EnginePicker
+                  value={engine}
+                  onChange={(e) => {
+                    // 4K is only available on Avatar III (lib/heygen/pricing.ts)
+                    // — clear it when switching away so no unsupported
+                    // engine+resolution combination lingers.
+                    onProjectChange(e !== "avatar_iii" && resolution === "4k" ? { engine: e, resolution: null } : { engine: e });
+                  }}
+                  canViewCost={canViewCost}
+                />
               </div>
             )}
           </div>

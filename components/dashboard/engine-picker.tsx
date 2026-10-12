@@ -6,26 +6,32 @@ import type { HeyGenEngine } from "@/lib/heygen";
 // lib/heygen/pricing.ts's ENGINE_RATE_USD_PER_SECOND — not imported
 // directly since that file assumes the Prisma VideoEngine enum shape
 // rather than HeyGen's lowercase API values this component works with.
+// Only shown when canViewCost is true (admin/super admin) — everyone else
+// gets the same tier description without the dollar figure.
 const ENGINE_OPTIONS: {
   value: HeyGenEngine;
   label: string;
   description: string;
+  descriptionWithCost: string;
 }[] = [
-  { value: "avatar_iii", label: "Avatar III", description: "Lower cost — $0.0167/sec" },
-  { value: "avatar_iv", label: "Avatar IV", description: "Balanced quality — $0.0667/sec" },
+  { value: "avatar_iii", label: "Avatar III", description: "Lower cost", descriptionWithCost: "Lower cost — $0.012/sec" },
+  { value: "avatar_iv", label: "Avatar IV", description: "Balanced quality", descriptionWithCost: "Balanced quality — $0.0667/sec" },
   {
     value: "avatar_v",
     label: "Avatar V",
-    description: "Highest fidelity, most natural motion — $0.0667/sec",
+    description: "Highest fidelity, most natural motion",
+    descriptionWithCost: "Highest fidelity, most natural motion — $0.0667/sec",
   },
 ];
 
 export function EnginePicker({
   value,
   onChange,
+  canViewCost,
 }: {
   value: HeyGenEngine;
   onChange: (value: HeyGenEngine) => void;
+  canViewCost: boolean;
 }) {
   return (
     <div className="space-y-2">
@@ -46,7 +52,9 @@ export function EnginePicker({
               }`}
             >
               <p className="text-sm font-medium">{opt.label}</p>
-              <p className="text-xs text-muted-foreground">{opt.description}</p>
+              <p className="text-xs text-muted-foreground">
+                {canViewCost ? opt.descriptionWithCost : opt.description}
+              </p>
             </button>
           );
         })}

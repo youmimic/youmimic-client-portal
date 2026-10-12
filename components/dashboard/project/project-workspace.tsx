@@ -724,6 +724,7 @@ export function ProjectWorkspace({
                   disabled={locked}
                   onSceneChange={(patch) => editSceneSettings(activeScene.id, patch)}
                   onProjectChange={editProject}
+                  canViewCost={canViewCost}
                 />
               )}
             </div>

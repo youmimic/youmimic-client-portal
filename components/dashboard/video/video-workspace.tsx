@@ -177,6 +177,7 @@ export function VideoWorkspace({
   looks,
   initial,
   resetFrom,
+  canViewCost,
 }: {
   avatarId: string;
   avatarName: string;
@@ -188,6 +189,7 @@ export function VideoWorkspace({
   initial?: Partial<WorkspaceInitialValues>;
   // Shown when the form was prefilled from an earlier video.
   resetFrom?: string;
+  canViewCost: boolean;
 }) {
   const router = useRouter();
   const firstReadyLookId = looks.find((l) => l.status === "ready")?.id ?? null;
@@ -286,8 +288,8 @@ export function VideoWorkspace({
   );
 
   const estimate = useMemo(
-    () => estimateGeneration(script, engine.toUpperCase() as VideoEngineValue),
-    [script, engine],
+    () => estimateGeneration(script, engine.toUpperCase() as VideoEngineValue, resolution),
+    [script, engine, resolution],
   );
   const words = wordCount(script);
 
@@ -542,10 +544,25 @@ export function VideoWorkspace({
                     onChange={(v) => setResolution(v === "default" ? null : v)}
                     options={[
                       { value: "default", label: "Standard", hint: "Provider default" },
-                      ...VIDEO_RESOLUTIONS.map((r) => ({ value: r, label: r })),
+                      ...VIDEO_RESOLUTIONS.filter((r) => r !== "4k" || engine === "avatar_iii").map((r) => ({
+                        value: r,
+                        label: r === "4k" ? "4K" : r,
+                        hint: r === "4k" ? "Avatar III only" : undefined,
+                      })),
                     ]}
                   />
-                  <EnginePicker value={engine} onChange={setEngine} />
+                  <EnginePicker
+                    value={engine}
+                    onChange={(e) => {
+                      setEngine(e);
+                      // 4K is only available on Avatar III (see
+                      // lib/heygen/pricing.ts) — switching away from it with
+                      // 4K selected would otherwise leave a resolution value
+                      // the provider doesn't support for that engine.
+                      if (e !== "avatar_iii" && resolution === "4k") setResolution(null);
+                    }}
+                    canViewCost={canViewCost}
+                  />
                 </div>
               )}
             </div>
@@ -575,10 +592,12 @@ export function VideoWorkspace({
                   {words > 0 ? `~${estimate.credits.toFixed(1)}` : "0"}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Estimated cost</span>
-                <span className="font-medium">{words > 0 ? `~${formatCents(estimate.costCents)}` : "$0.00"}</span>
-              </div>
+              {canViewCost && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Estimated cost</span>
+                  <span className="font-medium">{words > 0 ? `~${formatCents(estimate.costCents)}` : "$0.00"}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Ready in</span>
                 <span className="font-medium">
