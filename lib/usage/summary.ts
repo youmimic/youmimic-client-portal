@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { UsageLedgerStatus } from "@/app/generated/prisma/enums";
 import type { VideoEngine } from "@/app/generated/prisma/enums";
-import { resolveBillingPeriod } from "@/lib/usage/ledger";
+import { resolveBillingPeriod, resolveBillingPeriodForEnterprise } from "@/lib/usage/ledger";
 
 export type UsageSummary = {
   periodStart: Date;
@@ -151,5 +151,46 @@ export async function getUsageSummary(userId: string): Promise<UsageSummary> {
     })),
     recent: videos.slice(0, 8),
     enterprise: enterpriseSummary,
+  };
+}
+
+export type EnterpriseCreditUsage = {
+  periodStart: Date;
+  periodEnd: Date;
+  creditsUsed: number;
+  creditsLimit: number | null;
+};
+
+// For the admin enterprise detail page — same pooled-by-subscriptionId
+// figure every member's own Usage page shows them (see getUsageSummary's
+// `enterprise` field above and lib/usage/ledger.ts's enforcement), just
+// resolved directly against the enterprise rather than through a member who
+// happens to be logged in. Null when the enterprise has no applicable
+// subscription at all (e.g. never billed).
+export async function getEnterpriseCreditUsage(enterpriseId: string): Promise<EnterpriseCreditUsage | null> {
+  const period = await resolveBillingPeriodForEnterprise(enterpriseId);
+  if (!period.subscriptionId) return null;
+
+  const grouped = await prisma.usageLedgerEntry.groupBy({
+    by: ["status"],
+    where: {
+      subscriptionId: period.subscriptionId,
+      periodStart: period.periodStart,
+      periodEnd: period.periodEnd,
+      status: { in: [UsageLedgerStatus.RESERVED, UsageLedgerStatus.RECONCILED] },
+    },
+    _sum: { creditsReservedMilli: true, creditsChargedMilli: true },
+  });
+
+  let creditsMilli = 0;
+  for (const g of grouped) {
+    creditsMilli += g.status === UsageLedgerStatus.RESERVED ? (g._sum.creditsReservedMilli ?? 0) : (g._sum.creditsChargedMilli ?? 0);
+  }
+
+  return {
+    periodStart: period.periodStart,
+    periodEnd: period.periodEnd,
+    creditsUsed: creditsMilli / 1000,
+    creditsLimit: period.creditsLimitMilliOverride != null ? period.creditsLimitMilliOverride / 1000 : null,
   };
 }

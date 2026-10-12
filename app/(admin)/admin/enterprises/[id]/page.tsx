@@ -26,6 +26,8 @@ import {
   EnterpriseBillingBreakdownCard,
   ProvisioningModeCard,
 } from "@/components/admin/enterprise-billing";
+import { getEnterpriseCreditUsage } from "@/lib/usage/summary";
+import { Progress } from "@/components/ui/progress";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +118,12 @@ export default async function AdminEnterpriseDetailPage({
     where: { enterpriseId: id, billingComponent: "PLATFORM_FEE" },
     select: { id: true, unitAmountCents: true, currency: true, billingProvider: true, creditsLimitMilliOverride: true },
   });
+
+  // Same pooled-by-subscriptionId figure every member's own Usage page
+  // shows them (lib/usage/summary.ts) — lets an admin see at a glance how
+  // close an enterprise is to its shared cap without needing to be a
+  // member themselves.
+  const creditUsage = await getEnterpriseCreditUsage(id);
 
   const canManage = canManageEnterprises(actorRole);
   const canManageMembers = canManageEnterpriseMembers(actorRole);
@@ -344,6 +352,54 @@ export default async function AdminEnterpriseDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Credit usage */}
+      {creditUsage && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Credit Usage</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This billing period ({creditUsage.periodStart.toLocaleDateString("en-AU")} –{" "}
+              {creditUsage.periodEnd.toLocaleDateString("en-AU")}), pooled across every member — the same figure every
+              member sees on their own Usage page.
+            </p>
+            {creditUsage.creditsLimit != null ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    <span className="font-medium text-foreground">{creditUsage.creditsUsed.toFixed(1)}</span> of{" "}
+                    <span className="font-medium text-foreground">{creditUsage.creditsLimit.toFixed(1)}</span> credits
+                    used
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {Math.max(0, creditUsage.creditsLimit - creditUsage.creditsUsed).toFixed(1)} remaining
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    creditUsage.creditsLimit > 0
+                      ? Math.min(100, (creditUsage.creditsUsed / creditUsage.creditsLimit) * 100)
+                      : 100
+                  }
+                  indicatorClassName={
+                    creditUsage.creditsLimit > 0 && creditUsage.creditsUsed / creditUsage.creditsLimit >= 0.9
+                      ? "bg-destructive"
+                      : creditUsage.creditsLimit > 0 && creditUsage.creditsUsed / creditUsage.creditsLimit >= 0.7
+                        ? "bg-amber-500"
+                        : "bg-primary"
+                  }
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No monthly credit limit is set on this enterprise&apos;s plan at the moment, so nothing is blocked.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Members */}
       <Card>

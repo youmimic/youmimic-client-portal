@@ -2,7 +2,8 @@ import prisma from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma/client";
 import { PlanType, UsageLedgerStatus } from "@/app/generated/prisma/enums";
 import type { VideoEngine } from "@/app/generated/prisma/enums";
-import { getApplicableSubscription } from "@/lib/subscription";
+import { getApplicableSubscription, getApplicableSubscriptionForEnterprise } from "@/lib/subscription";
+import type { Subscription } from "@/app/generated/prisma/client";
 import { creditsForDurationMilli, PLAN_CREDIT_LIMITS_MILLI } from "@/lib/heygen/credits";
 import { estimateDurationSeconds } from "@/lib/heygen/duration-estimate";
 
@@ -30,24 +31,15 @@ export interface BillingPeriod {
   enterpriseId: string | null;
 }
 
-// Resolves which billing period a user's usage should be counted against,
-// using the same subscription (personal, or an owned enterprise's) that
-// already gates Avatar Studio access via userHasActiveSubscription. Falls
-// back to a calendar-month window only for the defensive edge case where no
-// applicable subscription exists, or one exists but has no
-// currentPeriodStart/End (both nullable in the schema even though the
-// live-gated generate path shouldn't normally produce either) — both cases
-// are logged since they signal a data gap worth investigating, not a
-// normal path.
-export async function resolveBillingPeriod(
-  tx: Prisma.TransactionClient,
-  userId: string,
-): Promise<BillingPeriod> {
-  const subscription = await getApplicableSubscription(userId, tx);
+// Shared by resolveBillingPeriod and resolveBillingPeriodForEnterprise below
+// — both resolve a Subscription (or null) through their own path (by user,
+// or directly by enterprise) and then need the identical
+// currentPeriodStart/End-or-calendar-month-fallback logic applied to it.
+function billingPeriodFromSubscription(subscription: Subscription | null, logContext: string): BillingPeriod {
   const now = new Date();
 
   if (!subscription) {
-    console.warn(`resolveBillingPeriod: no applicable subscription for user ${userId} — falling back to calendar month`);
+    console.warn(`resolveBillingPeriod: no applicable subscription for ${logContext} — falling back to calendar month`);
     return {
       subscriptionId: null,
       planType: PlanType.FREE,
@@ -70,7 +62,7 @@ export async function resolveBillingPeriod(
   }
 
   console.warn(
-    `resolveBillingPeriod: subscription ${subscription.id} has no currentPeriodStart/End — falling back to calendar month for user ${userId}`,
+    `resolveBillingPeriod: subscription ${subscription.id} has no currentPeriodStart/End — falling back to calendar month for ${logContext}`,
   );
   return {
     subscriptionId: subscription.id,
@@ -80,6 +72,34 @@ export async function resolveBillingPeriod(
     periodStart: startOfCalendarMonth(now),
     periodEnd: startOfNextCalendarMonth(now),
   };
+}
+
+// Resolves which billing period a user's usage should be counted against,
+// using the same subscription (personal, or an owned/member enterprise's)
+// that already gates Avatar Studio access via userHasActiveSubscription.
+// Falls back to a calendar-month window only for the defensive edge case
+// where no applicable subscription exists, or one exists but has no
+// currentPeriodStart/End (both nullable in the schema even though the
+// live-gated generate path shouldn't normally produce either) — both cases
+// are logged since they signal a data gap worth investigating, not a
+// normal path.
+export async function resolveBillingPeriod(
+  tx: Prisma.TransactionClient,
+  userId: string,
+): Promise<BillingPeriod> {
+  const subscription = await getApplicableSubscription(userId, tx);
+  return billingPeriodFromSubscription(subscription, `user ${userId}`);
+}
+
+// Same as resolveBillingPeriod, but resolved directly against an enterprise
+// rather than through a specific user — for admin-side views where there's
+// no "viewing user" to resolve through (see the admin enterprise detail
+// page's credit usage card).
+export async function resolveBillingPeriodForEnterprise(
+  enterpriseId: string,
+): Promise<BillingPeriod> {
+  const subscription = await getApplicableSubscriptionForEnterprise(enterpriseId);
+  return billingPeriodFromSubscription(subscription, `enterprise ${enterpriseId}`);
 }
 
 async function usedCreditsMilliForPeriod(

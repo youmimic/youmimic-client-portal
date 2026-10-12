@@ -96,3 +96,19 @@ export async function userHasActiveSubscription(userId: string): Promise<boolean
   const subscription = await getApplicableSubscription(userId);
   return subscription !== null;
 }
+
+// Same resolution (highest billingComponent priority, then newest, then id)
+// as getApplicableSubscription's enterprise branches above, but scoped
+// directly to an enterprise rather than discovered through a specific
+// user's ownership/membership — for admin-side views of an enterprise where
+// there's no "viewing user" to resolve through (see the admin enterprise
+// detail page's credit usage card).
+export async function getApplicableSubscriptionForEnterprise(
+  enterpriseId: string,
+  client: SubscriptionQueryClient = prisma,
+): Promise<Subscription | null> {
+  const subs = await client.subscription.findMany({
+    where: { enterpriseId, status: { in: ACTIVE_STATUSES } },
+  });
+  return pickApplicable(subs);
+}
