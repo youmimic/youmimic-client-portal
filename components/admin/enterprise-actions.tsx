@@ -449,6 +449,10 @@ export function EnterpriseMembersTable({
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [addState, setAddState] = useState<ActionState>(idle);
+  // Set when the backend reports the email belongs to an existing user who
+  // is already a member of a different enterprise — null means no conflict
+  // detected yet (or the email changed since the last check).
+  const [multiEnterpriseWarning, setMultiEnterpriseWarning] = useState<string[] | null>(null);
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
@@ -481,24 +485,60 @@ export function EnterpriseMembersTable({
       setNewName("");
       setNewEmail("");
       setAddState(idle);
+      setMultiEnterpriseWarning(null);
     }
   }
 
-  async function handleAddClient() {
+  function handleNewEmailChange(value: string) {
+    setNewEmail(value);
+    // The warning (and any error) was about the previously-typed email —
+    // stale once it changes, so clear both rather than show a mismatched one.
+    setMultiEnterpriseWarning(null);
+    if (addState.error) setAddState(idle);
+  }
+
+  async function submitAddClient(confirmMultiEnterprise: boolean) {
     setAddState({ loading: true, error: null });
     try {
-      await postAction(enterpriseId, "create-member", {
-        name: newName.trim(),
-        email: newEmail.trim(),
+      const res = await fetch(`/api/admin/enterprises/${enterpriseId}/create-member`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newName.trim() || undefined,
+          email: newEmail.trim(),
+          confirmMultiEnterprise,
+        }),
       });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string;
+        otherEnterprises?: string[];
+      };
+      if (!res.ok) {
+        if (json.code === "ALREADY_IN_OTHER_ENTERPRISE") {
+          setMultiEnterpriseWarning(json.otherEnterprises ?? []);
+          setAddState(idle);
+          return;
+        }
+        throw new Error(json.error ?? `Request failed (${res.status})`);
+      }
       setAddOpen(false);
       setNewName("");
       setNewEmail("");
       setAddState(idle);
+      setMultiEnterpriseWarning(null);
       router.refresh();
     } catch (e) {
       setAddState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
     }
+  }
+
+  function handleAddClient() {
+    return submitAddClient(false);
+  }
+
+  function handleConfirmAddAnyway() {
+    return submitAddClient(true);
   }
 
   return (
@@ -560,8 +600,10 @@ export function EnterpriseMembersTable({
           <DialogHeader>
             <DialogTitle>Add Client</DialogTitle>
             <DialogDescription>
-              Creates a new account under this enterprise and emails them a
-              link to set their password — no invite-acceptance step needed.
+              If the email already has an account, they&apos;re added as a
+              member here directly. Otherwise a new account is created and
+              emailed a link to set their password — no invite-acceptance
+              step needed. Name is only used for a brand-new account.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -579,24 +621,41 @@ export function EnterpriseMembersTable({
                 id="new-client-email"
                 type="email"
                 value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
+                onChange={(e) => handleNewEmailChange(e.target.value)}
               />
             </div>
           </div>
+          {multiEnterpriseWarning && (
+            <p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded p-2">
+              This email already belongs to a member of{" "}
+              {multiEnterpriseWarning.length > 0
+                ? multiEnterpriseWarning.join(", ")
+                : "another enterprise"}
+              . Adding them here will also give them access to this
+              enterprise.
+            </p>
+          )}
           {addState.error && <p className="text-sm text-destructive">{addState.error}</p>}
           <DialogFooter>
             <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
-            <Button
-              size="sm"
-              disabled={
-                addState.loading ||
-                newName.trim().length === 0 ||
-                newEmail.trim().length === 0
-              }
-              onClick={handleAddClient}
-            >
-              {addState.loading ? "Adding…" : "Add Client"}
-            </Button>
+            {multiEnterpriseWarning ? (
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={addState.loading}
+                onClick={handleConfirmAddAnyway}
+              >
+                {addState.loading ? "Adding…" : "Add Anyway"}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                disabled={addState.loading || newEmail.trim().length === 0}
+                onClick={handleAddClient}
+              >
+                {addState.loading ? "Adding…" : "Add Client"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

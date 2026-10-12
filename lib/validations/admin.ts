@@ -62,6 +62,21 @@ export const createUserSchema = z.object({
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
+// Admin "Add Client" on an enterprise detail page: creates a brand-new user
+// if the email is unused, or links an existing user as a member otherwise.
+// `name` is optional here (unlike createUserSchema above) because it's only
+// required for the brand-new-account branch — enforced in the route itself,
+// not the schema — since an existing user's name is never overwritten from
+// this form. `confirmMultiEnterprise` lets the admin re-submit after being
+// warned the email already belongs to a member of a different enterprise.
+export const addEnterpriseMemberSchema = z.object({
+  name: z.string().trim().max(200).optional(),
+  email: adminEmailSchema,
+  confirmMultiEnterprise: z.boolean().optional(),
+});
+
+export type AddEnterpriseMemberInput = z.infer<typeof addEnterpriseMemberSchema>;
+
 // Admin edit of an existing user. `name` and `adminRole` are independently
 // optional so a caller can send just one; `adminRole: null` explicitly means
 // "revoke admin access" (distinct from omitting the field, which means "leave

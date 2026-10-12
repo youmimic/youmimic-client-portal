@@ -4,15 +4,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import type { AdminRole } from "@/app/generated/prisma/client";
-import { canManageEnterpriseMembers } from "@/lib/admin/rbac";
-import { createUserSchema } from "@/lib/validations/admin";
+import { canManageEnterpriseMembers, canActOnUser } from "@/lib/admin/rbac";
+import { addEnterpriseMemberSchema } from "@/lib/validations/admin";
 import { writeAuditLog, ENTITY_TYPES } from "@/lib/admin/audit";
 import { sendAdminWelcomeEmail } from "@/lib/mailer";
 
 // Matches the "member" role name the self-serve /api/invites route upserts
-// for accepted invites — this route creates the account and membership
-// directly, skipping the invite-email/accept round trip entirely, so a new
-// client shows up under the enterprise immediately.
+// for accepted invites (see ENTERPRISE_MEMBER_ROLES in lib/validations/admin.ts).
 const MEMBER_ROLE_NAME = "member";
 
 export async function POST(
@@ -46,7 +44,7 @@ export async function POST(
     rawBody = {};
   }
 
-  const parsed = createUserSchema.safeParse(rawBody);
+  const parsed = addEnterpriseMemberSchema.safeParse(rawBody);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Validation failed", fieldErrors: parsed.error.flatten().fieldErrors },
@@ -54,19 +52,86 @@ export async function POST(
     );
   }
 
-  const { name, email } = parsed.data;
+  const { name, email, confirmMultiEnterprise } = parsed.data;
 
   const existingUser = await prisma.user.findUnique({
     where: { email },
-    select: { id: true },
+    select: { id: true, name: true, email: true, adminRole: true },
   });
+
+  // ---- Existing account: link them as a member, never create a duplicate ----
   if (existingUser) {
+    if (!canActOnUser(actorRole, existingUser.adminRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const alreadyMember = await prisma.enterpriseMember.findUnique({
+      where: { enterpriseId_userId: { enterpriseId, userId: existingUser.id } },
+      select: { id: true },
+    });
+    if (alreadyMember) {
+      return NextResponse.json(
+        { error: "This user is already a member of this enterprise" },
+        { status: 409 },
+      );
+    }
+
+    // A user can legitimately belong to more than one enterprise (e.g. a
+    // consultant working across clients), but typing the wrong email is just
+    // as plausible — surface the conflict and require an explicit confirm
+    // rather than silently granting cross-enterprise access.
+    const otherMemberships = await prisma.enterpriseMember.findMany({
+      where: { userId: existingUser.id, enterpriseId: { not: enterpriseId } },
+      select: { enterprise: { select: { name: true } } },
+    });
+    if (otherMemberships.length > 0 && !confirmMultiEnterprise) {
+      return NextResponse.json(
+        {
+          error: "This user already belongs to another enterprise",
+          code: "ALREADY_IN_OTHER_ENTERPRISE",
+          otherEnterprises: otherMemberships.map((m) => m.enterprise.name),
+        },
+        { status: 409 },
+      );
+    }
+
+    const memberRole = await prisma.role.upsert({
+      where: { name: MEMBER_ROLE_NAME },
+      create: { name: MEMBER_ROLE_NAME },
+      update: {},
+      select: { id: true },
+    });
+
+    await prisma.enterpriseMember.create({
+      data: { enterpriseId, userId: existingUser.id, roleId: memberRole.id },
+    });
+
+    await writeAuditLog({
+      adminUserId: session.user.id,
+      action: "add_existing_enterprise_member",
+      entityType: ENTITY_TYPES.ENTERPRISE_MEMBER,
+      entityId: enterpriseId,
+      targetUserId: existingUser.id,
+      metadata: {
+        email: existingUser.email,
+        otherEnterpriseCount: otherMemberships.length,
+      },
+    });
+
+    return NextResponse.json(
+      { user: { id: existingUser.id, name: existingUser.name, email: existingUser.email } },
+      { status: 201 },
+    );
+  }
+
+  // ---- No existing account: create a brand-new client user ----
+  if (!name || name.trim().length === 0) {
     return NextResponse.json(
       {
-        error: "A user with this email already exists",
-        fieldErrors: { email: ["Already in use"] },
+        error: "Validation failed",
+        fieldErrors: { name: ["Name is required for a new account"] },
       },
-      { status: 409 },
+      { status: 422 },
     );
   }
 
