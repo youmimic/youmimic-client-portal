@@ -59,7 +59,10 @@ export default async function AdminUserDetailPage({
         },
       },
       enterpriseMembers: {
-        select: { enterprise: { select: { id: true, name: true } } },
+        select: {
+          role: { select: { name: true } },
+          enterprise: { select: { id: true, name: true, status: true, createdAt: true } },
+        },
       },
       avatars: {
         orderBy: { createdAt: "desc" },
@@ -346,12 +349,74 @@ export default async function AdminUserDetailPage({
                 <tbody className="divide-y">
                   {user.enterprises.map((ent) => (
                     <tr key={ent.id}>
-                      <td className="py-2 pr-4 font-medium">{ent.name}</td>
+                      <td className="py-2 pr-4 font-medium">
+                        <Link
+                          href={`/admin/enterprises/${ent.id}`}
+                          className="hover:underline"
+                        >
+                          {ent.name}
+                        </Link>
+                      </td>
                       <td className="py-2 pr-4 text-muted-foreground">
                         {ent.status}
                       </td>
                       <td className="py-2 hidden sm:table-cell text-muted-foreground">
                         {ent.createdAt.toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Enterprise memberships (not owned — see Owned Enterprises above
+          for that) — a user can belong to more than one enterprise. */}
+      {user.enterpriseMembers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Enterprise Memberships</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left">
+                    <th className="pb-2 font-medium text-muted-foreground">
+                      Name
+                    </th>
+                    <th className="pb-2 font-medium text-muted-foreground">
+                      Role
+                    </th>
+                    <th className="pb-2 font-medium text-muted-foreground hidden sm:table-cell">
+                      Status
+                    </th>
+                    <th className="pb-2 font-medium text-muted-foreground hidden sm:table-cell">
+                      Created
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {user.enterpriseMembers.map((member) => (
+                    <tr key={member.enterprise.id}>
+                      <td className="py-2 pr-4 font-medium">
+                        <Link
+                          href={`/admin/enterprises/${member.enterprise.id}`}
+                          className="hover:underline"
+                        >
+                          {member.enterprise.name}
+                        </Link>
+                      </td>
+                      <td className="py-2 pr-4 text-muted-foreground">
+                        {member.role.name}
+                      </td>
+                      <td className="py-2 pr-4 hidden sm:table-cell text-muted-foreground">
+                        {member.enterprise.status}
+                      </td>
+                      <td className="py-2 hidden sm:table-cell text-muted-foreground">
+                        {member.enterprise.createdAt.toLocaleDateString()}
                       </td>
                     </tr>
                   ))}
