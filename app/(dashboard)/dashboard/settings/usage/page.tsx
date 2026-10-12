@@ -4,11 +4,13 @@ import { Film } from "lucide-react";
 import { auth } from "@/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { VideoStatusBadge } from "@/components/dashboard/video/video-status-badge";
 import { getUsageSummary } from "@/lib/usage/summary";
 import { formatCurrencyCents, formatShortDate } from "@/lib/format";
 import { ENGINE_LABEL, formatDuration, videoTitle } from "@/lib/video-display";
+import { cn } from "@/lib/utils";
 
 export const metadata = {
   title: "Usage | YouMimic Portal",
@@ -32,6 +34,15 @@ export default async function UsagePage() {
 
   const usage = await getUsageSummary(session.user.id);
   const empty = usage.videosStarted === 0 && usage.recent.length === 0;
+  // Cost is an internal, billing-facing figure — only admins see it here,
+  // same convention as the Videos list page.
+  const canViewCost = !!session.user.adminRole;
+  const creditsPct =
+    usage.creditsLimit != null && usage.creditsLimit > 0
+      ? Math.min(100, (usage.creditsUsed / usage.creditsLimit) * 100)
+      : usage.creditsLimit === 0
+        ? 100
+        : 0;
 
   return (
     <div className="space-y-6">
@@ -46,26 +57,41 @@ export default async function UsagePage() {
           </p>
         </div>
 
-        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <dl className={cn("grid gap-3 sm:grid-cols-2", canViewCost ? "lg:grid-cols-4" : "lg:grid-cols-3")}>
           <Stat label="Videos made" value={String(usage.videosStarted)} hint={`${usage.videosCompleted} finished`} />
           <Stat
             label="Video length"
             value={usage.completedSeconds > 0 ? formatDuration(usage.completedSeconds) : "0s"}
             hint="Finished videos only"
           />
-          <Stat label="Estimated spend" value={formatCurrencyCents(usage.estimatedCostCents)} />
+          {canViewCost && (
+            <Stat label="Estimated spend" value={formatCurrencyCents(usage.estimatedCostCents)} />
+          )}
           <Stat label="Credits used" value={usage.creditsUsed.toFixed(1)} hint="Includes videos still being made" />
         </dl>
 
         {usage.creditsLimit != null ? (
-          <p className="text-sm text-muted-foreground">
-            You&apos;ve used <span className="font-medium text-foreground">{usage.creditsUsed.toFixed(1)}</span> of{" "}
-            <span className="font-medium text-foreground">{usage.creditsLimit.toFixed(1)}</span> credits this period —{" "}
-            <span className="font-medium text-foreground">
-              {Math.max(0, usage.creditsLimit - usage.creditsUsed).toFixed(1)}
-            </span>{" "}
-            remaining.
-          </p>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                <span className="font-medium text-foreground">{usage.creditsUsed.toFixed(1)}</span> of{" "}
+                <span className="font-medium text-foreground">{usage.creditsLimit.toFixed(1)}</span> credits used
+              </span>
+              <span className="font-medium text-foreground">
+                {Math.max(0, usage.creditsLimit - usage.creditsUsed).toFixed(1)} remaining
+              </span>
+            </div>
+            <Progress
+              value={creditsPct}
+              indicatorClassName={
+                creditsPct >= 90
+                  ? "bg-destructive"
+                  : creditsPct >= 70
+                    ? "bg-amber-500"
+                    : "bg-primary"
+              }
+            />
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">
             There is no monthly credit limit on your plan at the moment, so nothing is blocked. If that changes, your
@@ -102,7 +128,9 @@ export default async function UsagePage() {
                         <th className="px-4 py-2.5 font-medium text-muted-foreground">Videos</th>
                         <th className="px-4 py-2.5 font-medium text-muted-foreground">Length</th>
                         <th className="px-4 py-2.5 font-medium text-muted-foreground">Credits</th>
-                        <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Estimated cost</th>
+                        {canViewCost && (
+                          <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">Estimated cost</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -112,7 +140,9 @@ export default async function UsagePage() {
                           <td className="px-4 py-3 tabular-nums">{row.videos}</td>
                           <td className="px-4 py-3 tabular-nums">{row.seconds > 0 ? formatDuration(row.seconds) : "0s"}</td>
                           <td className="px-4 py-3 tabular-nums">{row.credits.toFixed(1)}</td>
-                          <td className="px-4 py-3 text-right tabular-nums">{formatCurrencyCents(row.costCents)}</td>
+                          {canViewCost && (
+                            <td className="px-4 py-3 text-right tabular-nums">{formatCurrencyCents(row.costCents)}</td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -141,7 +171,7 @@ export default async function UsagePage() {
                     <span className="block text-xs text-muted-foreground">
                       {formatShortDate(v.createdAt)} · {ENGINE_LABEL[v.engine]}
                       {v.durationSeconds != null && ` · ${formatDuration(v.durationSeconds)}`}
-                      {v.estimatedCostCents != null && ` · ~${formatCurrencyCents(v.estimatedCostCents)}`}
+                      {canViewCost && v.estimatedCostCents != null && ` · ~${formatCurrencyCents(v.estimatedCostCents)}`}
                     </span>
                   </span>
                   <VideoStatusBadge status={v.status} />

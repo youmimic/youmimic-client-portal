@@ -131,10 +131,12 @@ export function VideoDetail({
   video,
   related,
   justCreated,
+  canViewCost,
 }: {
   video: VideoDetailData;
   related: RelatedVideo[];
   justCreated: boolean;
+  canViewCost: boolean;
 }) {
   const router = useRouter();
   const inProgress = isInProgress(video.status);
@@ -431,7 +433,7 @@ export function VideoDetail({
               <DetailRow label="Voice" value={video.voiceName ?? "Avatar's own voice"} />
               <DetailRow label="Engine" value={ENGINE_LABEL[video.engine]} />
               {video.durationSeconds != null && <DetailRow label="Length" value={formatDuration(video.durationSeconds)} />}
-              {video.estimatedCostCents != null && (
+              {canViewCost && video.estimatedCostCents != null && (
                 <DetailRow label="Estimated cost" value={`~${formatCents(video.estimatedCostCents)}`} />
               )}
             </dl>

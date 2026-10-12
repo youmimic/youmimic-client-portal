@@ -40,7 +40,15 @@ function messageFor(status: number, json: { error?: string }): string {
   return json.error ?? `Request failed (${status})`;
 }
 
-export function ProjectWorkspace({ initial, avatars }: { initial: ProjectView; avatars: AvatarOption[] }) {
+export function ProjectWorkspace({
+  initial,
+  avatars,
+  canViewCost,
+}: {
+  initial: ProjectView;
+  avatars: AvatarOption[];
+  canViewCost: boolean;
+}) {
   const router = useRouter();
   const [project, setProject] = useState<ProjectView>(initial);
   const [activeId, setActiveId] = useState(initial.scenes[0]?.id ?? "");
@@ -607,6 +615,7 @@ export function ProjectWorkspace({ initial, avatars }: { initial: ProjectView; a
           onDuplicate={duplicateProject}
           onDelete={() => setDeleteProjectOpen(true)}
           onRefreshLink={refreshLink}
+          canViewCost={canViewCost}
         />
       ) : (
         <>

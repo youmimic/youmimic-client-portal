@@ -149,6 +149,7 @@ export default async function VideosPage({
         </Card>
       ) : (
         <VideoLibrary
+          canViewCost={isAdmin}
           videos={videos.map((v) => ({
             id: v.id,
             title: videoTitle(v),

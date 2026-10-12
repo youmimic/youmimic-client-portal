@@ -40,6 +40,7 @@ export function FinalView({
   onDuplicate,
   onDelete,
   onRefreshLink,
+  canViewCost,
 }: {
   project: ProjectView;
   checking: boolean;
@@ -51,6 +52,7 @@ export function FinalView({
   onDuplicate: () => void;
   onDelete: () => void;
   onRefreshLink: () => void;
+  canViewCost: boolean;
 }) {
   const video = project.finalVideo;
   const generating = project.status === "GENERATING";
@@ -257,7 +259,7 @@ export function FinalView({
               <Detail label="Format" value={ASPECT_RATIO_LABEL[project.aspectRatio] ?? project.aspectRatio} />
               <Detail label="Resolution" value={project.resolution ?? "Standard"} />
               {video.durationSeconds != null && <Detail label="Length" value={formatDuration(video.durationSeconds)} />}
-              {video.estimatedCostCents != null && (
+              {canViewCost && video.estimatedCostCents != null && (
                 <Detail label="Estimated cost" value={`~${formatCents(video.estimatedCostCents)}`} />
               )}
             </dl>

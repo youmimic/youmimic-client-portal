@@ -214,7 +214,7 @@ export default async function DashboardPage({
               <ul className="grid gap-4 sm:grid-cols-2">
                 {videos.map((v) => (
                   <li key={v.id}>
-                    <VideoCard v={v} />
+                    <VideoCard v={v} canViewCost={!!session?.user.adminRole} />
                   </li>
                 ))}
               </ul>

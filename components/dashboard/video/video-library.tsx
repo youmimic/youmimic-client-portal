@@ -98,7 +98,7 @@ function SelfHealingThumb({
   );
 }
 
-export function VideoCard({ v }: { v: LibraryVideo }) {
+export function VideoCard({ v, canViewCost }: { v: LibraryVideo; canViewCost: boolean }) {
   return (
     // Always this specific render's own id, even for a project video — every
     // past render for the same project previously shared one href (the
@@ -132,7 +132,7 @@ export function VideoCard({ v }: { v: LibraryVideo }) {
             ` · ${ASPECT_RATIO_LABEL[v.aspectRatio]?.split(" ")[0] ?? v.aspectRatio}`}
           {v.durationSeconds != null &&
             ` · ${formatDuration(v.durationSeconds)}`}
-          {v.estimatedCostCents != null &&
+          {canViewCost && v.estimatedCostCents != null &&
             ` · ~${formatCents(v.estimatedCostCents)}`}
         </p>
         {v.status === "FAILED" && v.errorMessage && (
@@ -145,7 +145,7 @@ export function VideoCard({ v }: { v: LibraryVideo }) {
   );
 }
 
-export function VideoLibrary({ videos }: { videos: LibraryVideo[] }) {
+export function VideoLibrary({ videos, canViewCost }: { videos: LibraryVideo[]; canViewCost: boolean }) {
   const [filter, setFilter] = useState<Filter>("ALL");
 
   const counts = useMemo(
@@ -214,7 +214,7 @@ export function VideoLibrary({ videos }: { videos: LibraryVideo[] }) {
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((v) => (
             <li key={v.id}>
-              <VideoCard v={v} />
+              <VideoCard v={v} canViewCost={canViewCost} />
             </li>
           ))}
         </ul>
