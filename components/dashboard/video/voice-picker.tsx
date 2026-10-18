@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Pause, Play, Search, Timer } from "lucide-react";
+import { Check, ChevronDown, Pause, Play, Search, Timer, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import type { VoiceShortcut } from "@/lib/video-display";
 
 export type VoiceOption = {
   voice_id: string;
@@ -74,6 +75,7 @@ export function VoicePicker({
   onChange,
   defaultLabel = "Avatar's own voice (default)",
   disabled = false,
+  shortcuts = [],
 }: {
   value: SelectedVoice;
   onChange: (voice: SelectedVoice) => void;
@@ -81,6 +83,12 @@ export function VoicePicker({
   // "Using project voice: Emma".
   defaultLabel?: string;
   disabled?: boolean;
+  // Quick picks for "sounds like this account avatar" — e.g. narrating a
+  // photo avatar or an image/video scene with a digital twin's own voice —
+  // shown above the generic catalogue so you don't have to already know
+  // that avatar's voice name to find it. See lib/video-display.ts's
+  // avatarVoiceShortcuts.
+  shortcuts?: VoiceShortcut[];
 }) {
   const [open, setOpen] = useState(false);
   const [voices, setVoices] = useState<VoiceOption[]>([]);
@@ -180,6 +188,31 @@ export function VoicePicker({
 
       {open && (
         <div id="voice-picker-panel" className="space-y-2 rounded-lg border p-2">
+          {shortcuts.length > 0 && (
+            <ul className="space-y-1" aria-label="Use an avatar's own voice">
+              {shortcuts.map((shortcut) => {
+                const selected = value?.id === shortcut.voiceId;
+                return (
+                  <li key={shortcut.voiceId}>
+                    <button
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => onChange({ id: shortcut.voiceId, name: shortcut.label })}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors",
+                        selected ? "border-primary ring-2 ring-primary" : "border-transparent hover:bg-muted",
+                      )}
+                    >
+                      <UserRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <span className="min-w-0 flex-1 truncate">{shortcut.label}</span>
+                      {selected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />

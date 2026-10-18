@@ -19,8 +19,8 @@ const avatars: AvatarOption[] = [
     previewUrl: null,
     usable: true,
     looks: [
-      { id: "l1", name: "Suit", ready: true, previewUrl: null, videoUrl: null },
-      { id: "l2", name: "Casual", ready: false, previewUrl: null, videoUrl: null },
+      { id: "l1", name: "Suit", ready: true, previewUrl: null, videoUrl: null, defaultVoiceId: null },
+      { id: "l2", name: "Casual", ready: false, previewUrl: null, videoUrl: null, defaultVoiceId: null },
     ],
   },
   { id: "a2", name: "Chris", previewUrl: null, usable: false, looks: [] },

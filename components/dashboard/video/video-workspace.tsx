@@ -25,6 +25,7 @@ import type { HeyGenEngine } from "@/lib/heygen";
 import { VIDEO_ASPECT_RATIOS, VIDEO_RESOLUTIONS } from "@/lib/validations/video";
 import {
   ASPECT_RATIO_LABEL,
+  avatarVoiceShortcuts,
   ENGINE_LABEL,
   estimateGeneration,
   formatCents,
@@ -44,6 +45,15 @@ export type AvatarLookOption = {
   status: string;
   previewUrl: string | null;
   videoUrl: string | null;
+};
+
+// Every avatar on the account (not just this one) — lets narration borrow
+// another avatar's own voice (e.g. a photo avatar narrated in a digital
+// twin's voice). See lib/video-display.ts's avatarVoiceShortcuts.
+export type OtherAvatarOption = {
+  id: string;
+  name: string;
+  looks: { name: string; defaultVoiceId: string | null }[];
 };
 
 // Values a workspace can start with, used by Duplicate (?from=<videoId>).
@@ -175,6 +185,7 @@ export function VideoWorkspace({
   avatarId,
   avatarName,
   looks,
+  otherAvatars = [],
   initial,
   resetFrom,
   canViewCost,
@@ -182,6 +193,10 @@ export function VideoWorkspace({
   avatarId: string;
   avatarName: string;
   looks: AvatarLookOption[];
+  // Every avatar on the account, for "same voice as X" narration shortcuts.
+  // Optional since the admin "Test avatar" action doesn't have this list —
+  // shortcuts just don't show there.
+  otherAvatars?: OtherAvatarOption[];
   // Partial, not the full type: every field below already falls back to its
   // own default via `initial?.field ?? default`, so a caller (e.g. the
   // admin "Test avatar" action, which only has a script to seed) can pass
@@ -193,6 +208,7 @@ export function VideoWorkspace({
 }) {
   const router = useRouter();
   const firstReadyLookId = looks.find((l) => l.status === "ready")?.id ?? null;
+  const voiceShortcuts = useMemo(() => avatarVoiceShortcuts(otherAvatars), [otherAvatars]);
 
   const [title, setTitle] = useState(initial?.title ?? "");
   const [script, setScript] = useState(initial?.script ?? "");
@@ -510,7 +526,7 @@ export function VideoWorkspace({
               </div>
             )}
 
-            <VoicePicker value={voice} onChange={setVoice} />
+            <VoicePicker value={voice} onChange={setVoice} shortcuts={voiceShortcuts} />
 
             <Segmented
               label="Format"

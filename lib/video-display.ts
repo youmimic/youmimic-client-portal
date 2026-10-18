@@ -85,6 +85,40 @@ export function estimateGeneration(
   };
 }
 
+export type VoiceShortcut = { voiceId: string; label: string };
+
+// Lets a narration voice be picked by "which avatar sounds like this" rather
+// than hunting HeyGen's full generic voice catalogue for a name you don't
+// actually know — the real use case being a photo avatar borrowing a
+// digital twin's voice, or narrating an IMAGE/VIDEO scene with one of the
+// account's own avatar voices. One avatar can have several looks with
+// different default voices (confirmed live: two looks on the same real
+// avatar had different default_voice_id values), so this dedupes by voice
+// id per avatar and only disambiguates by look name when that avatar
+// genuinely has more than one distinct voice.
+export function avatarVoiceShortcuts(
+  avatars: { id: string; name: string; looks: { name: string; defaultVoiceId?: string | null }[] }[],
+): VoiceShortcut[] {
+  const shortcuts: VoiceShortcut[] = [];
+  for (const avatar of avatars) {
+    const voiceIdToLookName = new Map<string, string>();
+    for (const look of avatar.looks) {
+      if (look.defaultVoiceId && !voiceIdToLookName.has(look.defaultVoiceId)) {
+        voiceIdToLookName.set(look.defaultVoiceId, look.name);
+      }
+    }
+    const distinct = [...voiceIdToLookName.entries()];
+    if (distinct.length === 1) {
+      shortcuts.push({ voiceId: distinct[0][0], label: `Same voice as ${avatar.name}` });
+    } else {
+      for (const [voiceId, lookName] of distinct) {
+        shortcuts.push({ voiceId, label: `Same voice as ${avatar.name} (${lookName})` });
+      }
+    }
+  }
+  return shortcuts;
+}
+
 export function videoTitle(video: { title: string | null; script: string }): string {
   if (video.title) return video.title;
   const firstLine = video.script.trim().split("\n")[0] ?? "";

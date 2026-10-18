@@ -20,7 +20,7 @@ import {
   type ProjectDefaults,
   type SceneData,
 } from "@/lib/projects/rules";
-import { ASPECT_RATIO_LABEL } from "@/lib/video-display";
+import { ASPECT_RATIO_LABEL, avatarVoiceShortcuts } from "@/lib/video-display";
 import { cn } from "@/lib/utils";
 
 export type SceneSettingsPatch = Partial<
@@ -76,6 +76,8 @@ export function SettingsPanel({
   // exercised on a real avatar, only fake ones.
   const motionPromptAvailable = isAvatarScene && engine === "avatar_v";
 
+  const voiceShortcuts = avatarVoiceShortcuts(avatars);
+
   const voiceValue: SelectedVoice = scene.voiceId ? { id: scene.voiceId, name: scene.voiceName ?? "Chosen voice" } : null;
   const projectVoiceValue: SelectedVoice = defaults.defaultVoiceId
     ? { id: defaults.defaultVoiceId, name: defaults.defaultVoiceName ?? "Chosen voice" }
@@ -102,6 +104,7 @@ export function SettingsPanel({
             <VoicePicker
               value={voiceValue}
               disabled={disabled}
+              shortcuts={voiceShortcuts}
               defaultLabel={
                 defaults.defaultVoiceId
                   ? `Using project voice: ${defaults.defaultVoiceName ?? "Chosen voice"}`
@@ -214,6 +217,7 @@ export function SettingsPanel({
           <VoicePicker
             value={projectVoiceValue}
             disabled={disabled}
+            shortcuts={voiceShortcuts}
             onChange={(v) => onProjectChange({ defaultVoiceId: v?.id ?? null, defaultVoiceName: v?.name ?? null })}
           />
 

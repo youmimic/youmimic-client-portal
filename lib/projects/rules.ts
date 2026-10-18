@@ -56,7 +56,18 @@ export type AvatarOption = {
   // Thumbnail for the avatar itself: its first ready look, else any look.
   previewUrl: string | null;
   usable: boolean;
-  looks: { id: string; name: string; ready: boolean; previewUrl: string | null; videoUrl: string | null }[];
+  looks: {
+    id: string;
+    name: string;
+    ready: boolean;
+    previewUrl: string | null;
+    videoUrl: string | null;
+    // HeyGen's own default voice for this specific look — used to offer
+    // "same voice as this avatar" shortcuts elsewhere (see
+    // lib/video-display.ts's avatarVoiceShortcuts). Different looks on the
+    // same avatar can genuinely have different default voices.
+    defaultVoiceId: string | null;
+  }[];
 };
 
 export type ResolvedScene = {

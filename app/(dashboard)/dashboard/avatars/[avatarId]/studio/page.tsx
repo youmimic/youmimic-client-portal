@@ -58,6 +58,18 @@ export default async function AvatarStudioPage({
 
   if (!avatar) notFound();
 
+  // For "same voice as X" narration shortcuts — e.g. a photo avatar
+  // borrowing a digital twin's own voice. See lib/video-display.ts's
+  // avatarVoiceShortcuts.
+  const otherAvatars = await prisma.avatar.findMany({
+    where: { userId: session.user.id, id: { not: avatar.id } },
+    select: {
+      id: true,
+      name: true,
+      looks: { select: { name: true, defaultVoiceId: true } },
+    },
+  });
+
   // Middleware already gates this route on an active subscription — this
   // check is about the avatar itself, not billing: with looks (imported from
   // HeyGen), at least one look must be ready; without looks (legacy manual
@@ -137,6 +149,7 @@ export default async function AvatarStudioPage({
           avatarId={avatar.id}
           avatarName={avatar.name}
           looks={avatar.looks}
+          otherAvatars={otherAvatars}
           initial={initial}
           resetFrom={initial ? from : undefined}
           canViewCost={!!session.user.adminRole}

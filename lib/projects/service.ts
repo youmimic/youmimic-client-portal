@@ -224,7 +224,7 @@ export async function listAvatarOptions(userId: string): Promise<AvatarOption[]>
       heygenAvatarId: true,
       looks: {
         orderBy: { name: "asc" },
-        select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true },
+        select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, defaultVoiceId: true },
       },
     },
   });
@@ -243,6 +243,7 @@ export async function listAvatarOptions(userId: string): Promise<AvatarOption[]>
         ready: l.status === "ready",
         previewUrl: l.previewUrl,
         videoUrl: l.videoUrl,
+        defaultVoiceId: l.defaultVoiceId,
       })),
     };
   });
