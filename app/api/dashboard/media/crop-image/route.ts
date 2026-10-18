@@ -7,8 +7,21 @@ import { checkUrlIsSafeToFetch } from "@/lib/media/safe-fetch";
 import { computeCropBox, parseAspectRatio } from "@/lib/media/crop";
 import { cropImageSchema } from "@/lib/validations/media";
 
-const MAX_SOURCE_BYTES = 15 * 1024 * 1024; // 15MB
+// Not a platform limit — this is our own safety cap on the server-side
+// fetch of a user-supplied URL. It's unrelated to Vercel's 4.5MB request/
+// response body limit, which only applies to data going through the
+// function's own HTTP request/response, not an outbound fetch to a third
+// party. Vercel's function memory (2-4GB) comfortably handles files well
+// beyond this; raised from an initial 15MB after a real source image
+// legitimately exceeded that.
+const MAX_SOURCE_BYTES = 40 * 1024 * 1024; // 40MB
 const FETCH_TIMEOUT_MS = 10_000;
+// No output video is ever wider than 4K (3840px) — see
+// lib/heygen/pricing.ts's 4K support — so a source image larger than this
+// is downscaled before cropping. Protects memory/processing time against
+// an unnecessarily huge source (e.g. an 8000x6000 screenshot) without
+// affecting any realistic photo.
+const MAX_SOURCE_DIMENSION = 4096;
 
 // Takes a user-pasted image link plus a chosen focal point and project
 // aspect ratio, crops it server-side to exactly that ratio, and re-hosts
@@ -84,12 +97,12 @@ export async function POST(req: Request) {
     }
     const contentLength = res.headers.get("content-length");
     if (contentLength && Number(contentLength) > MAX_SOURCE_BYTES) {
-      return NextResponse.json({ error: "That image is too large (max 15MB)." }, { status: 422 });
+      return NextResponse.json({ error: "That image is too large (max 40MB)." }, { status: 422 });
     }
 
     const arrayBuffer = await res.arrayBuffer();
     if (arrayBuffer.byteLength > MAX_SOURCE_BYTES) {
-      return NextResponse.json({ error: "That image is too large (max 15MB)." }, { status: 422 });
+      return NextResponse.json({ error: "That image is too large (max 40MB)." }, { status: 422 });
     }
     sourceBuffer = Buffer.from(arrayBuffer);
   } catch (err) {
@@ -98,24 +111,44 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
+  let cropped: Buffer;
   try {
-    const image = sharp(sourceBuffer, { failOn: "none" });
-    const metadata = await image.metadata();
+    let image = sharp(sourceBuffer, { failOn: "none" });
+    let metadata = await image.metadata();
     if (!metadata.width || !metadata.height) {
       return NextResponse.json({ error: "Couldn't read that image." }, { status: 422 });
     }
 
-    const box = computeCropBox(metadata.width, metadata.height, targetRatio, focusX, focusY);
-    const cropped = await image.extract(box).jpeg({ quality: 90 }).toBuffer();
+    if (metadata.width > MAX_SOURCE_DIMENSION || metadata.height > MAX_SOURCE_DIMENSION) {
+      image = sharp(sourceBuffer, { failOn: "none" }).resize({
+        width: MAX_SOURCE_DIMENSION,
+        height: MAX_SOURCE_DIMENSION,
+        fit: "inside",
+        withoutEnlargement: true,
+      });
+      // Dimensions change after resize — re-read them rather than estimate,
+      // since fit: "inside" preserves aspect ratio and rounds to whole
+      // pixels.
+      const resizedBuffer = await image.toBuffer();
+      image = sharp(resizedBuffer, { failOn: "none" });
+      metadata = await image.metadata();
+    }
 
+    const box = computeCropBox(metadata.width!, metadata.height!, targetRatio, focusX, focusY);
+    cropped = await image.extract(box).jpeg({ quality: 90 }).toBuffer();
+  } catch (err) {
+    console.error("Image crop (decode/resize/extract) failed:", err);
+    return NextResponse.json({ error: "Couldn't process that image — it may be corrupted or an unsupported format." }, { status: 422 });
+  }
+
+  try {
     const blob = await put(`scene-crops/${session.user.id}/${Date.now()}.jpg`, cropped, {
       access: "public",
       contentType: "image/jpeg",
     });
-
     return NextResponse.json({ url: blob.url });
   } catch (err) {
-    console.error("Image crop failed:", err);
-    return NextResponse.json({ error: "Couldn't process that image." }, { status: 500 });
+    console.error("Image crop (Blob upload) failed:", err);
+    return NextResponse.json({ error: "Cropped the image, but couldn't save it. Please try again." }, { status: 500 });
   }
 }
