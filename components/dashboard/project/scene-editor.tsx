@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { InsertPauseButton } from "@/components/dashboard/video/insert-pause-button";
+import { ImageCropPicker } from "@/components/dashboard/project/image-crop-picker";
 import {
   DEFAULT_MEDIA_DURATION,
   MAX_MEDIA_DURATION,
@@ -73,6 +74,7 @@ export function SceneEditor({
   issues,
   disabled,
   showIssues,
+  aspectRatio,
   onChange,
 }: {
   scene: SceneData;
@@ -84,6 +86,7 @@ export function SceneEditor({
   issues: SceneIssue[];
   disabled: boolean;
   showIssues: boolean;
+  aspectRatio: string;
   onChange: (patch: SceneEdit) => void;
 }) {
   const resolved = resolveScene(scene, defaults);
@@ -149,7 +152,14 @@ export function SceneEditor({
           onChange={onChange}
         />
       ) : (
-        <MediaSceneContent scene={scene} resolved={resolved} engine={engine} disabled={disabled} onChange={onChange} />
+        <MediaSceneContent
+          scene={scene}
+          resolved={resolved}
+          engine={engine}
+          disabled={disabled}
+          aspectRatio={aspectRatio}
+          onChange={onChange}
+        />
       )}
 
       <IssueList errors={visibleErrors} warnings={warnings} />
@@ -278,12 +288,14 @@ function MediaSceneContent({
   resolved,
   engine,
   disabled,
+  aspectRatio,
   onChange,
 }: {
   scene: SceneData;
   resolved: ReturnType<typeof resolveScene>;
   engine: VideoEngineValue;
   disabled: boolean;
+  aspectRatio: string;
   onChange: (patch: SceneEdit) => void;
 }) {
   const kind = scene.kind as "IMAGE" | "VIDEO";
@@ -313,7 +325,16 @@ function MediaSceneContent({
         </p>
       </div>
 
-      {url && (
+      {url && kind === "IMAGE" && (
+        <ImageCropPicker
+          imageUrl={url}
+          aspectRatio={aspectRatio}
+          disabled={disabled}
+          onCropped={(newUrl) => onChange({ mediaUrl: newUrl })}
+        />
+      )}
+
+      {url && kind === "VIDEO" && (
         <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-muted">
           <MediaScenePreview kind={kind} url={url} />
         </div>

@@ -693,6 +693,7 @@ export function ProjectWorkspace({
                   issues={readiness.issues.filter((i) => i.sceneId === activeScene.id)}
                   disabled={locked}
                   showIssues={showIssues}
+                  aspectRatio={project.aspectRatio}
                   onChange={(patch) => editScene(activeScene.id, patch)}
                 />
               ) : (
