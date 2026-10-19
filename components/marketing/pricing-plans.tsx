@@ -119,7 +119,7 @@ export function PricingPlans() {
               </p>
               <ul className="space-y-2">
                 {[
-                  midMarketTier.avatars,
+                  `Up to ${midMarketTier.maxAvatars} avatars`,
                   "Priority video processing",
                   "Multilingual generation",
                   "Email + chat support",
@@ -162,7 +162,7 @@ export function PricingPlans() {
             </p>
             <ul className="space-y-2">
               {[
-                smallBusinessTier.avatars,
+                `Up to ${smallBusinessTier.maxAvatars} avatars`,
                 "Core video generation",
                 "Standard processing queue",
                 "Email support",

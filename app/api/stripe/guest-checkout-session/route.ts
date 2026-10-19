@@ -72,6 +72,11 @@ export async function POST(req: Request) {
     );
   }
 
+  const avatarStoragePriceId = process.env.STRIPE_AVATAR_STORAGE_PRICE_ID;
+  if (!avatarStoragePriceId) {
+    return NextResponse.json({ error: "Avatar pricing is not configured" }, { status: 500 });
+  }
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   try {
@@ -103,7 +108,13 @@ export async function POST(req: Request) {
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
+      // Platform-fee item first, avatar-storage second — handleSubscriptionUpsert
+      // (app/api/stripe/webhook/route.ts) reads items.data[0] as "the" price/
+      // product for this row, which should reflect the plan, not the add-on.
+      line_items: [
+        { price: priceId, quantity: 1 },
+        { price: avatarStoragePriceId, quantity: draft.avatarCount },
+      ],
       client_reference_id: draft.id,
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl.toString(),

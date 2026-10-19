@@ -43,6 +43,7 @@ export function CheckoutCard({
 }) {
   const [plan, setPlan] = useState<CheckoutPlanKey>(initialPlan);
   const [term, setTerm] = useState<BillingTermKey>(initialTerm);
+  const [avatarCount, setAvatarCount] = useState(1);
 
   return (
     <div className="space-y-4">
@@ -55,7 +56,13 @@ export function CheckoutCard({
           </CardHeader>
           <CardContent className="space-y-6">
             <PlanTermHeaderFields plan={plan} onPlanChange={setPlan} />
-            <PlanTermDetailFields plan={plan} term={term} onTermChange={setTerm} />
+            <PlanTermDetailFields
+              plan={plan}
+              term={term}
+              avatarCount={avatarCount}
+              onTermChange={setTerm}
+              onAvatarCountChange={setAvatarCount}
+            />
             <p className="text-xs text-muted-foreground">
               Recurring monthly charge, billed automatically each month. Taxes may apply at
               checkout depending on your location.
@@ -77,6 +84,7 @@ export function CheckoutCard({
             <GuestCheckoutForm
               planType={plan}
               billingTerm={term}
+              avatarCount={avatarCount}
               resumeDraftId={resumeDraftId}
               initialEmail={initialEmail}
               initialFullName={initialFullName}

@@ -59,6 +59,7 @@ const KNOWN_FIELD_KEYS = new Set<keyof FormInput>([
 export function GuestCheckoutForm({
   planType,
   billingTerm,
+  avatarCount,
   resumeDraftId,
   initialEmail,
   initialFullName,
@@ -66,6 +67,7 @@ export function GuestCheckoutForm({
 }: {
   planType: GuestCheckoutPlanType;
   billingTerm: GuestCheckoutBillingTerm;
+  avatarCount: number;
   // Present when arriving from a reminder email's resume link (see
   // app/checkout/page.tsx) — edits that existing draft in place instead of
   // creating a new one, so returning multiple times still produces exactly
@@ -131,7 +133,7 @@ export function GuestCheckoutForm({
         {
           method: resumeDraftId ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...values, planType, billingTerm }),
+          body: JSON.stringify({ ...values, planType, billingTerm, avatarCount }),
         },
       );
       const draftData = await draftRes.json().catch(() => ({}));

@@ -109,6 +109,7 @@ export async function activateGuestAccountForDraft(
         stripeSubscriptionId,
         planType: draft.planType,
         billingTerm: draft.billingTerm,
+        avatarAllowance: draft.avatarCount,
         status: "ACTIVE",
       },
       select: { id: true },

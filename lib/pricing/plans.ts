@@ -23,14 +23,24 @@ export const corporate = {
   ],
 };
 
-export const midMarketByTerm: Record<BillingTermKey, { avatars: string; priceDisplay: string }> = {
-  MONTHLY_12: { avatars: "10 avatars", priceDisplay: "$2,499 p/m" },
-  MONTHLY_24: { avatars: "5 avatars", priceDisplay: "$1,499 p/m" },
+// $99 AUD/month per avatar — same rate as STRIPE_AVATAR_STORAGE_PRICE_ID,
+// charged as a second line item (quantity = chosen avatar count) on the
+// same Stripe subscription as the platform fee below. See
+// app/api/stripe/checkout-session/route.ts and the guest equivalent.
+export const AVATAR_STORAGE_MONTHLY_CENTS = 9900;
+
+// priceCents is the platform-fee portion only — avatars are billed
+// separately on top (see AVATAR_STORAGE_MONTHLY_CENTS above), not bundled
+// into this number. maxAvatars caps how many a buyer can select at
+// checkout for this plan/term.
+export const midMarketByTerm: Record<BillingTermKey, { maxAvatars: number; priceCents: number; priceDisplay: string }> = {
+  MONTHLY_12: { maxAvatars: 10, priceCents: 249_900, priceDisplay: "$2,499 p/m" },
+  MONTHLY_24: { maxAvatars: 5, priceCents: 149_900, priceDisplay: "$1,499 p/m" },
 };
 
-export const smallBusinessByTerm: Record<BillingTermKey, { avatars: string; priceDisplay: string }> = {
-  MONTHLY_12: { avatars: "2 avatars", priceDisplay: "$899 p/m" },
-  MONTHLY_24: { avatars: "3 avatars", priceDisplay: "$499 p/m" },
+export const smallBusinessByTerm: Record<BillingTermKey, { maxAvatars: number; priceCents: number; priceDisplay: string }> = {
+  MONTHLY_12: { maxAvatars: 2, priceCents: 89_900, priceDisplay: "$899 p/m" },
+  MONTHLY_24: { maxAvatars: 3, priceCents: 49_900, priceDisplay: "$499 p/m" },
 };
 
 export const midMarket = {
@@ -49,3 +59,15 @@ export const TERM_LABEL: Record<BillingTermKey, string> = {
   MONTHLY_12: "12 months",
   MONTHLY_24: "24 months",
 };
+
+// Server- and client-safe: validates a chosen avatar count against the
+// plan/term's own allowance. Used both for display (clamping the dropdown)
+// and as the real server-side guard before ever creating a Stripe line
+// item — the browser's count is never trusted on its own.
+export function maxAvatarsFor(planType: "MID_MARKET" | "SMALL_BUSINESS", billingTerm: BillingTermKey): number {
+  return planType === "MID_MARKET" ? midMarketByTerm[billingTerm].maxAvatars : smallBusinessByTerm[billingTerm].maxAvatars;
+}
+
+export function platformFeeCentsFor(planType: "MID_MARKET" | "SMALL_BUSINESS", billingTerm: BillingTermKey): number {
+  return planType === "MID_MARKET" ? midMarketByTerm[billingTerm].priceCents : smallBusinessByTerm[billingTerm].priceCents;
+}

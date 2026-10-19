@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import stripe from "@/lib/stripe";
+import { maxAvatarsFor } from "@/lib/pricing/plans";
 
 // MID_MARKET/SMALL_BUSINESS both bill monthly regardless of the 12mo/24mo
 // commitment term shown on the pricing page — the term only changes which
@@ -33,12 +34,31 @@ const checkoutSchema = z
     planType: z.enum(["CREATOR", "ENTERPRISE", "MID_MARKET", "SMALL_BUSINESS"]),
     enterpriseId: z.string().optional(),
     billingTerm: z.enum(["MONTHLY_12", "MONTHLY_24"]).optional(),
+    // Sanity cap only — the real limit is the plan/term's own allowance,
+    // enforced below after billingTerm is known to be present (never trust
+    // the browser's count beyond that).
+    avatarCount: z.number().int().min(1).max(50).optional(),
   })
   .refine(
     (data) =>
       !(data.planType === "MID_MARKET" || data.planType === "SMALL_BUSINESS") ||
       data.billingTerm !== undefined,
     { message: "billingTerm is required for MID_MARKET and SMALL_BUSINESS", path: ["billingTerm"] },
+  )
+  .refine(
+    (data) =>
+      !(data.planType === "MID_MARKET" || data.planType === "SMALL_BUSINESS") ||
+      data.avatarCount !== undefined,
+    { message: "avatarCount is required for MID_MARKET and SMALL_BUSINESS", path: ["avatarCount"] },
+  )
+  .refine(
+    (data) =>
+      !(
+        (data.planType === "MID_MARKET" || data.planType === "SMALL_BUSINESS") &&
+        data.billingTerm &&
+        data.avatarCount !== undefined
+      ) || data.avatarCount <= maxAvatarsFor(data.planType, data.billingTerm),
+    { message: "That many avatars isn't available on this plan.", path: ["avatarCount"] },
   );
 
 export async function POST(req: Request) {
@@ -62,7 +82,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const { planType, enterpriseId, billingTerm } = parsed.data;
+  const { planType, enterpriseId, billingTerm, avatarCount } = parsed.data;
+  const needsAvatarStorage = planType === "MID_MARKET" || planType === "SMALL_BUSINESS";
 
   // MID_MARKET/SMALL_BUSINESS are personal (USER-owned) plans, same shape as
   // CREATOR — the marketing pricing page a self-serve visitor books from has
@@ -109,6 +130,11 @@ export async function POST(req: Request) {
     );
   }
 
+  const avatarStoragePriceId = process.env.STRIPE_AVATAR_STORAGE_PRICE_ID;
+  if (needsAvatarStorage && !avatarStoragePriceId) {
+    return NextResponse.json({ error: "Avatar pricing is not configured" }, { status: 500 });
+  }
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   try {
@@ -126,6 +152,16 @@ export async function POST(req: Request) {
 
     if (existingSub?.stripeCustomerId) {
       stripeCustomerId = existingSub.stripeCustomerId;
+      // A retry (e.g. the buyer went back after cancelling on Stripe's
+      // page) could pick a different avatar count the second time —
+      // refresh it on the existing placeholder row rather than leaving it
+      // stuck at whatever was chosen on the first attempt.
+      if (needsAvatarStorage) {
+        await prisma.subscription.update({
+          where: { id: existingSub.id },
+          data: { avatarAllowance: avatarCount },
+        });
+      }
     } else {
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
@@ -152,6 +188,7 @@ export async function POST(req: Request) {
           stripeCustomerId,
           planType,
           billingTerm,
+          avatarAllowance: needsAvatarStorage ? avatarCount : undefined,
           status: "INCOMPLETE",
         },
       });
@@ -173,7 +210,15 @@ export async function POST(req: Request) {
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
+      // Platform-fee item first, avatar-storage second — handleSubscriptionUpsert
+      // (app/api/stripe/webhook/route.ts) reads items.data[0] as "the" price/
+      // product for this row, which should reflect the plan, not the add-on.
+      line_items: needsAvatarStorage
+        ? [
+            { price: priceId, quantity: 1 },
+            { price: avatarStoragePriceId!, quantity: avatarCount! },
+          ]
+        : [{ price: priceId, quantity: 1 }],
       success_url: `${appUrl}/dashboard/checkout/success?redirect=${encodeURIComponent(redirectAfterCheckout)}`,
       cancel_url: `${appUrl}/dashboard/billing`,
       metadata: {

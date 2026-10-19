@@ -350,6 +350,16 @@ model Subscription {
   // for why only one row's value is ever actually read.
   creditsLimitMilliOverride Int?
 
+  // Self-serve Mid Market/Small Business checkout: how many avatar slots
+  // this subscription paid for (billed as an AVATAR_STORAGE-priced line
+  // item on this same Stripe subscription, quantity = this number — see
+  // app/api/stripe/checkout-session/route.ts). Null for every plan type
+  // that doesn't offer avatar selection at checkout (CREATOR, ENTERPRISE,
+  // LEGACY). Deliberately just a cap, not N separate AVATAR_STORAGE rows —
+  // no real avatar exists yet at checkout time, so there's nothing per-row
+  // to track until one is actually linked later.
+  avatarAllowance Int?
+
   // Phase 2 avatar billing automation — set when a self-serve Stripe
   // provision/cancel call fails, so the row is never silently left unbilled.
   // Cleared on the next successful attempt (initial or retried via the
@@ -435,6 +445,11 @@ model CheckoutDraft {
 
   planType    PlanType
   billingTerm BillingTerm
+  // How many avatar slots the buyer chose, capped at the plan/term's own
+  // allowance (lib/pricing/plans.ts) — defaults to 1 for any draft created
+  // before this field existed. Carried onto the resulting Subscription's
+  // avatarAllowance once payment completes (see activate-guest-account.ts).
+  avatarCount Int @default(1)
 
   email       String
   fullName    String

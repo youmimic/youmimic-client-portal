@@ -14,6 +14,9 @@ export type BillingAction =
       // Required by the API for MID_MARKET/SMALL_BUSINESS, ignored for
       // CREATOR/ENTERPRISE — see app/api/stripe/checkout-session/route.ts.
       billingTerm?: "MONTHLY_12" | "MONTHLY_24";
+      // Same — only meaningful for MID_MARKET/SMALL_BUSINESS, validated
+      // server-side against that plan/term's own allowance.
+      avatarCount?: number;
     }
   | { type: "portal"; enterpriseId?: string }
   | { type: "managed" }; // enterprise billing is handled by the YouMimic team
@@ -62,6 +65,7 @@ export function BillingActionButton({
               planType: action.planType,
               ...(action.enterpriseId && { enterpriseId: action.enterpriseId }),
               ...(action.billingTerm && { billingTerm: action.billingTerm }),
+              ...(action.avatarCount != null && { avatarCount: action.avatarCount }),
             }
           : {
               ...(action.enterpriseId && { enterpriseId: action.enterpriseId }),

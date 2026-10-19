@@ -35,6 +35,9 @@ vi.mock("@/lib/stripe", () => ({
 const VALID_INPUT = {
   planType: "MID_MARKET" as const,
   billingTerm: "MONTHLY_24" as const,
+  // Mid Market 24mo allows up to 5 (lib/pricing/plans.ts) — any value in
+  // range works for these tests, which aren't exercising the limit itself.
+  avatarCount: 2,
   email: "buyer@example.com",
   fullName: "Jane Buyer",
   companyName: "Acme Co",

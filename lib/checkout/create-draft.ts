@@ -84,7 +84,7 @@ export async function createCheckoutDraft(rawInput: unknown): Promise<CreateDraf
     };
   }
 
-  const { planType, billingTerm, email, fullName, companyName } = parsed.data;
+  const { planType, billingTerm, avatarCount, email, fullName, companyName } = parsed.data;
   // The schema already requires both checkboxes true — recorded here as the
   // real acceptance moment, not fabricated later once a User row exists.
   const now = new Date();
@@ -123,6 +123,7 @@ export async function createCheckoutDraft(rawInput: unknown): Promise<CreateDraf
       status: "CREATED",
       planType,
       billingTerm,
+      avatarCount,
       email,
       fullName,
       companyName: companyName || null,
@@ -187,7 +188,7 @@ export async function updateCheckoutDraft(
     };
   }
 
-  const { planType, billingTerm, email, fullName, companyName } = parsed.data;
+  const { planType, billingTerm, avatarCount, email, fullName, companyName } = parsed.data;
 
   const priceId = resolveGuestPriceId(planType, billingTerm);
   if (!priceId || priceId === "price_...") {
@@ -221,6 +222,7 @@ export async function updateCheckoutDraft(
     data: {
       planType,
       billingTerm,
+      avatarCount,
       email,
       fullName,
       companyName: companyName || null,

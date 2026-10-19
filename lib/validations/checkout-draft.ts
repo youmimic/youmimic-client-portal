@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maxAvatarsFor } from "@/lib/pricing/plans";
 
 // Same rules as lib/validations/auth.ts's private normalizeEmail/emailRegex.
 const emailRegex =
@@ -17,51 +18,60 @@ export type GuestCheckoutPlanType = (typeof GUEST_CHECKOUT_PLAN_TYPES)[number];
 export const BILLING_TERMS = ["MONTHLY_12", "MONTHLY_24"] as const;
 export type GuestCheckoutBillingTerm = (typeof BILLING_TERMS)[number];
 
-export const createCheckoutDraftSchema = z.object({
-  planType: z.enum(GUEST_CHECKOUT_PLAN_TYPES),
-  billingTerm: z.enum(BILLING_TERMS),
+export const createCheckoutDraftSchema = z
+  .object({
+    planType: z.enum(GUEST_CHECKOUT_PLAN_TYPES),
+    billingTerm: z.enum(BILLING_TERMS),
+    // Upper bound here is just a sanity cap — the real limit is the
+    // plan/term's own allowance, enforced by the .refine() below (never
+    // trust the browser's count beyond that).
+    avatarCount: z.number().int().min(1).max(50),
 
-  email: z
-    .string()
-    .transform(normalizeEmail)
-    .refine((value) => value.length >= 6, {
-      message: "Email is required",
-    })
-    .refine((value) => emailRegex.test(value), {
-      message: "Invalid email address",
+    email: z
+      .string()
+      .transform(normalizeEmail)
+      .refine((value) => value.length >= 6, {
+        message: "Email is required",
+      })
+      .refine((value) => emailRegex.test(value), {
+        message: "Invalid email address",
+      }),
+
+    fullName: z
+      .string()
+      .transform(normalizeName)
+      .refine((value) => value.length >= 2, {
+        message: "Full name must be at least 2 characters",
+      })
+      .refine((value) => value.length <= 100, {
+        message: "Full name must be 100 characters or less",
+      }),
+
+    companyName: z
+      .string()
+      .trim()
+      .max(200, "Company name must be 200 characters or less")
+      .optional(),
+
+    // Same fields/messages as lib/validations/auth.ts's registerSchema — a
+    // guest buyer never goes through /signup, so this is the only place
+    // they'd otherwise never see or accept either document before paying.
+    acceptTerms: z.boolean().refine((value) => value === true, {
+      message: "You must agree to the Terms and Conditions",
     }),
-
-  fullName: z
-    .string()
-    .transform(normalizeName)
-    .refine((value) => value.length >= 2, {
-      message: "Full name must be at least 2 characters",
-    })
-    .refine((value) => value.length <= 100, {
-      message: "Full name must be 100 characters or less",
+    termsLinkClicked: z.boolean().refine((value) => value === true, {
+      message: "Please open and review the Terms and Conditions before continuing",
     }),
-
-  companyName: z
-    .string()
-    .trim()
-    .max(200, "Company name must be 200 characters or less")
-    .optional(),
-
-  // Same fields/messages as lib/validations/auth.ts's registerSchema — a
-  // guest buyer never goes through /signup, so this is the only place
-  // they'd otherwise never see or accept either document before paying.
-  acceptTerms: z.boolean().refine((value) => value === true, {
-    message: "You must agree to the Terms and Conditions",
-  }),
-  termsLinkClicked: z.boolean().refine((value) => value === true, {
-    message: "Please open and review the Terms and Conditions before continuing",
-  }),
-  acceptPrivacyPolicy: z.boolean().refine((value) => value === true, {
-    message: "You must accept the Privacy Policy",
-  }),
-  privacyPolicyLinkClicked: z.boolean().refine((value) => value === true, {
-    message: "Please open the Privacy Policy before continuing",
-  }),
-});
+    acceptPrivacyPolicy: z.boolean().refine((value) => value === true, {
+      message: "You must accept the Privacy Policy",
+    }),
+    privacyPolicyLinkClicked: z.boolean().refine((value) => value === true, {
+      message: "Please open the Privacy Policy before continuing",
+    }),
+  })
+  .refine((data) => data.avatarCount <= maxAvatarsFor(data.planType, data.billingTerm), {
+    message: "That many avatars isn't available on this plan.",
+    path: ["avatarCount"],
+  });
 
 export type CreateCheckoutDraftInput = z.infer<typeof createCheckoutDraftSchema>;
