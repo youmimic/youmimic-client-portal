@@ -717,9 +717,18 @@ export default async function HomePage() {
           marketing copy, so it shouldn't be swappable from the CMS. Positive
           lockup renders on the light theme, Negative on the dark theme —
           both are the exact supplied files, swapped via CSS only, never
-          recoloured or inverted like the greyscale treatment above. */}
+          recoloured or inverted like the greyscale treatment above.
+
+          Deliberately separated from Awards and Nominations above with its
+          own divider rather than just relying on section spacing: a
+          certification/partner mark sitting directly under an "Awards and
+          Nominations" heading with no visual break could be misread as us
+          claiming it as an award, which the Code of Practice's
+          no-misrepresentation clause (§11.5) makes a real risk to avoid, not
+          just a style preference. */}
       <section className="py-16 sm:py-20">
         <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
+          <div className="mx-auto mb-10 h-px w-16 bg-border" aria-hidden="true" />
           <div className="flex items-center justify-center">
             <a
               href="https://mark.tasmanian.com.au/tasmanian-licensees/youmimic"
