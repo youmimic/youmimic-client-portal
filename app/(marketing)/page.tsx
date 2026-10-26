@@ -728,7 +728,7 @@ export default async function HomePage() {
           just a style preference. */}
       <section className="py-16 sm:py-20">
         <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-          <div className="mx-auto mb-10 h-px w-16 bg-border" aria-hidden="true" />
+          <div className="mx-auto mb-10 h-px w-24 bg-border dark:bg-muted-foreground" aria-hidden="true" />
           <div className="flex items-center justify-center">
             <a
               href="https://mark.tasmanian.com.au/tasmanian-licensees/youmimic"
