@@ -726,9 +726,9 @@ export default async function HomePage() {
           claiming it as an award, which the Code of Practice's
           no-misrepresentation clause (§11.5) makes a real risk to avoid, not
           just a style preference. */}
-      <section className="py-16 sm:py-20">
+      <section className="py-8 sm:py-10">
         <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
-          <div className="mx-auto mb-10 h-px w-24 bg-border dark:bg-muted-foreground" aria-hidden="true" />
+          <div className="mx-auto mb-6 h-px w-24 bg-border dark:bg-muted-foreground" aria-hidden="true" />
           <div className="flex items-center justify-center">
             <a
               href="https://mark.tasmanian.com.au/tasmanian-licensees/youmimic"
