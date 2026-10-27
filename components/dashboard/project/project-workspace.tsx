@@ -24,6 +24,7 @@ import {
   SettingsPanel,
   type ProjectSettingsPatch,
   type SceneSettingsPatch,
+  type WatermarkPosition,
 } from "@/components/dashboard/project/settings-panel";
 import type { HeyGenEngine } from "@/lib/heygen";
 import { moveItem } from "@/lib/projects/ordering";
@@ -75,6 +76,7 @@ export function ProjectWorkspace({
   const flushingRef = useRef<Promise<boolean> | null>(null);
 
   const engineLower = project.engine.toLowerCase() as HeyGenEngine;
+  const watermarkPositionLower = project.watermarkPosition.toLowerCase() as WatermarkPosition;
   const generating = project.status === "GENERATING";
   const locked = generating;
 
@@ -239,6 +241,7 @@ export function ProjectWorkspace({
       if (patch.engine !== undefined) next.engine = patch.engine.toUpperCase() as ProjectView["engine"];
       if (patch.captionsEnabled !== undefined) next.captionsEnabled = patch.captionsEnabled;
       if (patch.watermarkUrl !== undefined) next.watermarkUrl = patch.watermarkUrl;
+      if (patch.watermarkPosition !== undefined) next.watermarkPosition = patch.watermarkPosition.toUpperCase() as ProjectView["watermarkPosition"];
       next.defaults = {
         ...p.defaults,
         defaultVoiceId: patch.defaultVoiceId !== undefined ? patch.defaultVoiceId : p.defaults.defaultVoiceId,
@@ -724,6 +727,7 @@ export function ProjectWorkspace({
                   engine={engineLower}
                   captionsEnabled={project.captionsEnabled}
                   watermarkUrl={project.watermarkUrl}
+                  watermarkPosition={watermarkPositionLower}
                   disabled={locked}
                   onSceneChange={(patch) => editSceneSettings(activeScene.id, patch)}
                   onProjectChange={editProject}

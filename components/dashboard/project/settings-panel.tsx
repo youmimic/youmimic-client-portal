@@ -34,8 +34,18 @@ export type ProjectSettingsPatch = Partial<
     engine: HeyGenEngine;
     captionsEnabled: boolean;
     watermarkUrl: string | null;
+    watermarkPosition: WatermarkPosition;
   }
 >;
+
+export type WatermarkPosition = "top_left" | "top_right" | "bottom_left" | "bottom_right";
+
+const WATERMARK_POSITION_OPTIONS: { value: WatermarkPosition; label: string }[] = [
+  { value: "top_left", label: "Top left" },
+  { value: "top_right", label: "Top right" },
+  { value: "bottom_left", label: "Bottom left" },
+  { value: "bottom_right", label: "Bottom right" },
+];
 
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
@@ -50,6 +60,7 @@ export function SettingsPanel({
   engine,
   captionsEnabled,
   watermarkUrl,
+  watermarkPosition,
   disabled,
   onSceneChange,
   onProjectChange,
@@ -64,6 +75,7 @@ export function SettingsPanel({
   engine: HeyGenEngine;
   captionsEnabled: boolean;
   watermarkUrl: string | null;
+  watermarkPosition: WatermarkPosition;
   disabled: boolean;
   onSceneChange: (patch: SceneSettingsPatch) => void;
   onProjectChange: (patch: ProjectSettingsPatch) => void;
@@ -266,7 +278,27 @@ export function SettingsPanel({
                   Remove
                 </Button>
               </div>
-            ) : (
+            ) : null}
+            {watermarkUrl && (
+              <div role="group" aria-label="Watermark position" className="grid grid-cols-2 gap-2">
+                {WATERMARK_POSITION_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={watermarkPosition === opt.value}
+                    onClick={() => onProjectChange({ watermarkPosition: opt.value })}
+                    className={cn(
+                      "rounded-md border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
+                      watermarkPosition === opt.value ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!watermarkUrl && (
               <div className="space-y-1.5">
                 <Label htmlFor="project-watermark-upload" className="sr-only">
                   Upload a watermark image
@@ -284,7 +316,7 @@ export function SettingsPanel({
                   className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-transparent file:px-2.5 file:py-1 file:text-xs file:font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 <p className="text-xs text-muted-foreground">
-                  PNG or JPEG, shown in the bottom-right corner of the video. Optional.
+                  PNG or JPEG, shown as a small corner mark on the video. Optional.
                 </p>
               </div>
             )}

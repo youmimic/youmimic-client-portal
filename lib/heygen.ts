@@ -136,6 +136,7 @@ export async function getHeyGenVideoStatus(videoId: string): Promise<HeyGenVideo
 // HeyGen has no separate "queued" state, the job starts processing
 // immediately.
 export type HeyGenEngine = "avatar_iii" | "avatar_iv" | "avatar_v";
+export type HeyGenWatermarkPosition = "top_left" | "top_right" | "bottom_left" | "bottom_right";
 
 export async function createHeyGenVideo(params: {
   avatarId: string;
@@ -265,9 +266,10 @@ export async function createHeyGenStudioVideo(params: {
   // (a bare URL string errors with "Unable to extract tag using
   // discriminator 'type'"), and the field is gated per-workspace — it was
   // rejected with "Custom watermark is not enabled for this workspace"
-  // until HeyGen support turned it on for this account. Scale/opacity/
-  // placement are fixed defaults for now; no UI exposes them yet.
+  // until HeyGen support turned it on for this account. Scale/opacity are
+  // fixed defaults for now; no UI exposes them yet.
   watermarkUrl?: string;
+  watermarkPosition?: HeyGenWatermarkPosition;
 }): Promise<{ video_id: string }> {
   return heygenFetch<{ video_id: string }>(
     "/v3/videos",
@@ -287,7 +289,7 @@ export async function createHeyGenStudioVideo(params: {
                 image: { type: "url", url: params.watermarkUrl },
                 scale: 1,
                 opacity: 1,
-                placement: { position: "bottom_right" },
+                placement: { position: params.watermarkPosition ?? "bottom_right" },
               },
             }
           : {}),

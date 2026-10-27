@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VIDEO_ASPECT_RATIOS, VIDEO_ENGINES, VIDEO_RESOLUTIONS } from "@/lib/validations/video";
+import { VIDEO_ASPECT_RATIOS, VIDEO_ENGINES, VIDEO_RESOLUTIONS, WATERMARK_POSITIONS } from "@/lib/validations/video";
 import {
   HEX_COLOR,
   MAX_MEDIA_DURATION,
@@ -38,6 +38,7 @@ export const updateProjectSchema = z
     defaultVoiceName: z.string().trim().max(200).nullable().optional(),
     captionsEnabled: z.boolean().optional(),
     watermarkUrl: z.string().trim().max(MEDIA_URL_MAX).nullable().optional(),
+    watermarkPosition: z.enum(WATERMARK_POSITIONS).optional(),
   })
   .strict();
 

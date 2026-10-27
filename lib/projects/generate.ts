@@ -1,4 +1,4 @@
-import type { VideoEngine, VideoGenerationStatus, VideoProjectStatus } from "@/app/generated/prisma/enums";
+import type { VideoEngine, VideoGenerationStatus, VideoProjectStatus, WatermarkPosition } from "@/app/generated/prisma/enums";
 import prisma from "@/lib/prisma";
 import {
   createHeyGenStudioVideo,
@@ -6,6 +6,7 @@ import {
   HeyGenApiError,
   type HeyGenEngine,
   type HeyGenStudioScene,
+  type HeyGenWatermarkPosition,
 } from "@/lib/heygen";
 import { projectContentHash } from "@/lib/projects/hash";
 import { DEFAULT_MEDIA_DURATION, evaluateProject, resolveScene, sceneLabel, type SceneData, type SceneIssue } from "@/lib/projects/rules";
@@ -29,6 +30,13 @@ const ENGINE_TO_API: Record<VideoEngine, HeyGenEngine> = {
   AVATAR_III: "avatar_iii",
   AVATAR_IV: "avatar_iv",
   AVATAR_V: "avatar_v",
+};
+
+const WATERMARK_POSITION_TO_API: Record<WatermarkPosition, HeyGenWatermarkPosition> = {
+  TOP_LEFT: "top_left",
+  TOP_RIGHT: "top_right",
+  BOTTOM_LEFT: "bottom_left",
+  BOTTOM_RIGHT: "bottom_right",
 };
 
 function callbackUrl(): string | undefined {
@@ -250,6 +258,7 @@ export async function generateProject(userId: string, projectId: string, expecte
     aspectRatio: project.aspectRatio,
     resolution: project.resolution ?? undefined,
     watermarkUrl: project.watermarkUrl ?? undefined,
+    watermarkPosition: project.watermarkUrl ? project.watermarkPosition : undefined,
     sceneSnapshot: snapshot,
   };
 
@@ -263,6 +272,7 @@ export async function generateProject(userId: string, projectId: string, expecte
       resolution: project.resolution ?? undefined,
       captions: project.captionsEnabled,
       watermarkUrl: project.watermarkUrl ?? undefined,
+      watermarkPosition: WATERMARK_POSITION_TO_API[project.watermarkPosition],
     });
 
     const video = await prisma.generatedVideo.create({

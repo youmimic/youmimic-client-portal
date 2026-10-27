@@ -592,7 +592,10 @@ model VideoProject {
   // A hosted image URL (Vercel Blob) applied as a watermark on this
   // project's renders. Per-project only, by design — there's no
   // account-wide branding/settings concept in the app to default from.
-  watermarkUrl String?
+  // Position only matters once a watermarkUrl is set, hence the default
+  // rather than leaving it null too.
+  watermarkUrl      String?
+  watermarkPosition WatermarkPosition @default(BOTTOM_RIGHT)
 
   // Defaults that scenes inherit when their own value is null.
   defaultAvatarId     String?
@@ -702,6 +705,16 @@ enum VideoEngine {
   AVATAR_V
 }
 
+// Matches HeyGen's watermark.placement.position field — confirmed live
+// (2026-10-27). See lib/validations/video.ts's WATERMARK_POSITIONS for the
+// lowercase form used in the API/UI layer.
+enum WatermarkPosition {
+  TOP_LEFT
+  TOP_RIGHT
+  BOTTOM_LEFT
+  BOTTOM_RIGHT
+}
+
 // Avatar Studio (v1, script-only): one row per HeyGen video generation job.
 // Created synchronously when the job is accepted by HeyGen (status
 // PROCESSING, heygenVideoId set from the create response — HeyGen has no
@@ -757,8 +770,9 @@ model GeneratedVideo {
   aspectRatio  String?
   resolution   String?
   voiceId      String?
-  voiceName    String?
-  watermarkUrl String?
+  voiceName         String?
+  watermarkUrl      String?
+  watermarkPosition WatermarkPosition?
 
   // Set only when this render was produced from a multi-scene project.
   // sceneSnapshot is the ordered scene list exactly as it was sent to the

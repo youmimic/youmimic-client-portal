@@ -1,5 +1,5 @@
 import type { Prisma } from "@/app/generated/prisma/client";
-import type { VideoEngine, VideoGenerationStatus, VideoProjectStatus } from "@/app/generated/prisma/enums";
+import type { VideoEngine, VideoGenerationStatus, VideoProjectStatus, WatermarkPosition } from "@/app/generated/prisma/enums";
 import prisma from "@/lib/prisma";
 import { isPermutation, insertAfter, moveItem } from "@/lib/projects/ordering";
 import { projectContentHash } from "@/lib/projects/hash";
@@ -66,6 +66,7 @@ export type ProjectView = {
   engine: "AVATAR_III" | "AVATAR_IV" | "AVATAR_V";
   captionsEnabled: boolean;
   watermarkUrl: string | null;
+  watermarkPosition: "TOP_LEFT" | "TOP_RIGHT" | "BOTTOM_LEFT" | "BOTTOM_RIGHT";
   defaults: ProjectDefaults;
   version: number;
   scenes: SceneData[];
@@ -186,6 +187,7 @@ export async function getProjectView(userId: string, projectId: string): Promise
     engine: project.engine,
     captionsEnabled: project.captionsEnabled,
     watermarkUrl: project.watermarkUrl,
+    watermarkPosition: project.watermarkPosition,
     defaults: {
       defaultAvatarId: project.defaultAvatarId,
       defaultAvatarLookId: project.defaultAvatarLookId,
@@ -295,7 +297,7 @@ export async function createProject(userId: string, input: { title?: string; ava
 }
 
 export async function updateProject(userId: string, projectId: string, input: UpdateProjectInput): Promise<{ version: number }> {
-  const { expectedVersion, engine, ...rest } = input;
+  const { expectedVersion, engine, watermarkPosition, ...rest } = input;
 
   return prisma.$transaction(async (tx) => {
     const avatarId = rest.defaultAvatarId;
@@ -311,6 +313,7 @@ export async function updateProject(userId: string, projectId: string, input: Up
 
     const data: Prisma.VideoProjectUpdateManyMutationInput & Record<string, unknown> = { ...rest };
     if (engine) data.engine = engine.toUpperCase() as VideoEngine;
+    if (watermarkPosition) data.watermarkPosition = watermarkPosition.toUpperCase() as WatermarkPosition;
     // Changing the default avatar without naming a look clears the old look.
     if (avatarId !== undefined && rest.defaultAvatarLookId === undefined) data.defaultAvatarLookId = null;
 
@@ -556,6 +559,7 @@ export async function duplicateProject(userId: string, projectId: string): Promi
         defaultVoiceName: source.defaultVoiceName,
         captionsEnabled: source.captionsEnabled,
         watermarkUrl: source.watermarkUrl,
+        watermarkPosition: source.watermarkPosition,
         scenes: {
           create: source.scenes.map((sc, index) => ({
             orderIndex: index,

@@ -16,6 +16,10 @@ export const VIDEO_ENGINES = ["avatar_iii", "avatar_iv", "avatar_v"] as const;
 export const VIDEO_ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:5"] as const;
 export const VIDEO_RESOLUTIONS = ["720p", "1080p", "4k"] as const;
 
+// Matches HeyGen's watermark.placement.position field — confirmed live
+// (2026-10-27). Only meaningful when a project has a watermarkUrl set.
+export const WATERMARK_POSITIONS = ["top_left", "top_right", "bottom_left", "bottom_right"] as const;
+
 // HeyGen's own script limit is 5000 characters. avatarLookId is optional —
 // only required when the avatar has looks (imported from HeyGen); the route
 // layer validates it belongs to the requested avatar. title, aspectRatio,

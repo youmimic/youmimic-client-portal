@@ -14,6 +14,7 @@ export function projectContentHash(
     engine: string;
     captionsEnabled: boolean;
     watermarkUrl?: string | null;
+    watermarkPosition?: string | null;
   },
   scenes: SceneData[],
 ): string {
@@ -24,6 +25,10 @@ export function projectContentHash(
     engine: project.engine,
     captionsEnabled: project.captionsEnabled,
     watermarkUrl: project.watermarkUrl ?? null,
+    // Position only matters when a watermark is actually set — otherwise
+    // flipping it back and forth with no watermark would mark the video
+    // outdated for a setting that has no visible effect.
+    watermarkPosition: project.watermarkUrl ? (project.watermarkPosition ?? null) : null,
     scenes: ordered.map((scene) => {
       const r = resolveScene(scene, project);
       return {
