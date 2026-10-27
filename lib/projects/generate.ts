@@ -249,6 +249,7 @@ export async function generateProject(userId: string, projectId: string, expecte
     title: project.title.trim() || undefined,
     aspectRatio: project.aspectRatio,
     resolution: project.resolution ?? undefined,
+    watermarkUrl: project.watermarkUrl ?? undefined,
     sceneSnapshot: snapshot,
   };
 
@@ -261,6 +262,7 @@ export async function generateProject(userId: string, projectId: string, expecte
       aspectRatio: project.aspectRatio,
       resolution: project.resolution ?? undefined,
       captions: project.captionsEnabled,
+      watermarkUrl: project.watermarkUrl ?? undefined,
     });
 
     const video = await prisma.generatedVideo.create({

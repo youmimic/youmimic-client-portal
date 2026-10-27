@@ -589,6 +589,11 @@ model VideoProject {
   resolution  String?
   engine      VideoEngine @default(AVATAR_III)
 
+  // A hosted image URL (Vercel Blob) applied as a watermark on this
+  // project's renders. Per-project only, by design — there's no
+  // account-wide branding/settings concept in the app to default from.
+  watermarkUrl String?
+
   // Defaults that scenes inherit when their own value is null.
   defaultAvatarId     String?
   defaultAvatarLookId String?
@@ -748,11 +753,12 @@ model GeneratedVideo {
   // before the workspace existed (and API callers that omit them) stay valid.
   // A null aspectRatio/resolution means the provider default was used, and a
   // null voiceId means the look's own default voice was used.
-  title       String?
-  aspectRatio String?
-  resolution  String?
-  voiceId     String?
-  voiceName   String?
+  title        String?
+  aspectRatio  String?
+  resolution   String?
+  voiceId      String?
+  voiceName    String?
+  watermarkUrl String?
 
   // Set only when this render was produced from a multi-scene project.
   // sceneSnapshot is the ordered scene list exactly as it was sent to the

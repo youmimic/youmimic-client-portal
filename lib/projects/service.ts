@@ -65,6 +65,7 @@ export type ProjectView = {
   resolution: string | null;
   engine: "AVATAR_III" | "AVATAR_IV" | "AVATAR_V";
   captionsEnabled: boolean;
+  watermarkUrl: string | null;
   defaults: ProjectDefaults;
   version: number;
   scenes: SceneData[];
@@ -184,6 +185,7 @@ export async function getProjectView(userId: string, projectId: string): Promise
     resolution: project.resolution,
     engine: project.engine,
     captionsEnabled: project.captionsEnabled,
+    watermarkUrl: project.watermarkUrl,
     defaults: {
       defaultAvatarId: project.defaultAvatarId,
       defaultAvatarLookId: project.defaultAvatarLookId,
@@ -553,6 +555,7 @@ export async function duplicateProject(userId: string, projectId: string): Promi
         defaultVoiceId: source.defaultVoiceId,
         defaultVoiceName: source.defaultVoiceName,
         captionsEnabled: source.captionsEnabled,
+        watermarkUrl: source.watermarkUrl,
         scenes: {
           create: source.scenes.map((sc, index) => ({
             orderIndex: index,

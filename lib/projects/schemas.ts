@@ -37,6 +37,7 @@ export const updateProjectSchema = z
     defaultVoiceId: nullableId.optional(),
     defaultVoiceName: z.string().trim().max(200).nullable().optional(),
     captionsEnabled: z.boolean().optional(),
+    watermarkUrl: z.string().trim().max(MEDIA_URL_MAX).nullable().optional(),
   })
   .strict();
 

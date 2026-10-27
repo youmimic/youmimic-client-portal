@@ -13,6 +13,7 @@ export function projectContentHash(
     resolution: string | null;
     engine: string;
     captionsEnabled: boolean;
+    watermarkUrl?: string | null;
   },
   scenes: SceneData[],
 ): string {
@@ -22,6 +23,7 @@ export function projectContentHash(
     resolution: project.resolution,
     engine: project.engine,
     captionsEnabled: project.captionsEnabled,
+    watermarkUrl: project.watermarkUrl ?? null,
     scenes: ordered.map((scene) => {
       const r = resolveScene(scene, project);
       return {

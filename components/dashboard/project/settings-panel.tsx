@@ -33,6 +33,7 @@ export type ProjectSettingsPatch = Partial<
     resolution: string | null;
     engine: HeyGenEngine;
     captionsEnabled: boolean;
+    watermarkUrl: string | null;
   }
 >;
 
@@ -48,6 +49,7 @@ export function SettingsPanel({
   resolution,
   engine,
   captionsEnabled,
+  watermarkUrl,
   disabled,
   onSceneChange,
   onProjectChange,
@@ -61,12 +63,35 @@ export function SettingsPanel({
   resolution: string | null;
   engine: HeyGenEngine;
   captionsEnabled: boolean;
+  watermarkUrl: string | null;
   disabled: boolean;
   onSceneChange: (patch: SceneSettingsPatch) => void;
   onProjectChange: (patch: ProjectSettingsPatch) => void;
   canViewCost: boolean;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [watermarkBusy, setWatermarkBusy] = useState(false);
+  const [watermarkError, setWatermarkError] = useState<string | null>(null);
+
+  async function uploadWatermark(file: File) {
+    setWatermarkError(null);
+    setWatermarkBusy(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/dashboard/media/upload-watermark", { method: "POST", body: formData });
+      const json = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok || !json.url) {
+        setWatermarkError(json.error ?? "Couldn't upload that image.");
+        return;
+      }
+      onProjectChange({ watermarkUrl: json.url });
+    } catch {
+      setWatermarkError("Couldn't upload that image.");
+    } finally {
+      setWatermarkBusy(false);
+    }
+  }
   const resolved = resolveScene(scene, defaults);
   const bgOn = scene.backgroundColor !== null;
   const bgValid = scene.backgroundColor === null || HEX_COLOR.test(scene.backgroundColor);
@@ -220,6 +245,52 @@ export function SettingsPanel({
             shortcuts={voiceShortcuts}
             onChange={(v) => onProjectChange({ defaultVoiceId: v?.id ?? null, defaultVoiceName: v?.name ?? null })}
           />
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Watermark</p>
+            {watermarkUrl ? (
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element -- Vercel Blob URL, same as image-crop-picker.tsx */}
+                <img
+                  src={watermarkUrl}
+                  alt="Watermark preview"
+                  className="h-10 w-10 rounded border border-input object-contain bg-muted p-1"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled || watermarkBusy}
+                  onClick={() => onProjectChange({ watermarkUrl: null })}
+                >
+                  Remove
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="project-watermark-upload" className="sr-only">
+                  Upload a watermark image
+                </Label>
+                <input
+                  id="project-watermark-upload"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  disabled={disabled || watermarkBusy}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void uploadWatermark(file);
+                  }}
+                  className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-transparent file:px-2.5 file:py-1 file:text-xs file:font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  PNG or JPEG, shown in the bottom-right corner of the video. Optional.
+                </p>
+              </div>
+            )}
+            {watermarkBusy && <p className="text-xs text-muted-foreground">Uploading…</p>}
+            {watermarkError && <p className="text-xs text-destructive">{watermarkError}</p>}
+          </div>
 
           <div className="space-y-2">
             <p className="text-sm font-medium" id="project-format">

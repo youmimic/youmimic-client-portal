@@ -238,6 +238,7 @@ export function ProjectWorkspace({
       if (patch.resolution !== undefined) next.resolution = patch.resolution;
       if (patch.engine !== undefined) next.engine = patch.engine.toUpperCase() as ProjectView["engine"];
       if (patch.captionsEnabled !== undefined) next.captionsEnabled = patch.captionsEnabled;
+      if (patch.watermarkUrl !== undefined) next.watermarkUrl = patch.watermarkUrl;
       next.defaults = {
         ...p.defaults,
         defaultVoiceId: patch.defaultVoiceId !== undefined ? patch.defaultVoiceId : p.defaults.defaultVoiceId,
@@ -722,6 +723,7 @@ export function ProjectWorkspace({
                   resolution={project.resolution}
                   engine={engineLower}
                   captionsEnabled={project.captionsEnabled}
+                  watermarkUrl={project.watermarkUrl}
                   disabled={locked}
                   onSceneChange={(patch) => editSceneSettings(activeScene.id, patch)}
                   onProjectChange={editProject}

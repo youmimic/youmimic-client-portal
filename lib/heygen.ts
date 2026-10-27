@@ -260,6 +260,14 @@ export async function createHeyGenStudioVideo(params: {
   // .srt via the completed video's subtitle_url — confirmed live as a
   // top-level, schema-valid field on a studio job.
   captions?: boolean;
+  // A hosted image URL applied as a watermark. Confirmed live (2026-10-27):
+  // `watermark.image` needs a discriminated `{ type: "url", url }` shape
+  // (a bare URL string errors with "Unable to extract tag using
+  // discriminator 'type'"), and the field is gated per-workspace — it was
+  // rejected with "Custom watermark is not enabled for this workspace"
+  // until HeyGen support turned it on for this account. Scale/opacity/
+  // placement are fixed defaults for now; no UI exposes them yet.
+  watermarkUrl?: string;
 }): Promise<{ video_id: string }> {
   return heygenFetch<{ video_id: string }>(
     "/v3/videos",
@@ -273,6 +281,16 @@ export async function createHeyGenStudioVideo(params: {
         ...(params.aspectRatio ? { aspect_ratio: params.aspectRatio } : {}),
         ...(params.resolution ? { resolution: params.resolution } : {}),
         ...(params.captions ? { caption: { file_format: "srt", style: "default" } } : {}),
+        ...(params.watermarkUrl
+          ? {
+              watermark: {
+                image: { type: "url", url: params.watermarkUrl },
+                scale: 1,
+                opacity: 1,
+                placement: { position: "bottom_right" },
+              },
+            }
+          : {}),
       }),
     },
     20000,
