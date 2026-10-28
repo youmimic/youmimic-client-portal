@@ -118,6 +118,11 @@ export async function POST(req: Request) {
       client_reference_id: draft.id,
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl.toString(),
+      phone_number_collection: { enabled: true },
+      billing_address_collection: "required",
+      // optional: true since not every customer (e.g. a solo Creator-plan
+      // user) has a business name to give.
+      name_collection: { business: { enabled: true, optional: true } },
       metadata: {
         checkoutDraftId: draft.id,
         planType: draft.planType,

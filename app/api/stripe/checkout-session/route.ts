@@ -221,6 +221,11 @@ export async function POST(req: Request) {
         : [{ price: priceId, quantity: 1 }],
       success_url: `${appUrl}/dashboard/checkout/success?redirect=${encodeURIComponent(redirectAfterCheckout)}`,
       cancel_url: `${appUrl}/dashboard/billing`,
+      phone_number_collection: { enabled: true },
+      billing_address_collection: "required",
+      // optional: true since not every customer (e.g. a solo Creator-plan
+      // user) has a business name to give.
+      name_collection: { business: { enabled: true, optional: true } },
       metadata: {
         planType,
         userId: isPersonalPlan ? session.user.id : "",
