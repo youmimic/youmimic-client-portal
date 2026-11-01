@@ -16,6 +16,7 @@ import {
   HEX_COLOR,
   MOTION_PROMPT_MAX,
   resolveScene,
+  supportsBackgroundOverride,
   type AvatarOption,
   type ProjectDefaults,
   type SceneData,
@@ -108,6 +109,19 @@ export function SettingsPanel({
   const bgOn = scene.backgroundColor !== null;
   const bgValid = scene.backgroundColor === null || HEX_COLOR.test(scene.backgroundColor);
   const isAvatarScene = scene.kind === "AVATAR";
+
+  // Only certain HeyGen avatar types actually honour a background colour
+  // override — see SUPPORTED_BACKGROUND_AVATAR_TYPES's comment in
+  // lib/projects/rules.ts. Resolve the scene's current avatar+look to its
+  // avatarType the same way the rest of this panel resolves avatar/voice.
+  const resolvedAvatarForBg = avatars.find((a) => a.id === resolved.avatarId);
+  const resolvedLookForBg = resolvedAvatarForBg?.looks.find((l) => l.id === resolved.avatarLookId);
+  const resolvedAvatarType = resolvedLookForBg
+    ? resolvedLookForBg.avatarType
+    : (resolvedAvatarForBg?.looks.length ?? 0) === 0
+      ? (resolvedAvatarForBg?.avatarType ?? null)
+      : null;
+  const backgroundOverrideAvailable = isAvatarScene && supportsBackgroundOverride(resolvedAvatarType);
   // Confirmed live against the provider: motion_prompt is schema-valid only
   // on the Avatar V engine — sending it elsewhere is rejected. Not yet
   // exercised on a real avatar, only fake ones.
@@ -168,7 +182,7 @@ export function SettingsPanel({
             )}
           </div>
 
-          {isAvatarScene && (
+          {backgroundOverrideAvailable && (
             <div className="space-y-2">
               <p className="text-sm font-medium">Background colour</p>
               {bgOn ? (

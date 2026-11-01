@@ -47,6 +47,7 @@ export async function syncAvatarLookFromHeyGen(
         previewUrl: look.preview_image_url ?? undefined,
         videoUrl: look.preview_video_url ?? undefined,
         defaultVoiceId: look.default_voice_id ?? undefined,
+        avatarType: look.avatar_type ?? undefined,
         ...(mappedStatus ? { status: mappedStatus } : {}),
       },
     });
@@ -107,12 +108,16 @@ export async function syncAvatarFromHeyGen(
   try {
     const mappedStatus = mapHeyGenStatus(look.status);
     const videoUrl = "preview_video_url" in look ? look.preview_video_url : undefined;
+    // HeyGenAvatar (the group-fallback shape) has no avatar_type field —
+    // only HeyGenAvatarLook does.
+    const avatarType = "avatar_type" in look ? look.avatar_type : undefined;
 
     await prisma.avatar.update({
       where: { id: avatarId },
       data: {
         previewUrl: look.preview_image_url ?? undefined,
         videoUrl: videoUrl ?? undefined,
+        avatarType: avatarType ?? undefined,
         ...(mappedStatus ? { status: mappedStatus } : {}),
       },
     });
@@ -215,6 +220,7 @@ export async function addAvatarLookFromHeyGen(
         previewUrl: look.preview_image_url ?? undefined,
         videoUrl: look.preview_video_url ?? undefined,
         defaultVoiceId: look.default_voice_id ?? undefined,
+        avatarType: look.avatar_type ?? undefined,
       },
       select: { id: true },
     });

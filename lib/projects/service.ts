@@ -226,9 +226,10 @@ export async function listAvatarOptions(userId: string): Promise<AvatarOption[]>
       status: true,
       previewUrl: true,
       heygenAvatarId: true,
+      avatarType: true,
       looks: {
         orderBy: { name: "asc" },
-        select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, defaultVoiceId: true },
+        select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, defaultVoiceId: true, avatarType: true },
       },
     },
   });
@@ -241,6 +242,7 @@ export async function listAvatarOptions(userId: string): Promise<AvatarOption[]>
       name: a.name,
       previewUrl: readyLooks[0]?.previewUrl ?? a.looks[0]?.previewUrl ?? a.previewUrl,
       usable,
+      avatarType: a.avatarType,
       looks: a.looks.map((l) => ({
         id: l.id,
         name: l.name,
@@ -248,6 +250,7 @@ export async function listAvatarOptions(userId: string): Promise<AvatarOption[]>
         previewUrl: l.previewUrl,
         videoUrl: l.videoUrl,
         defaultVoiceId: l.defaultVoiceId,
+        avatarType: l.avatarType,
       })),
     };
   });

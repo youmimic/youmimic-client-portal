@@ -21,6 +21,24 @@ export const MAX_MEDIA_DURATION = 300;
 export const DEFAULT_MEDIA_DURATION = 5;
 export const MOTION_PROMPT_MAX = 500;
 
+// Which HeyGen avatar_type values actually honor the studio background.color
+// field. Confirmed live (2026-11-02): "digital_twin" avatars — recorded
+// video footage, which is every avatar in this app at the time of writing —
+// silently ignore it; the request succeeds and a video renders, but the
+// background stays whatever was in the original footage. "photo_avatar" is
+// listed as the one type where a colour override is plausible (a still
+// image composited live, not baked video) based on HeyGen's docs and how
+// the feature is architecturally described there — not yet live-confirmed
+// working, since no photo_avatar exists in this app's fleet to test against.
+// Treat anything not in this set (including null/unknown) as unsupported:
+// the UI control should stay hidden rather than show something that quietly
+// does nothing, the way it did for digital_twin.
+export const SUPPORTED_BACKGROUND_AVATAR_TYPES = new Set(["photo_avatar"]);
+
+export function supportsBackgroundOverride(avatarType: string | null | undefined): boolean {
+  return !!avatarType && SUPPORTED_BACKGROUND_AVATAR_TYPES.has(avatarType);
+}
+
 export type SceneKindValue = "AVATAR" | "IMAGE" | "VIDEO";
 export const SCENE_KINDS: SceneKindValue[] = ["AVATAR", "IMAGE", "VIDEO"];
 
@@ -56,6 +74,10 @@ export type AvatarOption = {
   // Thumbnail for the avatar itself: its first ready look, else any look.
   previewUrl: string | null;
   usable: boolean;
+  // Only meaningful for a manually-linked avatar with no looks at all (see
+  // Avatar.avatarType's schema comment) — ignored whenever looks is
+  // non-empty, since each look carries its own avatarType instead.
+  avatarType: string | null;
   looks: {
     id: string;
     name: string;
@@ -67,6 +89,8 @@ export type AvatarOption = {
     // lib/video-display.ts's avatarVoiceShortcuts). Different looks on the
     // same avatar can genuinely have different default voices.
     defaultVoiceId: string | null;
+    // See SUPPORTED_BACKGROUND_AVATAR_TYPES above.
+    avatarType: string | null;
   }[];
 };
 

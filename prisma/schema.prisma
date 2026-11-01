@@ -533,6 +533,16 @@ model Avatar {
   contactPhone  String?
   billingStatus AvatarBillingStatus @default(ACTIVE)
 
+  // HeyGen's avatar_type (e.g. "digital_twin", "photo_avatar") for the
+  // manually-linked, no-looks case — Avatar.heygenAvatarId is used directly.
+  // Null until the next sync for rows that predate this column. Confirmed
+  // live (2026-11-02): digital_twin avatars (every avatar in this app at
+  // the time of writing) silently ignore the studio background.color
+  // field — the request succeeds but the rendered video keeps the avatar's
+  // own baked-in background. See SUPPORTED_BACKGROUND_AVATAR_TYPES in
+  // lib/projects/rules.ts, which gates the UI control on this value.
+  avatarType String?
+
   user            User             @relation(fields: [userId], references: [id])
   enterprise      Enterprise?      @relation(fields: [enterpriseId], references: [id])
   subscriptions   Subscription[]
@@ -557,6 +567,8 @@ model AvatarLook {
   previewUrl     String?
   videoUrl       String?
   defaultVoiceId String?
+  // See Avatar.avatarType's comment — same HeyGen field, same gating use.
+  avatarType     String?
   createdAt      DateTime @default(now())
 
   avatar          Avatar           @relation(fields: [avatarId], references: [id], onDelete: Cascade)
