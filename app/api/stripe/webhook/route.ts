@@ -26,10 +26,12 @@ const PLAN_LABELS: Record<string, string> = {
   FREE: "Free",
   CREATOR: "Creator",
   ENTERPRISE: "Enterprise",
+  MID_MARKET: "Mid Market",
+  SMALL_BUSINESS: "Small Business",
 };
 
 function appUrl(): string {
-  return process.env.BASE_URL ?? "http://localhost:3000";
+  return process.env.BASE_URL || "http://localhost:3000";
 }
 
 // User-facing billing emails link to our own /dashboard/billing rather than
