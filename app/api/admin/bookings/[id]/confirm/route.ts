@@ -11,7 +11,7 @@ import { formatDate } from "@/lib/format";
 import { formatLocationSummary } from "@/lib/booking-time";
 
 function appUrl(): string {
-  return process.env.BASE_URL ?? "http://localhost:3000";
+  return process.env.BASE_URL || "http://localhost:3000";
 }
 
 export async function POST(

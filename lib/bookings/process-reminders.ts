@@ -6,7 +6,7 @@ import { formatLocationSummary } from "@/lib/booking-time";
 const HOUR_MS = 60 * 60 * 1000;
 
 function appUrl(): string {
-  return process.env.BASE_URL ?? "http://localhost:3000";
+  return process.env.BASE_URL || "http://localhost:3000";
 }
 
 // Cron-driven (see app/api/internal/billing/retry-failed-provisioning —
