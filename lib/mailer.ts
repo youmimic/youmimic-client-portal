@@ -12,6 +12,8 @@ import { PaymentFailedEmail } from "@/emails/templates/payment-failed-email";
 import { AdminBillingEventEmail } from "@/emails/templates/admin-billing-event-email";
 import { CheckoutReminder2dEmail } from "@/emails/templates/checkout-reminder-2d-email";
 import { CheckoutReminder7dEmail } from "@/emails/templates/checkout-reminder-7d-email";
+import { BookingConfirmedEmail } from "@/emails/templates/booking-confirmed-email";
+import { BookingReminderEmail } from "@/emails/templates/booking-reminder-email";
 import type { ContactInput } from "@/lib/validations/contact";
 
 type SendVerifyEmailParams = {
@@ -189,6 +191,7 @@ type SendSubscriptionStartedEmailParams = {
   name: string;
   planLabel: string;
   dashboardUrl: string;
+  bookingUrl: string;
   idempotencyKey: string;
 };
 
@@ -197,6 +200,7 @@ export async function sendSubscriptionStartedEmail({
   name,
   planLabel,
   dashboardUrl,
+  bookingUrl,
   idempotencyKey,
 }: SendSubscriptionStartedEmailParams) {
   const from = getFromEmail();
@@ -206,7 +210,7 @@ export async function sendSubscriptionStartedEmail({
       from,
       to: [to],
       subject: "Your youmimic subscription is active",
-      react: SubscriptionStartedEmail({ name, planLabel, dashboardUrl }),
+      react: SubscriptionStartedEmail({ name, planLabel, dashboardUrl, bookingUrl }),
       tags: [{ name: "category", value: "subscription_started" }],
     },
     { idempotencyKey },
@@ -390,6 +394,103 @@ export async function sendCheckoutReminder7dEmail({
       subject: `Last reminder: your ${planLabel} plan is waiting`,
       react: CheckoutReminder7dEmail({ name, planLabel, priceDisplay, resumeUrl }),
       tags: [{ name: "category", value: "checkout_reminder_7d" }],
+    },
+    { idempotencyKey },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+type SendBookingLifecycleEmailParams = {
+  to: string;
+  name: string;
+  dateDisplay: string;
+  timeRange: string;
+  locationSummary: string;
+  capturesCount: number;
+  prepareUrl: string;
+  bookingsUrl: string;
+  idempotencyKey: string;
+};
+
+// Sent once, synchronously, when an admin confirms a pending booking
+// (app/api/admin/bookings/[id]/confirm/route.ts). idempotencyKey is
+// booking-confirmed/${booking.id} — inherently unique, since the confirm
+// route rejects re-confirming an already-confirmed booking.
+export async function sendBookingConfirmedEmail({
+  to,
+  name,
+  dateDisplay,
+  timeRange,
+  locationSummary,
+  capturesCount,
+  prepareUrl,
+  bookingsUrl,
+  idempotencyKey,
+}: SendBookingLifecycleEmailParams) {
+  const from = getFromEmail();
+
+  const { data, error } = await resend.emails.send(
+    {
+      from,
+      to: [to],
+      subject: `Your capture session on ${dateDisplay} is confirmed`,
+      react: BookingConfirmedEmail({
+        name,
+        dateDisplay,
+        timeRange,
+        locationSummary,
+        capturesCount,
+        prepareUrl,
+        bookingsUrl,
+      }),
+      tags: [{ name: "category", value: "booking_confirmed" }],
+    },
+    { idempotencyKey },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+// Cron-driven day-before reminder (see lib/bookings/process-reminders.ts).
+// idempotencyKey is booking-reminder-24h/${booking.id}, stamped onto
+// Booking.reminder24hSentAt by the caller so a daily rerun never double-sends.
+export async function sendBookingReminderEmail({
+  to,
+  name,
+  dateDisplay,
+  timeRange,
+  locationSummary,
+  capturesCount,
+  prepareUrl,
+  bookingsUrl,
+  idempotencyKey,
+}: SendBookingLifecycleEmailParams) {
+  const from = getFromEmail();
+
+  const { data, error } = await resend.emails.send(
+    {
+      from,
+      to: [to],
+      subject: "Your capture session is tomorrow",
+      react: BookingReminderEmail({
+        name,
+        dateDisplay,
+        timeRange,
+        locationSummary,
+        capturesCount,
+        prepareUrl,
+        bookingsUrl,
+      }),
+      tags: [{ name: "category", value: "booking_reminder_24h" }],
     },
     { idempotencyKey },
   );

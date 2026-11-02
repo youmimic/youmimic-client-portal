@@ -6,6 +6,13 @@ import type { AdminRole } from "@/app/generated/prisma/client";
 import { canManageBookings } from "@/lib/admin/rbac";
 import { writeAuditLog, ENTITY_TYPES } from "@/lib/admin/audit";
 import { bookingStatusActionSchema } from "@/lib/validations/admin";
+import { sendBookingConfirmedEmail } from "@/lib/mailer";
+import { formatDate } from "@/lib/format";
+import { formatLocationSummary } from "@/lib/booking-time";
+
+function appUrl(): string {
+  return process.env.BASE_URL ?? "http://localhost:3000";
+}
 
 export async function POST(
   req: Request,
@@ -74,7 +81,19 @@ export async function POST(
   const updated = await prisma.booking.update({
     where: { id },
     data: { status: "confirmed" },
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      requestedDate: true,
+      timeStart: true,
+      timeEnd: true,
+      capturesCount: true,
+      captureLocationType: true,
+      capitalCity: true,
+      suburbOrTown: true,
+      stateOrTerritory: true,
+      user: { select: { name: true, email: true } },
+    },
   });
 
   await writeAuditLog({
@@ -84,6 +103,25 @@ export async function POST(
     entityId: id,
     reason,
   });
+
+  // Tolerant send — a failed email should never turn an already-successful
+  // confirm into an error response (same pattern as the Stripe webhook's
+  // notifySubscriptionStarted).
+  try {
+    await sendBookingConfirmedEmail({
+      to: updated.user.email,
+      name: updated.user.name ?? "there",
+      dateDisplay: formatDate(updated.requestedDate),
+      timeRange: `${updated.timeStart}–${updated.timeEnd}`,
+      locationSummary: formatLocationSummary(updated),
+      capturesCount: updated.capturesCount,
+      prepareUrl: `${appUrl()}/dashboard/bookings/prepare`,
+      bookingsUrl: `${appUrl()}/dashboard/bookings`,
+      idempotencyKey: `booking-confirmed/${updated.id}`,
+    });
+  } catch (err) {
+    console.error(`Booking-confirmed email failed for booking ${updated.id}:`, err);
+  }
 
   revalidatePath("/dashboard/bookings");
 

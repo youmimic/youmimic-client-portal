@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
@@ -206,6 +207,13 @@ export function NewBookingDialog() {
             Request an avatar capture session by choosing a date, captures, and
             time.
           </DialogDescription>
+          <Link
+            href="/dashboard/bookings/prepare"
+            target="_blank"
+            className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
+          >
+            Read how to prepare
+          </Link>
         </DialogHeader>
 
         {serverError && (

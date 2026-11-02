@@ -167,6 +167,7 @@ async function notifySubscriptionStarted(
       name: owner.name ?? "there",
       planLabel,
       dashboardUrl: `${appUrl()}/dashboard`,
+      bookingUrl: `${appUrl()}/dashboard/bookings`,
       idempotencyKey: `subscription-started/${eventId}`,
     });
   } catch (err) {

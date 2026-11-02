@@ -197,15 +197,10 @@ export async function POST(req: Request) {
     // After checkout, send users to the session-refresh route so the JWT
     // is updated before they land on a subscription-gated page.
     // CREATOR plans go to bookings (the primary gated feature).
-    // ENTERPRISE plans go to billing (subscription is B2B-managed, not user-facing gated).
-    // MID_MARKET/SMALL_BUSINESS have no specific gated feature to send them
-    // to the way CREATOR has bookings, so they land on the dashboard home.
-    const redirectAfterCheckout =
-      planType === "CREATOR"
-        ? "/dashboard/bookings"
-        : planType === "MID_MARKET" || planType === "SMALL_BUSINESS"
-          ? "/dashboard"
-          : "/dashboard/billing";
+    // Every tier needs its avatar(s) filmed in a real capture session before
+    // anything else is usable, so every tier lands on the booking prompt
+    // after paying — not just CREATOR as before.
+    const redirectAfterCheckout = "/dashboard/bookings";
 
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,

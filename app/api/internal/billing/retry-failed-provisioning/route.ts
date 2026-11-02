@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { provisionAvatarStorageSubscription, retryLegacyAvatarSubscription } from "@/lib/stripe/avatar-billing";
 import { processCheckoutDraftLifecycle } from "@/lib/checkout/process-draft-lifecycle";
+import { processBookingReminders } from "@/lib/bookings/process-reminders";
 
 // Cron-triggered (see vercel.json), and deliberately bundles two unrelated
 // daily billing tasks in one handler: Vercel's Hobby plan caps this project
@@ -24,6 +25,10 @@ import { processCheckoutDraftLifecycle } from "@/lib/checkout/process-draft-life
 // Task 2 — lib/checkout/process-draft-lifecycle.ts: day-2/day-7 reminder
 // emails and 30-day deletion for abandoned guest Mid Market / Small
 // Business checkouts. See that file for the actual logic.
+//
+// Task 3 — lib/bookings/process-reminders.ts: single day-before reminder
+// email for confirmed bookings happening in the next 48h. See that file for
+// the actual logic.
 export async function POST(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("authorization");
@@ -65,10 +70,12 @@ export async function POST(req: Request) {
   }
 
   const checkoutDraftLifecycle = await processCheckoutDraftLifecycle();
+  const bookingReminders = await processBookingReminders();
 
   return NextResponse.json({
     attempted: results.length,
     results,
     checkoutDraftLifecycle,
+    bookingReminders,
   });
 }
