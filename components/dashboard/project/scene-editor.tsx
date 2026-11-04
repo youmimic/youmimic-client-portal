@@ -2,10 +2,11 @@
 
 import { useRef } from "react";
 import NextImage from "next/image";
-import { Image as ImageIcon, Lightbulb, TriangleAlert, UserCircle2, Video as VideoIcon } from "lucide-react";
+import { CircleHelp, Image as ImageIcon, Lightbulb, TriangleAlert, UserCircle2, Video as VideoIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { InsertPauseButton } from "@/components/dashboard/video/insert-pause-button";
 import { ImageCropPicker } from "@/components/dashboard/project/image-crop-picker";
 import {
@@ -255,6 +256,34 @@ function AvatarSceneContent({
         <p className="text-xs text-muted-foreground">
           A pause only works if the chosen voice supports it — look for the &quot;Pauses&quot; tag in the voice list.
         </p>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <p>End on a calm, low-motion line so the video doesn&apos;t freeze mid-gesture.</p>
+          <Tooltip>
+            <TooltipTrigger
+              type="button"
+              aria-label="Why does this matter?"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent>
+              The avatar freezes on whichever frame the audio happens to end on — there&apos;s no way to control
+              this. If your script trails off mid-gesture or mid-sentence, the video can end on an awkward frame.
+              <br />
+              <br />
+              Try finishing with a short, still closing line, e.g.:
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                <li>&quot;...and that&apos;s it, thanks for watching.&quot;</li>
+                <li>&quot;Have a great day.&quot;</li>
+                <li>&quot;Thanks for your time — talk soon.&quot;</li>
+                <li>&quot;That&apos;s all for today.&quot;</li>
+                <li>&quot;Reach out anytime with questions.&quot;</li>
+              </ul>
+              <br />
+              Avoid ending right after a hand gesture or while still mid-sentence.
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </>
   );
