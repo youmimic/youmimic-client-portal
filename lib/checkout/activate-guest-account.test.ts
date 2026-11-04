@@ -7,6 +7,9 @@ const findUniqueUser = vi.fn();
 const createUser = vi.fn();
 const createPasswordResetToken = vi.fn();
 const createSubscription = vi.fn();
+const upsertRole = vi.fn();
+const createEnterprise = vi.fn();
+const createEnterpriseMember = vi.fn();
 const sendAdminWelcomeEmail = vi.fn();
 
 const tx = {
@@ -23,6 +26,15 @@ const tx = {
   },
   subscription: {
     create: (...args: unknown[]) => createSubscription(...args),
+  },
+  role: {
+    upsert: (...args: unknown[]) => upsertRole(...args),
+  },
+  enterprise: {
+    create: (...args: unknown[]) => createEnterprise(...args),
+  },
+  enterpriseMember: {
+    create: (...args: unknown[]) => createEnterpriseMember(...args),
   },
 };
 
@@ -59,6 +71,9 @@ beforeEach(() => {
   createUser.mockReset();
   createPasswordResetToken.mockReset();
   createSubscription.mockReset();
+  upsertRole.mockReset().mockResolvedValue({ id: "role_owner" });
+  createEnterprise.mockReset().mockResolvedValue({ id: "enterprise_new" });
+  createEnterpriseMember.mockReset();
   sendAdminWelcomeEmail.mockReset();
   vi.stubEnv("NEXTAUTH_URL", "https://app.example.com");
 });
@@ -105,7 +120,7 @@ describe("activateGuestAccountForDraft", () => {
     expect(sendAdminWelcomeEmail).not.toHaveBeenCalled();
   });
 
-  it("creates a user, a password reset token, and a Subscription row owned by the new user in one transaction", async () => {
+  it("creates a user, a password reset token, a Subscription row, and an owned Enterprise in one transaction", async () => {
     findUniqueCheckoutDraft.mockResolvedValue({ ...DRAFT });
     findUniqueUser.mockResolvedValue(null);
     createUser.mockResolvedValue({ id: "user_new", name: "Jane Buyer", email: "buyer@example.com" });
@@ -125,14 +140,15 @@ describe("activateGuestAccountForDraft", () => {
     expect(createPasswordResetToken).toHaveBeenCalledTimes(1);
     expect(createPasswordResetToken.mock.calls[0][0].data.userId).toBe("user_new");
 
-    // The Subscription row must always carry a non-null userId — the DB's
-    // subscriptions_exactly_one_owner_check constraint forbids a row with
-    // neither userId nor enterpriseId set, so it can only be created once
-    // the User exists, never as an earlier "userId: null" placeholder.
+    // The Subscription belongs to the new Enterprise, not the user
+    // personally — so the admin Enterprises list (which reads plan/status
+    // via enterprise.subscriptions) shows it correctly. The DB's
+    // subscriptions_exactly_one_owner_check constraint still holds: exactly
+    // enterpriseId is set here, no userId.
     expect(createSubscription).toHaveBeenCalledWith({
       data: {
-        ownerType: "USER",
-        userId: "user_new",
+        ownerType: "ENTERPRISE",
+        enterpriseId: "enterprise_new",
         stripeCustomerId: "cus_123",
         stripeSubscriptionId: "sub_stripe_1",
         planType: "MID_MARKET",
@@ -147,10 +163,45 @@ describe("activateGuestAccountForDraft", () => {
       data: { status: "COMPLETED", userId: "user_new", subscriptionId: "sub_row_new" },
     });
 
+    // Same pattern as the admin "create enterprise" action
+    // (app/api/admin/enterprises/route.ts) — an owner Role, an Enterprise
+    // named after the company, and an owner EnterpriseMember row.
+    expect(createEnterprise).toHaveBeenCalledWith({
+      data: { name: "Acme Co", ownerUserId: "user_new" },
+      select: { id: true },
+    });
+    expect(createEnterpriseMember).toHaveBeenCalledWith({
+      data: { enterpriseId: "enterprise_new", userId: "user_new", roleId: "role_owner" },
+    });
+
     expect(sendAdminWelcomeEmail).toHaveBeenCalledTimes(1);
     const emailArgs = sendAdminWelcomeEmail.mock.calls[0][0];
     expect(emailArgs.to).toBe("buyer@example.com");
     expect(emailArgs.setPasswordUrl).toContain("/reset-password?token=");
+  });
+
+  it("skips Enterprise creation when the draft somehow has no companyName, and falls back to a USER-owned Subscription (defensive — the schema requires companyName for new drafts)", async () => {
+    findUniqueCheckoutDraft.mockResolvedValue({ ...DRAFT, companyName: null });
+    findUniqueUser.mockResolvedValue(null);
+    createUser.mockResolvedValue({ id: "user_new", name: "Jane Buyer", email: "buyer@example.com" });
+    createSubscription.mockResolvedValue({ id: "sub_row_new" });
+
+    await activateGuestAccountForDraft("draft_1", "sub_stripe_1");
+
+    expect(createEnterprise).not.toHaveBeenCalled();
+    expect(createEnterpriseMember).not.toHaveBeenCalled();
+    expect(createSubscription).toHaveBeenCalledWith({
+      data: {
+        ownerType: "USER",
+        userId: "user_new",
+        stripeCustomerId: "cus_123",
+        stripeSubscriptionId: "sub_stripe_1",
+        planType: "MID_MARKET",
+        billingTerm: "MONTHLY_24",
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
   });
 
   it("creates the Subscription with a null stripeSubscriptionId when the checkout session had none yet", async () => {

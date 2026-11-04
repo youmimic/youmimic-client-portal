@@ -50,8 +50,8 @@ export const createCheckoutDraftSchema = z
     companyName: z
       .string()
       .trim()
-      .max(200, "Company name must be 200 characters or less")
-      .optional(),
+      .min(1, "Company name is required")
+      .max(200, "Company name must be 200 characters or less"),
 
     // Same fields/messages as lib/validations/auth.ts's registerSchema — a
     // guest buyer never goes through /signup, so this is the only place

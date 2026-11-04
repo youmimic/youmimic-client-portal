@@ -6,6 +6,7 @@ const BASE = {
   billingTerm: "MONTHLY_24" as const, // Mid Market 24mo allows up to 5
   email: "buyer@example.com",
   fullName: "Jane Buyer",
+  companyName: "Acme Co",
   acceptTerms: true,
   termsLinkClicked: true,
   acceptPrivacyPolicy: true,
@@ -37,5 +38,18 @@ describe("createCheckoutDraftSchema — avatarCount", () => {
   it("rejects a non-positive or non-integer count before the allowance check even runs", () => {
     expect(createCheckoutDraftSchema.safeParse({ ...BASE, avatarCount: 0 }).success).toBe(false);
     expect(createCheckoutDraftSchema.safeParse({ ...BASE, avatarCount: 2.5 }).success).toBe(false);
+  });
+});
+
+describe("createCheckoutDraftSchema — companyName", () => {
+  it("requires a non-empty companyName", () => {
+    const { companyName: _companyName, ...withoutCompany } = BASE;
+    void _companyName;
+    expect(createCheckoutDraftSchema.safeParse({ ...withoutCompany, avatarCount: 1 }).success).toBe(false);
+    expect(createCheckoutDraftSchema.safeParse({ ...BASE, avatarCount: 1, companyName: "  " }).success).toBe(false);
+  });
+
+  it("accepts a real companyName", () => {
+    expect(createCheckoutDraftSchema.safeParse({ ...BASE, avatarCount: 1 }).success).toBe(true);
   });
 });

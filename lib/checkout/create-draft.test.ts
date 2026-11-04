@@ -163,16 +163,16 @@ describe("createCheckoutDraft", () => {
     expect(callArgs.data.billingTerm).toBe("MONTHLY_24");
   });
 
-  it("stores a null companyName when omitted, never undefined", async () => {
+  it("rejects a missing companyName — required so every guest buyer gets a real Enterprise", async () => {
     findUniqueUser.mockResolvedValue(null);
-    createCheckoutDraft_.mockResolvedValue({ id: "draft_2" });
 
     const { companyName, ...withoutCompany } = VALID_INPUT;
     void companyName;
-    await createCheckoutDraft(withoutCompany);
+    const result = await createCheckoutDraft(withoutCompany);
 
-    const callArgs = createCheckoutDraft_.mock.calls[0][0];
-    expect(callArgs.data.companyName).toBeNull();
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("VALIDATION");
+    expect(createCheckoutDraft_).not.toHaveBeenCalled();
   });
 
   it("overrides (deletes) an older abandoned draft for the same email, including its Stripe customer, before creating the new one", async () => {
