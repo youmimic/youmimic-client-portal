@@ -154,6 +154,27 @@ function resolveAction(
   const hasRealSub = !!sub && (sub.billingProvider !== "STRIPE" || !!sub.stripeCustomerId);
 
   if (enterpriseId !== undefined) {
+    // Guest Mid Market/Small Business checkout now creates the buyer's own
+    // Enterprise and parents the Subscription to it (see
+    // lib/checkout/activate-guest-account.ts) — those stay fully self-serve,
+    // same as a personal plan, just enterprise-owned. Only true
+    // Enterprise-tier (sales-assisted) falls through to the "managed by the
+    // team" branch below. A missing/canceled/incomplete subscription on a
+    // self-serve-tier enterprise falls through too — rebuilding a term/
+    // avatar-count picker for that edge case isn't worth it here; it
+    // shouldn't occur in practice since the Subscription is created in the
+    // same transaction as the Enterprise.
+    if (
+      hasRealSub &&
+      sub!.billingProvider === "STRIPE" &&
+      (sub!.planType === "MID_MARKET" || sub!.planType === "SMALL_BUSINESS") &&
+      sub!.status !== "CANCELED" &&
+      sub!.status !== "INCOMPLETE_EXPIRED" &&
+      sub!.status !== "INCOMPLETE"
+    ) {
+      return { action: { type: "portal", enterpriseId }, label: "Manage billing", variant: "outline" };
+    }
+
     // Enterprise: self-serve checkout for initial setup only.
     // Once an active subscription exists, changes go through the YouMimic team.
     const noSub =

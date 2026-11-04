@@ -29,7 +29,7 @@ import type {
 const formSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email address"),
   fullName: z.string().min(2, "Full name must be at least 2 characters"),
-  companyName: z.string().optional(),
+  companyName: z.string().min(1, "Company name is required"),
   acceptTerms: z.boolean().refine((value) => value === true, {
     message: "You must agree to the Terms and Conditions",
   }),

@@ -101,17 +101,71 @@ export async function activateGuestAccountForDraft(
       data: { userId: createdUser.id, token, expiresAt, used: false },
     });
 
+    // Give the buyer a real Enterprise, same as the self-serve "Business
+    // account" registration path (lib/auth/register-user.ts) — without
+    // this, a guest Mid Market/Small Business buyer had no Enterprise row
+    // at all (companyName was purely a display string on User), which
+    // silently meant no team-invite card ever appeared on their settings
+    // page. createCheckoutDraftSchema requires companyName now, so it's
+    // always present by the time a draft reaches here. Mirrors exactly
+    // what the admin "create enterprise" action does for an existing user
+    // (app/api/admin/enterprises/route.ts) — owner Role, Enterprise, owner
+    // EnterpriseMember.
+    let enterpriseId: string | null = null;
+    if (draft.companyName) {
+      const ownerRole = await tx.role.upsert({
+        where: { name: "owner" },
+        create: { name: "owner" },
+        update: {},
+        select: { id: true },
+      });
+
+      const enterprise = await tx.enterprise.create({
+        data: { name: draft.companyName, ownerUserId: createdUser.id },
+        select: { id: true },
+      });
+
+      await tx.enterpriseMember.create({
+        data: { enterpriseId: enterprise.id, userId: createdUser.id, roleId: ownerRole.id },
+      });
+
+      enterpriseId = enterprise.id;
+    }
+
+    // The Subscription belongs to the Enterprise when one exists, so the
+    // admin Enterprises list (which reads plan/status via
+    // enterprise.subscriptions) shows it correctly — not just USER-owned
+    // under the buyer personally. Safe: userHasActiveSubscription already
+    // resolves an enterprise-owned row for its owner
+    // (lib/subscription.ts's getApplicableSubscription), every Stripe
+    // webhook handler keys off stripeCustomerId/stripeSubscriptionId (never
+    // userId), and app/(dashboard)/dashboard/billing/page.tsx's
+    // resolveAction() has a self-serve carve-out for MID_MARKET/
+    // SMALL_BUSINESS so this doesn't lose the "Manage billing" portal
+    // button. Falls back to USER-owned only in the defensive no-companyName
+    // case above.
     const createdSubscription = await tx.subscription.create({
-      data: {
-        ownerType: "USER",
-        userId: createdUser.id,
-        stripeCustomerId: draft.stripeCustomerId,
-        stripeSubscriptionId,
-        planType: draft.planType,
-        billingTerm: draft.billingTerm,
-        avatarAllowance: draft.avatarCount,
-        status: "ACTIVE",
-      },
+      data: enterpriseId
+        ? {
+            ownerType: "ENTERPRISE",
+            enterpriseId,
+            stripeCustomerId: draft.stripeCustomerId,
+            stripeSubscriptionId,
+            planType: draft.planType,
+            billingTerm: draft.billingTerm,
+            avatarAllowance: draft.avatarCount,
+            status: "ACTIVE",
+          }
+        : {
+            ownerType: "USER",
+            userId: createdUser.id,
+            stripeCustomerId: draft.stripeCustomerId,
+            stripeSubscriptionId,
+            planType: draft.planType,
+            billingTerm: draft.billingTerm,
+            avatarAllowance: draft.avatarCount,
+            status: "ACTIVE",
+          },
       select: { id: true },
     });
 
