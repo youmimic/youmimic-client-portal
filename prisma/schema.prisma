@@ -909,6 +909,7 @@ model Booking {
   addressLine2        String?
   locationNotes       String?
   createdAt           DateTime               @default(now())
+  reminder24hSentAt   DateTime?
 
   user         User                        @relation(fields: [userId], references: [id])
   enterprise   Enterprise?                 @relation(fields: [enterpriseId], references: [id])

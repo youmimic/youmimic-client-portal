@@ -26,10 +26,12 @@ const PLAN_LABELS: Record<string, string> = {
   FREE: "Free",
   CREATOR: "Creator",
   ENTERPRISE: "Enterprise",
+  MID_MARKET: "Mid Market",
+  SMALL_BUSINESS: "Small Business",
 };
 
 function appUrl(): string {
-  return process.env.BASE_URL ?? "http://localhost:3000";
+  return process.env.BASE_URL || "http://localhost:3000";
 }
 
 // User-facing billing emails link to our own /dashboard/billing rather than
@@ -167,6 +169,7 @@ async function notifySubscriptionStarted(
       name: owner.name ?? "there",
       planLabel,
       dashboardUrl: `${appUrl()}/dashboard`,
+      bookingUrl: `${appUrl()}/dashboard/bookings`,
       idempotencyKey: `subscription-started/${eventId}`,
     });
   } catch (err) {

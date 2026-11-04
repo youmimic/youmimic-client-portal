@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { CalendarDays } from "lucide-react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { formatShortDate as formatDate } from "@/lib/format";
@@ -11,11 +13,8 @@ import {
   BookingActions,
   type BookingForActions,
 } from "@/components/dashboard/booking-actions";
-import {
-  CAPITAL_CITY_LABELS,
-  type AustralianCapitalCity,
-  type CaptureLocationType,
-} from "@/lib/validations/booking";
+import { type CaptureLocationType } from "@/lib/validations/booking";
+import { formatLocationSummary } from "@/lib/booking-time";
 
 export const metadata = {
   title: "Bookings | YouMimic Portal",
@@ -73,25 +72,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-
-function formatLocationSummary(booking: BookingRow): string {
-  const type = booking.captureLocationType as CaptureLocationType | null;
-  if (!type) return "—";
-  if (type === "capital_city") {
-    const city = booking.capitalCity as AustralianCapitalCity | null;
-    return city ? (CAPITAL_CITY_LABELS[city] ?? city) : "Capital city";
-  }
-  if (type === "regional_other") {
-    const parts = [booking.suburbOrTown, booking.stateOrTerritory].filter(
-      Boolean,
-    );
-    return parts.length > 0 ? parts.join(", ") : "Regional";
-  }
-  if (type === "multi_location") {
-    return "Multi-location";
-  }
-  return "—";
-}
 
 function toBookingForActions(booking: BookingRow): BookingForActions {
   return {
@@ -207,14 +187,33 @@ export default async function BookingsPage() {
       <PageHeader
         title="Bookings"
         description="View and manage your scheduled avatar capture sessions."
-        actions={<NewBookingDialog />}
+        actions={
+          <>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/dashboard/bookings/prepare">What to expect</Link>
+            </Button>
+            <NewBookingDialog />
+          </>
+        }
       />
 
       {bookings.length === 0 ? (
         <EmptyState
           icon={CalendarDays}
           title="No bookings yet"
-          description="A capture session is how we record the footage your avatar is made from. Book one and it will show up here."
+          description={
+            <>
+              A capture session is how we record the footage your avatar is made
+              from. Book one and it will show up here. Read{" "}
+              <Link
+                href="/dashboard/bookings/prepare"
+                className="text-primary underline underline-offset-4 hover:text-primary/80"
+              >
+                what to expect and how to prepare
+              </Link>{" "}
+              before your session.
+            </>
+          }
           action={<NewBookingDialog />}
         />
       ) : (
