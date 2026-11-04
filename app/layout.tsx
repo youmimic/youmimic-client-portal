@@ -23,10 +23,15 @@ export const metadata: Metadata = {
   // is a multiple of 48px, so 48, 96, 192 and 512 are all provided.
   icons: {
     icon: [
-      { url: "/favicon-48.png", sizes: "48x48", type: "image/png" },
-      { url: "/favicon-96.png", sizes: "96x96", type: "image/png" },
-      { url: "/favicon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/favicon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon-48.png", sizes: "48x48", type: "image/png", media: "(prefers-color-scheme: light)" },
+      { url: "/favicon-96.png", sizes: "96x96", type: "image/png", media: "(prefers-color-scheme: light)" },
+      { url: "/favicon-192.png", sizes: "192x192", type: "image/png", media: "(prefers-color-scheme: light)" },
+      { url: "/favicon-512.png", sizes: "512x512", type: "image/png", media: "(prefers-color-scheme: light)" },
+      // White mark for a dark browser/OS theme — same crop, recolored, alpha preserved.
+      { url: "/favicon-48-dark.png", sizes: "48x48", type: "image/png", media: "(prefers-color-scheme: dark)" },
+      { url: "/favicon-96-dark.png", sizes: "96x96", type: "image/png", media: "(prefers-color-scheme: dark)" },
+      { url: "/favicon-192-dark.png", sizes: "192x192", type: "image/png", media: "(prefers-color-scheme: dark)" },
+      { url: "/favicon-512-dark.png", sizes: "512x512", type: "image/png", media: "(prefers-color-scheme: dark)" },
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },

@@ -215,13 +215,21 @@
   }
 }
 
-@keyframes video-progress {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(300%); }
+/* The "generating" indicator's two-piece brand mark, pulsing out of phase
+   with each other (see components/dashboard/video/generating-indicator.tsx). */
+@keyframes mark-pulse-a {
+  0%, 100% { opacity: 0.35; transform: scale(0.82); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes mark-pulse-b {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.82); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-\[video-progress_1\.6s_ease-in-out_infinite\] {
+  .animate-\[mark-pulse-a_1\.4s_ease-in-out_infinite\],
+  .animate-\[mark-pulse-b_1\.4s_ease-in-out_infinite\] {
     animation: none;
   }
 }

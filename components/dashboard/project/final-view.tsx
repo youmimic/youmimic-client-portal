@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Copy, Download, Loader2, Pencil, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Copy, Download, Pencil, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GeneratingIndicator } from "@/components/dashboard/video/generating-indicator";
 import type { ProjectView } from "@/lib/projects/service";
 import {
   ASPECT_RATIO_LABEL,
@@ -94,23 +95,19 @@ export function FinalView({
           ) : (
             <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 p-6 text-center text-white/90">
               {generating && (
-                <>
-                  <Loader2 className="h-8 w-8 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                  <div role="status" aria-live="polite">
-                    <p className="font-medium">Your video is being made</p>
-                    <p className="text-sm text-white/70">
-                      {formatDuration(elapsed)} so far. Usually ready in {estimate.waitMinutesLow} to{" "}
-                      {estimate.waitMinutesHigh} minutes.
-                    </p>
+                <GeneratingIndicator
+                  label="Your video is being made"
+                  sublabel={
                     <p className="mt-1 text-sm text-white/70">
                       All {snapshot.length} {snapshot.length === 1 ? "scene is" : "scenes are"} being put together in one
                       go. Your script and settings are saved.
                     </p>
-                  </div>
-                  <div className="h-1.5 w-56 overflow-hidden rounded-full bg-white/20" aria-hidden="true">
-                    <div className="h-full w-1/3 animate-[video-progress_1.6s_ease-in-out_infinite] rounded-full bg-primary" />
-                  </div>
-                </>
+                  }
+                  elapsedSeconds={elapsed}
+                  waitMinutesLow={estimate.waitMinutesLow}
+                  waitMinutesHigh={estimate.waitMinutesHigh}
+                  canViewTime={canViewCost}
+                />
               )}
               {project.status === "FAILED" && (
                 <>
