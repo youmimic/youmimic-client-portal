@@ -62,7 +62,7 @@ export default async function VideosPage({
   );
   // Cost is an internal, billing-facing figure — only admins see it here.
   // Everyone else sees how much video they've actually produced instead.
-  const isAdmin = !!session.user.adminRole;
+  const isAdmin = !!session.user.adminRole && !session.user.clientModeEnabled;
 
   return (
     <div className="space-y-6">

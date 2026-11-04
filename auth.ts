@@ -32,6 +32,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.isSuspended = user.isSuspended ?? false;
         token.isEnterpriseSuspended = false;
         token.sessionVersion = user.sessionVersion ?? 1;
+        token.clientModeEnabled = user.clientModeEnabled ?? true;
 
         // Populate subscription state at sign-in so proxy.ts can gate
         // /dashboard/bookings without a DB call on every request.
@@ -64,6 +65,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             sessionVersion: true,
             termsAcceptedAt: true,
             privacyPolicyAcceptedAt: true,
+            clientModeEnabled: true,
           },
         });
 
@@ -78,6 +80,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.adminRole = dbUser.adminRole ?? null;
         token.hasAcceptedLegal = !!dbUser.termsAcceptedAt && !!dbUser.privacyPolicyAcceptedAt;
         token.isSuspended = dbUser.isSuspended;
+        token.clientModeEnabled = dbUser.clientModeEnabled;
         token.isEnterpriseSuspended = dbUser.isSuspended
           ? false // individual suspension already covers the redirect; skip the extra query
           : (await getSuspendedEnterpriseName(userId)) !== null;
@@ -98,6 +101,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.isSuspended = Boolean(token.isSuspended);
         session.user.isEnterpriseSuspended = Boolean(token.isEnterpriseSuspended);
         session.user.sessionVersion = (token.sessionVersion as number | undefined) ?? 1;
+        session.user.clientModeEnabled = (token.clientModeEnabled as boolean | undefined) ?? true;
       }
 
       return session;

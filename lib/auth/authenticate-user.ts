@@ -119,5 +119,6 @@ export async function authenticateUser(credentials: unknown, request: Request) {
     isSuspended: user.isSuspended,
     isEnterpriseSuspended: false,
     sessionVersion: user.sessionVersion,
+    clientModeEnabled: user.clientModeEnabled,
   };
 }

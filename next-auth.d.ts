@@ -13,6 +13,7 @@ declare module "next-auth" {
       isSuspended: boolean;
       isEnterpriseSuspended: boolean;
       sessionVersion: number;
+      clientModeEnabled: boolean;
     } & DefaultSession["user"];
   }
 
@@ -25,6 +26,7 @@ declare module "next-auth" {
     isSuspended: boolean;
     isEnterpriseSuspended: boolean;
     sessionVersion: number;
+    clientModeEnabled: boolean;
   }
 }
 
@@ -39,5 +41,6 @@ declare module "next-auth/jwt" {
     isSuspended?: boolean;
     isEnterpriseSuspended?: boolean;
     sessionVersion?: number;
+    clientModeEnabled?: boolean;
   }
 }

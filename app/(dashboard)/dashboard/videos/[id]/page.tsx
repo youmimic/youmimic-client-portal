@@ -74,7 +74,7 @@ export default async function VideoPage({
 
       <VideoDetail
         justCreated={isNew === "1"}
-        canViewCost={!!session.user.adminRole}
+        canViewCost={!!session.user.adminRole && !session.user.clientModeEnabled}
         related={related.map((r) => ({
           id: r.id,
           title: videoTitle(r),
