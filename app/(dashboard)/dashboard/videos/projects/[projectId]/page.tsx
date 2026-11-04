@@ -25,5 +25,11 @@ export default async function VideoProjectPage({ params }: { params: Promise<{ p
 
   const avatars = await listAvatarOptions(session.user.id);
 
-  return <ProjectWorkspace initial={project} avatars={avatars} canViewCost={!!session.user.adminRole} />;
+  return (
+    <ProjectWorkspace
+      initial={project}
+      avatars={avatars}
+      canViewCost={!!session.user.adminRole && !session.user.clientModeEnabled}
+    />
+  );
 }

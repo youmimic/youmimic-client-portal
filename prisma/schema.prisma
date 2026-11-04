@@ -78,6 +78,14 @@ model User {
   suspensionReason String?
   sessionVersion   Int        @default(1)
 
+  // Admin-only presentation preference: when true, an admin's own dashboard
+  // hides cost/generation-time figures (see canViewCost at its call sites
+  // under app/(dashboard)/dashboard/**) so it reads exactly like what a real
+  // customer sees — for demos/pitches. Meaningless for non-admin accounts
+  // (nothing reads it unless adminRole is also set), defaults true so admin
+  // accounts start in the safe, client-safe view.
+  clientModeEnabled Boolean @default(true)
+
   // Collected on the guest Mid Market/Small Business checkout review page
   // (app/checkout) — optional since existing rows and other signup paths
   // never set it. Purely informational; nothing currently branches on it.

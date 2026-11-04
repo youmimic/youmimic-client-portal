@@ -36,7 +36,7 @@ export default async function UsagePage() {
   const empty = usage.videosStarted === 0 && usage.recent.length === 0;
   // Cost is an internal, billing-facing figure — only admins see it here,
   // same convention as the Videos list page.
-  const canViewCost = !!session.user.adminRole;
+  const canViewCost = !!session.user.adminRole && !session.user.clientModeEnabled;
   const creditsPct =
     usage.creditsLimit != null && usage.creditsLimit > 0
       ? Math.min(100, (usage.creditsUsed / usage.creditsLimit) * 100)

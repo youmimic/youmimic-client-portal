@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { CheckCircle2, ShieldAlert, Users } from "lucide-react";
+import { SessionProvider } from "next-auth/react";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import {
@@ -10,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { InviteForm } from "@/components/dashboard/invite-form";
+import { ClientModeCard } from "@/components/dashboard/client-mode-card";
 import { formatDate } from "@/lib/format";
 
 export const metadata = {
@@ -26,6 +28,7 @@ async function fetchUser(userId: string) {
       email: true,
       emailVerified: true,
       createdAt: true,
+      clientModeEnabled: true,
       userRoles: {
         select: { role: { select: { name: true } } },
         orderBy: { role: { name: "asc" } },
@@ -167,6 +170,11 @@ export default async function SettingsPage() {
     <div className="space-y-4">
       <AccountCard user={user} />
       <AccessCard user={user} />
+      {session.user.adminRole && (
+        <SessionProvider>
+          <ClientModeCard enabled={user.clientModeEnabled} />
+        </SessionProvider>
+      )}
       {enterprise && <TeamCard enterprise={enterprise} />}
     </div>
   );
