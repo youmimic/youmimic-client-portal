@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { VideoStatusBadge } from "@/components/dashboard/video/video-status-badge";
+import { GeneratingIndicator } from "@/components/dashboard/video/generating-indicator";
 import {
   ASPECT_RATIO_LABEL,
   ENGINE_LABEL,
@@ -284,21 +285,13 @@ export function VideoDetail({
             ) : (
               <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 p-6 text-center text-white/90">
                 {inProgress && (
-                  <>
-                    <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
-                    <div role="status" aria-live="polite">
-                      <p className="font-medium">
-                        {video.status === "PENDING" ? "Waiting in the queue" : "Creating your video"}
-                      </p>
-                      <p className="text-sm text-white/70">
-                        {formatDuration(elapsed)} so far. Usually ready in {estimate.waitMinutesLow} to{" "}
-                        {estimate.waitMinutesHigh} minutes.
-                      </p>
-                    </div>
-                    <div className="h-1.5 w-56 overflow-hidden rounded-full bg-white/20" aria-hidden="true">
-                      <div className="h-full w-1/3 animate-[video-progress_1.6s_ease-in-out_infinite] rounded-full bg-primary" />
-                    </div>
-                  </>
+                  <GeneratingIndicator
+                    label={video.status === "PENDING" ? "Waiting in the queue" : "Creating your video"}
+                    elapsedSeconds={elapsed}
+                    waitMinutesLow={estimate.waitMinutesLow}
+                    waitMinutesHigh={estimate.waitMinutesHigh}
+                    canViewTime={canViewCost}
+                  />
                 )}
                 {video.status === "FAILED" && (
                   <>
