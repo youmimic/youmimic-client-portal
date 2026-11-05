@@ -110,11 +110,24 @@ export async function POST(req: Request) {
   }
 
   if (isPersonalPlan) {
-    const ownedEnterprise = await prisma.enterprise.findFirst({
-      where: { ownerUserId: session.user.id },
+    // Only a real, actively-paying Enterprise-tier account blocks a personal
+    // plan purchase — merely owning an Enterprise row isn't enough. A
+    // sales-assisted trial (PLATFORM_FEE/LEGACY, no real Standard-tier
+    // subscription) or an abandoned INCOMPLETE Enterprise checkout
+    // shouldn't trap its owner out of ever self-serving a personal plan
+    // (confirmed real case: a trial customer's placeholder Enterprise
+    // blocked them from buying Small Business). TRIALING+ACTIVE mirrors
+    // lib/subscription.ts's own definition of "really has this plan".
+    const ownedEnterpriseWithActivePlan = await prisma.enterprise.findFirst({
+      where: {
+        ownerUserId: session.user.id,
+        subscriptions: {
+          some: { billingComponent: "STANDARD", status: { in: ["TRIALING", "ACTIVE"] } },
+        },
+      },
       select: { id: true },
     });
-    if (ownedEnterprise) {
+    if (ownedEnterpriseWithActivePlan) {
       return NextResponse.json(
         { error: "Enterprise accounts cannot subscribe to personal plans" },
         { status: 403 },
