@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const prismaMock = vi.hoisted(() => ({
   videoProject: { findFirst: vi.fn(), updateMany: vi.fn() },
   avatar: { findMany: vi.fn() },
-  generatedVideo: { create: vi.fn() },
+  generatedVideo: { create: vi.fn(), update: vi.fn() },
   usageLedgerEntry: { update: vi.fn() },
 }));
 const heygen = vi.hoisted(() => ({
@@ -63,6 +63,7 @@ beforeEach(() => {
   prismaMock.videoProject.updateMany.mockResolvedValue({ count: 1 });
   prismaMock.avatar.findMany.mockResolvedValue([avatarRow]);
   prismaMock.generatedVideo.create.mockResolvedValue({ id: "gv1" });
+  prismaMock.generatedVideo.update.mockResolvedValue({ id: "gv1" });
   heygen.getHeyGenAvatarLook.mockResolvedValue({ default_voice_id: "v-default" });
   heygen.createHeyGenStudioVideo.mockResolvedValue({ video_id: "provider-1" });
   ledger.reserveCreditsForGeneration.mockResolvedValue({ ok: true, ledgerEntryId: "led1" });
@@ -84,9 +85,17 @@ describe("generateProject", () => {
     expect(ledger.reserveCreditsForGeneration).toHaveBeenCalledOnce();
     expect(ledger.reserveCreditsForGeneration.mock.calls[0][0].script).toBe("Welcome to the launch\nHere is what is new");
 
+    // Row is created PENDING, before the provider is ever called — see
+    // lib/projects/generate.ts's own comment — then updated to PROCESSING
+    // with the provider's id once it actually accepts the job.
     const created = prismaMock.generatedVideo.create.mock.calls[0][0].data;
-    expect(created).toMatchObject({ projectId: "p1", status: "PROCESSING", heygenVideoId: "provider-1", avatarId: "a1" });
+    expect(created).toMatchObject({ projectId: "p1", status: "PENDING", avatarId: "a1" });
+    expect(created.heygenVideoId).toBeUndefined();
     expect(created.sceneSnapshot).toHaveLength(2);
+    expect(prismaMock.generatedVideo.update).toHaveBeenCalledWith({
+      where: { id: "gv1" },
+      data: { status: "PROCESSING", heygenVideoId: "provider-1" },
+    });
     expect(prismaMock.usageLedgerEntry.update).toHaveBeenCalledWith({ where: { id: "led1" }, data: { videoId: "gv1" } });
   });
 
@@ -144,7 +153,13 @@ describe("generateProject", () => {
     const result = await generateProject("u1", "p1", 3);
     expect(result).toMatchObject({ ok: false, code: "HEYGEN_ERROR", error: "Avatar not found" });
     expect(ledger.releaseReservation).toHaveBeenCalledWith("led1");
-    expect(prismaMock.generatedVideo.create.mock.calls[0][0].data).toMatchObject({ status: "FAILED", projectId: "p1" });
+    // The PENDING row created before the (now-rejected) provider call gets
+    // updated to FAILED, rather than a second row being created.
+    expect(prismaMock.generatedVideo.create.mock.calls[0][0].data).toMatchObject({ status: "PENDING", projectId: "p1" });
+    expect(prismaMock.generatedVideo.update).toHaveBeenCalledWith({
+      where: { id: "gv1" },
+      data: { status: "FAILED", errorMessage: "Avatar not found" },
+    });
     expect(prismaMock.videoProject.updateMany.mock.calls.at(-1)?.[0].data).toEqual({ status: "FAILED" });
   });
 

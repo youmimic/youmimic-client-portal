@@ -262,6 +262,18 @@ export async function generateProject(userId: string, projectId: string, expecte
     sceneSnapshot: snapshot,
   };
 
+  // Created before calling the provider, not after — so the row (and the
+  // ledger entry's link to it) already exists by the time any webhook could
+  // possibly reference it. heygenVideoId/status only arrive once the
+  // provider actually accepts the job, via the update below. See
+  // app/api/webhooks/heygen/route.ts's own comment on the matching half of
+  // this fix.
+  const video = await prisma.generatedVideo.create({
+    data: { ...baseData, status: "PENDING" as VideoGenerationStatus },
+    select: { id: true },
+  });
+  await prisma.usageLedgerEntry.update({ where: { id: reservation.ledgerEntryId }, data: { videoId: video.id } });
+
   try {
     const { video_id } = await createHeyGenStudioVideo({
       scenes: providerScenes,
@@ -275,11 +287,10 @@ export async function generateProject(userId: string, projectId: string, expecte
       watermarkPosition: WATERMARK_POSITION_TO_API[project.watermarkPosition],
     });
 
-    const video = await prisma.generatedVideo.create({
-      data: { ...baseData, status: "PROCESSING" as VideoGenerationStatus, heygenVideoId: video_id },
-      select: { id: true },
+    await prisma.generatedVideo.update({
+      where: { id: video.id },
+      data: { status: "PROCESSING" as VideoGenerationStatus, heygenVideoId: video_id },
     });
-    await prisma.usageLedgerEntry.update({ where: { id: reservation.ledgerEntryId }, data: { videoId: video.id } });
     await prisma.videoProject.updateMany({
       where: { id: projectId, userId },
       data: { lastGeneratedHash: projectContentHash({ ...project, engine: engineValue }, scenes) },
@@ -288,10 +299,13 @@ export async function generateProject(userId: string, projectId: string, expecte
   } catch (err) {
     const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
     // The provider never accepted the job: give the credits back and keep a
-    // failed record so the reason shows on the project.
+    // failed record so the reason shows on the project. Updates the row
+    // created above rather than creating a second one — it already exists
+    // (and is already linked from the ledger entry).
     await releaseReservation(reservation.ledgerEntryId);
-    await prisma.generatedVideo.create({
-      data: { ...baseData, status: "FAILED" as VideoGenerationStatus, errorMessage: message },
+    await prisma.generatedVideo.update({
+      where: { id: video.id },
+      data: { status: "FAILED" as VideoGenerationStatus, errorMessage: message },
     });
     await prisma.videoProject.updateMany({ where: { id: projectId, userId }, data: { status: "FAILED" } });
     return { ok: false, code: "HEYGEN_ERROR", error: message };
