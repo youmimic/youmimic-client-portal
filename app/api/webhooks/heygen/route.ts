@@ -91,7 +91,20 @@ export async function POST(req: Request) {
     select: { id: true, lastWebhookEventId: true, engine: true, resolution: true },
   });
   if (!local) {
-    return NextResponse.json({ received: true });
+    // The generation code now creates its GeneratedVideo row before ever
+    // calling HeyGen (lib/heygen/generate-video.ts, lib/projects/generate.ts)
+    // specifically so this should never happen for a real, successfully
+    // started job — but the narrow gap between "HeyGen's response with
+    // video_id reaches us" and "our own heygenVideoId update commits" can't
+    // be fully eliminated, so a genuinely early webhook event could still
+    // race it. Returning non-2xx (rather than swallowing it as {received:
+    // true}) asks HeyGen to retry delivery, which should succeed on the
+    // next attempt once that update has committed — normally milliseconds
+    // later. If every retry is exhausted before a row ever shows up (e.g.
+    // this id is simply unrecognized), the stuck-generation sweep
+    // (lib/heygen/generate-video.ts's sweepStuckGenerations) is the final
+    // backstop regardless.
+    return NextResponse.json({ error: "No matching video yet — please retry" }, { status: 404 });
   }
 
   // Redelivery of an event we already fully reconciled — skip the HeyGen

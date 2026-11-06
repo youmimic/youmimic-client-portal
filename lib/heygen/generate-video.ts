@@ -140,6 +140,34 @@ export async function generateAvatarVideo(
     };
   }
 
+  // Created before calling the provider, not after — so the row (and the
+  // ledger entry's link to it) already exists by the time any webhook could
+  // possibly reference it. heygenVideoId/status only arrive once the
+  // provider actually accepts the job, via the update below. See
+  // app/api/webhooks/heygen/route.ts's own comment on the matching half of
+  // this fix.
+  const generatedVideo = await prisma.generatedVideo.create({
+    data: {
+      userId,
+      avatarId: avatar.id,
+      avatarLookId: resolvedLookId,
+      script,
+      status: "PENDING" as VideoGenerationStatus,
+      engine: prismaEngine,
+      title: options.title,
+      aspectRatio: options.aspectRatio,
+      resolution: options.resolution,
+      voiceId: options.voiceId,
+      voiceName: options.voiceName,
+    },
+    select: { id: true },
+  });
+
+  await prisma.usageLedgerEntry.update({
+    where: { id: reservation.ledgerEntryId },
+    data: { videoId: generatedVideo.id },
+  });
+
   try {
     const { video_id } = await createHeyGenVideo({
       avatarId: heygenLookId,
@@ -152,27 +180,9 @@ export async function generateAvatarVideo(
       resolution: options.resolution,
     });
 
-    const generatedVideo = await prisma.generatedVideo.create({
-      data: {
-        userId,
-        avatarId: avatar.id,
-        avatarLookId: resolvedLookId,
-        script,
-        status: "PROCESSING" as VideoGenerationStatus,
-        engine: prismaEngine,
-        heygenVideoId: video_id,
-        title: options.title,
-        aspectRatio: options.aspectRatio,
-        resolution: options.resolution,
-        voiceId: options.voiceId,
-        voiceName: options.voiceName,
-      },
-      select: { id: true },
-    });
-
-    await prisma.usageLedgerEntry.update({
-      where: { id: reservation.ledgerEntryId },
-      data: { videoId: generatedVideo.id },
+    await prisma.generatedVideo.update({
+      where: { id: generatedVideo.id },
+      data: { status: "PROCESSING" as VideoGenerationStatus, heygenVideoId: video_id },
     });
 
     return { ok: true, generatedVideoId: generatedVideo.id };
@@ -183,24 +193,11 @@ export async function generateAvatarVideo(
     // than counting them against this billing period.
     await releaseReservation(reservation.ledgerEntryId);
 
-    // Never leave this silently unbilled-for-nothing — record the failed
-    // attempt (no heygenVideoId, since HeyGen never accepted the job) so it
-    // shows in the user's history with a clear reason instead of vanishing.
-    await prisma.generatedVideo.create({
-      data: {
-        userId,
-        avatarId: avatar.id,
-        avatarLookId: resolvedLookId,
-        script,
-        status: "FAILED" as VideoGenerationStatus,
-        engine: prismaEngine,
-        errorMessage: message,
-        title: options.title,
-        aspectRatio: options.aspectRatio,
-        resolution: options.resolution,
-        voiceId: options.voiceId,
-        voiceName: options.voiceName,
-      },
+    // Updates the row created above rather than creating a second one — it
+    // already exists (and is already linked from the ledger entry).
+    await prisma.generatedVideo.update({
+      where: { id: generatedVideo.id },
+      data: { status: "FAILED" as VideoGenerationStatus, errorMessage: message },
     });
 
     return { ok: false, code: "HEYGEN_ERROR", error: message };
