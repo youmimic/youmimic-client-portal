@@ -73,7 +73,10 @@ export default async function AdminUserDetailPage({
           heygenAvatarId: true,
           enterpriseId: true,
           previewUrl: true,
-          looks: { select: { status: true, previewUrl: true } },
+          looks: {
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+            select: { id: true, name: true, heygenLookId: true, status: true, previewUrl: true },
+          },
         },
       },
       adminLogsAsTarget: {

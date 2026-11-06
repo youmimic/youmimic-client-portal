@@ -3,7 +3,22 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { UserCircle2 } from "lucide-react";
+import { UserCircle2, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -62,6 +77,14 @@ const STATUS_CLASS: Record<string, string> = {
   pending_consent: "text-amber-600 dark:text-amber-400",
 };
 
+type Look = {
+  id: string;
+  name: string;
+  heygenLookId: string;
+  status: string;
+  previewUrl: string | null;
+};
+
 type Avatar = {
   id: string;
   name: string;
@@ -70,6 +93,7 @@ type Avatar = {
   enterpriseId: string | null;
   previewUrl: string | null;
   lookCount: number;
+  looks: Look[];
 };
 
 type EnterpriseOption = { id: string; name: string };
@@ -91,6 +115,126 @@ function AvatarThumbnail({ previewUrl, name }: { previewUrl: string | null; name
   );
 }
 
+function SortableLookRow({
+  look,
+  canManage,
+  onRemove,
+}: {
+  look: Look;
+  canManage: boolean;
+  onRemove: (look: Look) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: look.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-1.5 min-w-0">
+        {canManage && (
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            className="shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+            aria-label={`Reorder ${look.name}`}
+          >
+            <GripVertical className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        )}
+        <AvatarThumbnail previewUrl={look.previewUrl} name={look.name} />
+        <div className="min-w-0">
+          <div className="truncate">{look.name}</div>
+          <div className="text-xs text-muted-foreground">
+            <span className={STATUS_CLASS[look.status] ?? ""}>{STATUS_LABEL[look.status] ?? look.status}</span>
+            {" · "}
+            <span className="font-mono truncate">{look.heygenLookId}</span>
+          </div>
+        </div>
+      </div>
+      {canManage && (
+        <Button
+          variant="ghost"
+          size="xs"
+          className="shrink-0 text-destructive hover:text-destructive"
+          onClick={() => onRemove(look)}
+        >
+          Remove
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// One independent drag-and-drop list per avatar — each needs its own stable
+// DndContext id (an avatar's own id works fine here, unlike
+// QuickLinksSidebar's case, since this never renders two copies of the same
+// avatar's list at once). Keeps its own local order so dragging animates
+// immediately; reverts to the server's order if the reorder request fails.
+function SortableLooksList({
+  userId,
+  avatarId,
+  looks,
+  canManage,
+  onRemove,
+}: {
+  userId: string;
+  avatarId: string;
+  looks: Look[];
+  canManage: boolean;
+  onRemove: (look: Look) => void;
+}) {
+  const router = useRouter();
+  const [ordered, setOrdered] = useState(looks);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = ordered.findIndex((l) => l.id === active.id);
+    const newIndex = ordered.findIndex((l) => l.id === over.id);
+    const previous = ordered;
+    const reordered = arrayMove(ordered, oldIndex, newIndex);
+    setOrdered(reordered);
+
+    try {
+      await apiCall(`/api/admin/users/${userId}/avatars/${avatarId}/looks/reorder`, "POST", {
+        orderedIds: reordered.map((l) => l.id),
+      });
+      router.refresh();
+    } catch {
+      setOrdered(previous);
+    }
+  }
+
+  if (!canManage) {
+    return (
+      <div className="mt-2 ml-14 space-y-1.5">
+        {ordered.map((look) => (
+          <SortableLookRow key={look.id} look={look} canManage={false} onRemove={onRemove} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 ml-14 space-y-1.5">
+      <DndContext id={`avatar-looks-${avatarId}`} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={ordered.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+          {ordered.map((look) => (
+            <SortableLookRow key={look.id} look={look} canManage={canManage} onRemove={onRemove} />
+          ))}
+        </SortableContext>
+      </DndContext>
+    </div>
+  );
+}
+
 export function UserAvatarsCard({
   userId,
   avatars,
@@ -106,6 +250,8 @@ export function UserAvatarsCard({
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Avatar | null>(null);
   const [removing, setRemoving] = useState<Avatar | null>(null);
+  const [removingLook, setRemovingLook] = useState<{ avatarId: string; look: Look } | null>(null);
+  const [removeLookState, setRemoveLookState] = useState<ActionState>(idle);
 
   const [name, setName] = useState("");
   const [heygenAvatarId, setHeygenAvatarId] = useState("");
@@ -236,6 +382,22 @@ export function UserAvatarsCard({
     }
   }
 
+  async function handleRemoveLook() {
+    if (!removingLook) return;
+    setRemoveLookState({ loading: true, error: null });
+    try {
+      await apiCall(
+        `/api/admin/users/${userId}/avatars/${removingLook.avatarId}/looks/${removingLook.look.id}`,
+        "DELETE",
+      );
+      setRemovingLook(null);
+      setRemoveLookState(idle);
+      router.refresh();
+    } catch (e) {
+      setRemoveLookState({ loading: false, error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
   return (
     <>
       <div className="space-y-3 text-sm">
@@ -243,7 +405,8 @@ export function UserAvatarsCard({
           <p className="text-muted-foreground">No avatars linked yet.</p>
         ) : (
           avatars.map((avatar) => (
-            <div key={avatar.id} className="flex items-center justify-between gap-3 py-2 border-t first:border-t-0">
+            <div key={avatar.id} className="py-2 border-t first:border-t-0">
+            <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <AvatarThumbnail previewUrl={avatar.previewUrl} name={avatar.name} />
                 <div className="min-w-0">
@@ -319,6 +482,20 @@ export function UserAvatarsCard({
                   </Button>
                 </div>
               )}
+            </div>
+            {avatar.looks.length > 0 && (
+              <SortableLooksList
+                // Remounts (resetting local drag order) whenever the server's
+                // own order actually changes — e.g. a refresh after adding or
+                // removing a look — without needing an effect to sync state.
+                key={avatar.looks.map((l) => l.id).join(",")}
+                userId={userId}
+                avatarId={avatar.id}
+                looks={avatar.looks}
+                canManage={canManage}
+                onRemove={(look) => setRemovingLook({ avatarId: avatar.id, look })}
+              />
+            )}
             </div>
           ))
         )}
@@ -426,6 +603,26 @@ export function UserAvatarsCard({
             <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
             <Button variant="destructive" size="sm" disabled={state.loading} onClick={handleRemove}>
               {state.loading ? "Removing…" : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove look confirm */}
+      <Dialog open={removingLook !== null} onOpenChange={(o) => { if (!o) setRemovingLook(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Look</DialogTitle>
+            <DialogDescription>
+              {removingLook?.look.name} will be unlinked from this avatar and no longer selectable for
+              new videos. This doesn&apos;t delete anything in HeyGen itself.
+            </DialogDescription>
+          </DialogHeader>
+          {removeLookState.error && <p className="text-sm text-destructive">{removeLookState.error}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
+            <Button variant="destructive" size="sm" disabled={removeLookState.loading} onClick={handleRemoveLook}>
+              {removeLookState.loading ? "Removing…" : "Remove"}
             </Button>
           </DialogFooter>
         </DialogContent>

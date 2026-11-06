@@ -271,7 +271,18 @@ async function resolveUsableLookId(
 
   const sourceAvatar = await prisma.avatar.findFirst({
     where: { heygenAvatarId: heygenId },
-    select: { looks: { where: { status: "ready" }, select: { heygenLookId: true }, take: 1 } },
+    select: {
+      looks: {
+        where: { status: "ready" },
+        // Admin-controlled priority (components/admin/avatar-actions.tsx's
+        // drag-to-reorder) — same ordering as the admin panel's own look
+        // list, so "Test avatar" exercises whichever look the admin
+        // actually put first, not an arbitrary DB-default row.
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { heygenLookId: true },
+        take: 1,
+      },
+    },
   });
   const knownLookId = sourceAvatar?.looks[0]?.heygenLookId;
   if (!knownLookId) {

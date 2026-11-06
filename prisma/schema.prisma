@@ -579,10 +579,19 @@ model AvatarLook {
   avatarType     String?
   createdAt      DateTime @default(now())
 
+  // Admin-controlled display order within this avatar's admin-panel look
+  // list (components/admin/avatar-actions.tsx) — defaults to 0 for every
+  // existing row, so until an admin actually drags something, display falls
+  // back to createdAt (see the admin page's orderBy). Same pattern as
+  // QuickLink.order. Purely an admin-panel concern — the customer-facing
+  // look picker (lib/projects/service.ts's listAvatarOptions) has its own,
+  // deliberate alphabetical ordering and is untouched by this.
+  sortOrder Int @default(0)
+
   avatar          Avatar           @relation(fields: [avatarId], references: [id], onDelete: Cascade)
   generatedVideos GeneratedVideo[]
 
-  @@index([avatarId])
+  @@index([avatarId, sortOrder])
   @@map("avatar_looks")
 }
 
