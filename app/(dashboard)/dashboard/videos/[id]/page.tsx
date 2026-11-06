@@ -5,6 +5,12 @@ import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { VideoDetail } from "@/components/dashboard/video/video-detail";
 import { videoTitle } from "@/lib/video-display";
+import { refreshIfInProgress } from "@/lib/heygen/generate-video";
+
+const VIDEO_INCLUDE = {
+  avatar: { select: { id: true, name: true } },
+  project: { select: { id: true, title: true } },
+} as const;
 
 export const metadata = {
   title: "Video | YouMimic Portal",
@@ -25,11 +31,18 @@ export default async function VideoPage({
   const { id } = await params;
   const { new: isNew } = await searchParams;
 
-  const video = await prisma.generatedVideo.findFirst({
+  let video = await prisma.generatedVideo.findFirst({
     where: { id, userId: session.user.id },
-    include: { avatar: { select: { id: true, name: true } }, project: { select: { id: true, title: true } } },
+    include: VIDEO_INCLUDE,
   });
   if (!video) notFound();
+
+  // Don't show a stale PENDING/PROCESSING status just because nobody's
+  // actively watching this page — see refreshIfInProgress's own comment.
+  await refreshIfInProgress(video, session.user.id);
+  if (video.status === "PENDING" || video.status === "PROCESSING") {
+    video = (await prisma.generatedVideo.findFirst({ where: { id, userId: session.user.id }, include: VIDEO_INCLUDE })) ?? video;
+  }
 
   // Only the project's current (most recent) render redirects into the live
   // editor — that's the one page meant to show "the" video for a project.

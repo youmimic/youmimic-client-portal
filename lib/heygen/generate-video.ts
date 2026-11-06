@@ -262,6 +262,32 @@ export async function refreshGeneratedVideoStatus(generatedVideoId: string, user
   }
 }
 
+// Server-side "don't show stale status" helper for page loads. Without
+// this, a PENDING/PROCESSING row only ever gets refreshed by the webhook
+// (can be missed — see app/api/webhooks/heygen/route.ts), by client-side
+// polling (only runs while that exact page is open in a tab), or by the
+// once-daily stuck-generation sweep (sweepStuckGenerations below, which can
+// take up to ~24h to catch something). Someone who queues a video, closes
+// the tab, and checks back later from the videos list or a bookmark — not
+// watching the in-progress loader — would otherwise see whatever was true
+// at page-load time, stale for as long as nothing else happened to refresh
+// it. Calling this on every relevant page load closes that gap directly.
+// Best-effort: a page load should never break because HeyGen is slow or
+// briefly unavailable — on failure this just leaves the DB (and therefore
+// the page) showing whatever was already there, same as if this call were
+// never made.
+export async function refreshIfInProgress(
+  row: { id: string; status: VideoGenerationStatus },
+  userId: string,
+): Promise<void> {
+  if (row.status !== "PENDING" && row.status !== "PROCESSING") return;
+  try {
+    await refreshGeneratedVideoStatus(row.id, userId);
+  } catch (err) {
+    console.error(`Best-effort status refresh failed for video ${row.id}:`, err);
+  }
+}
+
 function mapRemoteStatus(status: string): VideoGenerationStatus {
   switch (status) {
     case "completed":
