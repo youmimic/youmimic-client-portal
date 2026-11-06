@@ -534,3 +534,9 @@ export const reorderQuickLinksSchema = z.object({
 });
 
 export type ReorderQuickLinksInput = z.infer<typeof reorderQuickLinksSchema>;
+
+export const reorderAvatarLooksSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1),
+});
+
+export type ReorderAvatarLooksInput = z.infer<typeof reorderAvatarLooksSchema>;
