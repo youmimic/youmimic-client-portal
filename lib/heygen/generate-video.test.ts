@@ -68,7 +68,7 @@ describe("sweepStuckGenerations", () => {
   it("marks a row COMPLETED and reconciles credits when HeyGen reports it finished", async () => {
     findManyGeneratedVideo.mockResolvedValue([STUCK_ROW]);
     getHeyGenVideoStatus.mockResolvedValue({ status: "completed", duration: 5.2, video_url: "https://x/video.mp4" });
-    updateGeneratedVideo.mockResolvedValue(undefined);
+    updateGeneratedVideo.mockResolvedValue({ status: "COMPLETED", videoUrl: "https://x/video.mp4" });
     reconcileCredits.mockResolvedValue(undefined);
 
     const result = await sweepStuckGenerations();
@@ -83,10 +83,47 @@ describe("sweepStuckGenerations", () => {
     expect(reconcileCredits).toHaveBeenCalledWith({ videoId: "video_1", engine: "AVATAR_III", actualDurationSeconds: 5.2 });
   });
 
+  it("uses HeyGen's own completed_at timestamp, not the moment the sweep happens to run", async () => {
+    findManyGeneratedVideo.mockResolvedValue([STUCK_ROW]);
+    // A video that actually finished 25 minutes ago, found by a sweep
+    // running right now — completedAt must reflect the real finish time,
+    // not "now", otherwise a late reconciliation shows the wrong duration.
+    const realCompletionUnixSeconds = Math.floor(Date.now() / 1000) - 25 * 60;
+    getHeyGenVideoStatus.mockResolvedValue({
+      status: "completed",
+      duration: 5.2,
+      video_url: "https://x/video.mp4",
+      completed_at: realCompletionUnixSeconds,
+    });
+    updateGeneratedVideo.mockResolvedValue({ status: "COMPLETED", videoUrl: "https://x/video.mp4" });
+    reconcileCredits.mockResolvedValue(undefined);
+
+    await sweepStuckGenerations();
+
+    const data = updateGeneratedVideo.mock.calls[0][0].data;
+    expect(data.completedAt).toBeInstanceOf(Date);
+    expect(data.completedAt.getTime()).toBe(realCompletionUnixSeconds * 1000);
+  });
+
+  it("falls back to the current time for completedAt when HeyGen doesn't provide completed_at", async () => {
+    findManyGeneratedVideo.mockResolvedValue([STUCK_ROW]);
+    getHeyGenVideoStatus.mockResolvedValue({ status: "completed", duration: 5.2, video_url: "https://x/video.mp4" });
+    updateGeneratedVideo.mockResolvedValue({ status: "COMPLETED", videoUrl: "https://x/video.mp4" });
+    reconcileCredits.mockResolvedValue(undefined);
+
+    const before = Date.now();
+    await sweepStuckGenerations();
+    const after = Date.now();
+
+    const data = updateGeneratedVideo.mock.calls[0][0].data;
+    expect(data.completedAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(data.completedAt.getTime()).toBeLessThanOrEqual(after);
+  });
+
   it("marks a row FAILED and releases the credit reservation when HeyGen reports it failed", async () => {
     findManyGeneratedVideo.mockResolvedValue([STUCK_ROW]);
     getHeyGenVideoStatus.mockResolvedValue({ status: "failed", error: { message: "Render error" } });
-    updateGeneratedVideo.mockResolvedValue(undefined);
+    updateGeneratedVideo.mockResolvedValue({ status: "FAILED", videoUrl: null });
     releaseReservationForVideo.mockResolvedValue(undefined);
 
     const result = await sweepStuckGenerations();
@@ -98,7 +135,7 @@ describe("sweepStuckGenerations", () => {
   it("leaves a row alone (stillProcessing) when HeyGen reports it's genuinely still rendering", async () => {
     findManyGeneratedVideo.mockResolvedValue([STUCK_ROW]);
     getHeyGenVideoStatus.mockResolvedValue({ status: "processing" });
-    updateGeneratedVideo.mockResolvedValue(undefined);
+    updateGeneratedVideo.mockResolvedValue({ status: "PROCESSING", videoUrl: null });
 
     const result = await sweepStuckGenerations();
 
@@ -110,6 +147,7 @@ describe("sweepStuckGenerations", () => {
   it("records a per-row failure and keeps processing the rest when a HeyGen lookup throws", async () => {
     findManyGeneratedVideo.mockResolvedValue([STUCK_ROW, { ...STUCK_ROW, id: "video_2", heygenVideoId: "heygen_video_2" }]);
     getHeyGenVideoStatus.mockRejectedValueOnce(new Error("HeyGen down")).mockResolvedValueOnce({ status: "processing" });
+    updateGeneratedVideo.mockResolvedValue({ status: "PROCESSING", videoUrl: null });
 
     const result = await sweepStuckGenerations();
 

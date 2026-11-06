@@ -57,6 +57,15 @@ export interface HeyGenVideoStatus {
   // from this instead).
   duration: number | null;
   error: { code?: string; message?: string } | null;
+  // Unix seconds — confirmed via a real "completed" API response
+  // (alongside a matching created_at). This is when the render actually
+  // finished on HeyGen's side, not when our own code happened to notice —
+  // use this for GeneratedVideo.completedAt rather than "now", otherwise a
+  // video reconciled late (a missed webhook, the daily sweep, a page-load
+  // refresh long after the fact) shows a "finished" time hours after it
+  // actually finished. Optional since this hasn't been confirmed present on
+  // a "failed" response.
+  completed_at?: number;
 }
 
 export class HeyGenApiError extends Error {
