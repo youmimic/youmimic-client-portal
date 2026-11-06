@@ -356,6 +356,86 @@ export async function refreshExpiringVideoUrls(): Promise<RefreshExpiringUrlsRes
   return { checked: dueForRefresh.length, refreshed, failed };
 }
 
+// A webhook delivery that's missed for any reason (the delivery race
+// between our own GeneratedVideo.create() and a very fast HeyGen render —
+// see app/api/webhooks/heygen/route.ts's local-row lookup — a signature
+// failure, a dropped delivery, anything) leaves a video stuck at PENDING/
+// PROCESSING forever, with no automated path back: refreshExpiringVideoUrls
+// above only ever touches already-COMPLETED rows, and the only other paths
+// (an open browser tab polling, or someone manually revisiting the page)
+// require a person to actually be looking. This is the reconciliation
+// sweep that closes that gap.
+const STUCK_GENERATION_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+export type SweepStuckGenerationsResult = {
+  checked: number;
+  resolved: number; // now COMPLETED or FAILED
+  stillProcessing: number; // genuinely still rendering — left alone
+  failed: { generatedVideoId: string; error: string }[];
+};
+
+// Threshold checked against real completion data (2026-11-07): p90 ~6 min,
+// max ~12 min across 31 clean (non-stuck) completions — 30 minutes is well
+// past any real render time seen so far, so this only ever catches rows
+// that are actually stuck, never one that's merely slow.
+export async function sweepStuckGenerations(): Promise<SweepStuckGenerationsResult> {
+  const cutoff = new Date(Date.now() - STUCK_GENERATION_THRESHOLD_MS);
+
+  const stuck = await prisma.generatedVideo.findMany({
+    where: {
+      status: { in: ["PENDING", "PROCESSING"] as VideoGenerationStatus[] },
+      heygenVideoId: { not: null },
+      createdAt: { lte: cutoff },
+    },
+    select: { id: true, heygenVideoId: true, engine: true, resolution: true },
+  });
+
+  let resolved = 0;
+  let stillProcessing = 0;
+  const failed: SweepStuckGenerationsResult["failed"] = [];
+
+  for (const row of stuck) {
+    try {
+      const remote = await getHeyGenVideoStatus(row.heygenVideoId!);
+      const mapped = mapRemoteStatus(remote.status);
+
+      const isCompleted = mapped === "COMPLETED";
+      const durationSeconds = isCompleted ? (remote.duration ?? undefined) : undefined;
+
+      await prisma.generatedVideo.update({
+        where: { id: row.id },
+        data: {
+          status: mapped,
+          videoUrl: remote.video_url ?? undefined,
+          thumbnailUrl: remote.thumbnail_url ?? undefined,
+          errorMessage: mapped === "FAILED" ? (remote.error?.message ?? "Video generation failed") : undefined,
+          completedAt: mapped === "COMPLETED" || mapped === "FAILED" ? new Date() : undefined,
+          durationSeconds,
+          estimatedCostCents:
+            durationSeconds !== undefined ? estimatedCostCents(row.engine, durationSeconds, row.resolution) : undefined,
+        },
+      });
+
+      if (isCompleted && durationSeconds !== undefined) {
+        await reconcileCredits({ videoId: row.id, engine: row.engine, actualDurationSeconds: durationSeconds });
+        resolved++;
+      } else if (mapped === "FAILED") {
+        await releaseReservationForVideo(row.id);
+        resolved++;
+      } else {
+        // Genuinely still processing on HeyGen's side — leave it, the next
+        // sweep (or an open tab's own polling) will catch it when it's done.
+        stillProcessing++;
+      }
+    } catch (err) {
+      const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
+      failed.push({ generatedVideoId: row.id, error: message });
+    }
+  }
+
+  return { checked: stuck.length, resolved, stillProcessing, failed };
+}
+
 export type RefreshVideoUrlResult =
   | { ok: true; videoUrl: string | null; thumbnailUrl: string | null }
   | { ok: false; code: "NOT_FOUND" | "NOT_COMPLETED" | "HEYGEN_ERROR"; error: string };
