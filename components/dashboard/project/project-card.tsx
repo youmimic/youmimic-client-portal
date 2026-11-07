@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ProjectStatusBadge, type ProjectStatusValue } from "@/components/dashboard/project/project-status-badge";
+import { MarkPulseLoader } from "@/components/dashboard/video/generating-indicator";
 import { formatDateTime } from "@/lib/video-display";
 
 // One in-progress project on the Videos page, with a delete button that always
@@ -70,7 +71,9 @@ export function ProjectCard({
         aria-label={`Open ${name}`}
       >
         <div className="relative flex aspect-video items-center justify-center bg-muted">
-          {thumbnailUrl ? (
+          {status === "GENERATING" ? (
+            <MarkPulseLoader className="relative h-12 w-12" />
+          ) : thumbnailUrl ? (
             <Image
               src={thumbnailUrl}
               alt=""
