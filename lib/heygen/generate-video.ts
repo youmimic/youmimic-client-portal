@@ -208,6 +208,76 @@ export type RefreshResult =
   | { ok: true; status: VideoGenerationStatus; videoUrl: string | null }
   | { ok: false; code: "NOT_FOUND" | "HEYGEN_ERROR"; error: string };
 
+export type ReconcileVideoResult =
+  | { ok: true; status: VideoGenerationStatus; videoUrl: string | null }
+  | { ok: false; error: string };
+
+// The one place that actually talks to HeyGen to find out a video's real
+// status and writes the result back — used by the webhook handler
+// (app/api/webhooks/heygen/route.ts), refreshGeneratedVideoStatus below,
+// and sweepStuckGenerations further down, so this logic (and any fix to
+// it, like the completedAt timestamp below) only ever needs to be correct
+// in one place.
+export async function reconcileVideoWithHeyGen(
+  row: { id: string; heygenVideoId: string; engine: VideoEngine; resolution: string | null },
+  opts: { webhookEventId?: string } = {},
+): Promise<ReconcileVideoResult> {
+  try {
+    const remote = await getHeyGenVideoStatus(row.heygenVideoId);
+    const mapped = mapRemoteStatus(remote.status);
+
+    // duration/cost only meaningful once actually completed — HeyGen's
+    // status response has no cost field at all, so cost is always derived
+    // from duration x this row's own engine rate (see lib/heygen/pricing.ts).
+    const isCompleted = mapped === "COMPLETED";
+    const isFailed = mapped === "FAILED";
+    const durationSeconds = isCompleted ? (remote.duration ?? undefined) : undefined;
+
+    // Use HeyGen's own completion timestamp when it gives us one, not the
+    // moment we happen to be reconciling — a video reconciled late (a
+    // missed webhook, the daily sweep, a page-load refresh long after the
+    // fact) would otherwise show a "finished" time hours after it actually
+    // finished. Falls back to now only if HeyGen doesn't provide one
+    // (confirmed present on a real "completed" response; not yet confirmed
+    // on a "failed" one).
+    const completedAt =
+      isCompleted || isFailed
+        ? remote.completed_at
+          ? new Date(remote.completed_at * 1000)
+          : new Date()
+        : undefined;
+
+    const updated = await prisma.generatedVideo.update({
+      where: { id: row.id },
+      data: {
+        status: mapped,
+        videoUrl: remote.video_url ?? undefined,
+        thumbnailUrl: remote.thumbnail_url ?? undefined,
+        errorMessage: isFailed ? (remote.error?.message ?? "Video generation failed") : undefined,
+        completedAt,
+        lastWebhookEventId: opts.webhookEventId ?? undefined,
+        durationSeconds,
+        estimatedCostCents:
+          durationSeconds !== undefined
+            ? estimatedCostCents(row.engine, durationSeconds, row.resolution)
+            : undefined,
+      },
+      select: { status: true, videoUrl: true },
+    });
+
+    if (isCompleted && durationSeconds !== undefined) {
+      await reconcileCredits({ videoId: row.id, engine: row.engine, actualDurationSeconds: durationSeconds });
+    } else if (isFailed) {
+      await releaseReservationForVideo(row.id);
+    }
+
+    return { ok: true, status: updated.status, videoUrl: updated.videoUrl };
+  } catch (err) {
+    const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
+    return { ok: false, error: message };
+  }
+}
+
 // On-demand fallback for whenever the webhook hasn't fired yet (or isn't
 // registered against this environment at all) — re-fetches authoritative
 // state from HeyGen rather than trusting anything the caller already has.
@@ -222,43 +292,39 @@ export async function refreshGeneratedVideoStatus(generatedVideoId: string, user
     return { ok: true, status: row.status, videoUrl: null };
   }
 
+  const result = await reconcileVideoWithHeyGen({
+    id: row.id,
+    heygenVideoId: row.heygenVideoId,
+    engine: row.engine,
+    resolution: row.resolution,
+  });
+  if (!result.ok) return { ok: false, code: "HEYGEN_ERROR", error: result.error };
+  return { ok: true, status: result.status, videoUrl: result.videoUrl };
+}
+
+// Server-side "don't show stale status" helper for page loads. Without
+// this, a PENDING/PROCESSING row only ever gets refreshed by the webhook
+// (can be missed — see app/api/webhooks/heygen/route.ts), by client-side
+// polling (only runs while that exact page is open in a tab), or by the
+// once-daily stuck-generation sweep (sweepStuckGenerations below, which can
+// take up to ~24h to catch something). Someone who queues a video, closes
+// the tab, and checks back later from the videos list or a bookmark — not
+// watching the in-progress loader — would otherwise see whatever was true
+// at page-load time, stale for as long as nothing else happened to refresh
+// it. Calling this on every relevant page load closes that gap directly.
+// Best-effort: a page load should never break because HeyGen is slow or
+// briefly unavailable — on failure this just leaves the DB (and therefore
+// the page) showing whatever was already there, same as if this call were
+// never made.
+export async function refreshIfInProgress(
+  row: { id: string; status: VideoGenerationStatus },
+  userId: string,
+): Promise<void> {
+  if (row.status !== "PENDING" && row.status !== "PROCESSING") return;
   try {
-    const remote = await getHeyGenVideoStatus(row.heygenVideoId);
-    const mapped = mapRemoteStatus(remote.status);
-
-    // duration/cost only meaningful once actually completed — HeyGen's
-    // status response has no cost field at all, so cost is always derived
-    // from duration x this row's own engine rate (see lib/heygen/pricing.ts).
-    const isCompleted = mapped === "COMPLETED";
-    const durationSeconds = isCompleted ? (remote.duration ?? undefined) : undefined;
-
-    const updated = await prisma.generatedVideo.update({
-      where: { id: row.id },
-      data: {
-        status: mapped,
-        videoUrl: remote.video_url ?? undefined,
-        thumbnailUrl: remote.thumbnail_url ?? undefined,
-        errorMessage: mapped === "FAILED" ? (remote.error?.message ?? "Video generation failed") : undefined,
-        completedAt: mapped === "COMPLETED" || mapped === "FAILED" ? new Date() : undefined,
-        durationSeconds,
-        estimatedCostCents:
-          durationSeconds !== undefined
-            ? estimatedCostCents(row.engine, durationSeconds, row.resolution)
-            : undefined,
-      },
-      select: { status: true, videoUrl: true },
-    });
-
-    if (isCompleted && durationSeconds !== undefined) {
-      await reconcileCredits({ videoId: row.id, engine: row.engine, actualDurationSeconds: durationSeconds });
-    } else if (mapped === "FAILED") {
-      await releaseReservationForVideo(row.id);
-    }
-
-    return { ok: true, status: updated.status, videoUrl: updated.videoUrl };
+    await refreshGeneratedVideoStatus(row.id, userId);
   } catch (err) {
-    const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
-    return { ok: false, code: "HEYGEN_ERROR", error: message };
+    console.error(`Best-effort status refresh failed for video ${row.id}:`, err);
   }
 }
 
@@ -392,41 +458,21 @@ export async function sweepStuckGenerations(): Promise<SweepStuckGenerationsResu
   const failed: SweepStuckGenerationsResult["failed"] = [];
 
   for (const row of stuck) {
-    try {
-      const remote = await getHeyGenVideoStatus(row.heygenVideoId!);
-      const mapped = mapRemoteStatus(remote.status);
+    const result = await reconcileVideoWithHeyGen({
+      id: row.id,
+      heygenVideoId: row.heygenVideoId!,
+      engine: row.engine,
+      resolution: row.resolution,
+    });
 
-      const isCompleted = mapped === "COMPLETED";
-      const durationSeconds = isCompleted ? (remote.duration ?? undefined) : undefined;
-
-      await prisma.generatedVideo.update({
-        where: { id: row.id },
-        data: {
-          status: mapped,
-          videoUrl: remote.video_url ?? undefined,
-          thumbnailUrl: remote.thumbnail_url ?? undefined,
-          errorMessage: mapped === "FAILED" ? (remote.error?.message ?? "Video generation failed") : undefined,
-          completedAt: mapped === "COMPLETED" || mapped === "FAILED" ? new Date() : undefined,
-          durationSeconds,
-          estimatedCostCents:
-            durationSeconds !== undefined ? estimatedCostCents(row.engine, durationSeconds, row.resolution) : undefined,
-        },
-      });
-
-      if (isCompleted && durationSeconds !== undefined) {
-        await reconcileCredits({ videoId: row.id, engine: row.engine, actualDurationSeconds: durationSeconds });
-        resolved++;
-      } else if (mapped === "FAILED") {
-        await releaseReservationForVideo(row.id);
-        resolved++;
-      } else {
-        // Genuinely still processing on HeyGen's side — leave it, the next
-        // sweep (or an open tab's own polling) will catch it when it's done.
-        stillProcessing++;
-      }
-    } catch (err) {
-      const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
-      failed.push({ generatedVideoId: row.id, error: message });
+    if (!result.ok) {
+      failed.push({ generatedVideoId: row.id, error: result.error });
+    } else if (result.status === "COMPLETED" || result.status === "FAILED") {
+      resolved++;
+    } else {
+      // Genuinely still processing on HeyGen's side — leave it, the next
+      // sweep (or an open tab's own polling) will catch it when it's done.
+      stillProcessing++;
     }
   }
 

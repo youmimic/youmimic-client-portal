@@ -1,10 +1,7 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getHeyGenVideoStatus, HeyGenApiError } from "@/lib/heygen";
-import { estimatedCostCents } from "@/lib/heygen/pricing";
-import { reconcileCredits, releaseReservationForVideo } from "@/lib/usage/ledger";
-import type { VideoGenerationStatus } from "@/app/generated/prisma/enums";
+import { reconcileVideoWithHeyGen } from "@/lib/heygen/generate-video";
 
 // HeyGen signs the raw request body with HMAC-SHA256 using the endpoint's
 // signing secret, sent as the Heygen-Signature header (hex digest), plus a
@@ -31,19 +28,6 @@ interface HeyGenWebhookEvent {
   event_type: string;
   event_data: { video_id?: string };
   created_at: string;
-}
-
-function mapRemoteStatus(status: string): VideoGenerationStatus {
-  switch (status) {
-    case "completed":
-      return "COMPLETED" as VideoGenerationStatus;
-    case "failed":
-      return "FAILED" as VideoGenerationStatus;
-    case "processing":
-      return "PROCESSING" as VideoGenerationStatus;
-    default:
-      return "PENDING" as VideoGenerationStatus;
-  }
 }
 
 export async function POST(req: Request) {
@@ -121,41 +105,12 @@ export async function POST(req: Request) {
   // authoritative state from HeyGen, rather than trusting webhook payload
   // fields directly — matches HeyGen's own guidance for failure events, and
   // means success/fail are handled identically here.
-  try {
-    const remote = await getHeyGenVideoStatus(videoId);
-    const mapped = mapRemoteStatus(remote.status);
-
-    // duration/cost only meaningful once actually completed — HeyGen's
-    // status response has no cost field at all, so cost is always derived
-    // from duration x this row's own engine rate (see lib/heygen/pricing.ts).
-    const isCompleted = mapped === "COMPLETED";
-    const durationSeconds = isCompleted ? (remote.duration ?? undefined) : undefined;
-
-    await prisma.generatedVideo.update({
-      where: { id: local.id },
-      data: {
-        status: mapped,
-        videoUrl: remote.video_url ?? undefined,
-        thumbnailUrl: remote.thumbnail_url ?? undefined,
-        errorMessage: mapped === "FAILED" ? (remote.error?.message ?? "Video generation failed") : undefined,
-        completedAt: mapped === "COMPLETED" || mapped === "FAILED" ? new Date() : undefined,
-        lastWebhookEventId: eventId ?? undefined,
-        durationSeconds,
-        estimatedCostCents:
-          durationSeconds !== undefined
-            ? estimatedCostCents(local.engine, durationSeconds, local.resolution)
-            : undefined,
-      },
-    });
-
-    if (isCompleted && durationSeconds !== undefined) {
-      await reconcileCredits({ videoId: local.id, engine: local.engine, actualDurationSeconds: durationSeconds });
-    } else if (mapped === "FAILED") {
-      await releaseReservationForVideo(local.id);
-    }
-  } catch (err) {
-    const message = err instanceof HeyGenApiError ? err.message : "Unknown error";
-    console.error(`Failed to reconcile HeyGen video ${videoId} after webhook:`, message);
+  const result = await reconcileVideoWithHeyGen(
+    { id: local.id, heygenVideoId: videoId, engine: local.engine, resolution: local.resolution },
+    { webhookEventId: eventId ?? undefined },
+  );
+  if (!result.ok) {
+    console.error(`Failed to reconcile HeyGen video ${videoId} after webhook:`, result.error);
     // Still 200 — HeyGen shouldn't retry-storm us; the manual refresh
     // fallback in the UI covers this case.
   }

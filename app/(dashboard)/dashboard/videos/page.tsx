@@ -10,6 +10,23 @@ import { NewProjectButton } from "@/components/dashboard/project/new-project-but
 import { ProjectCard } from "@/components/dashboard/project/project-card";
 import { listProjects } from "@/lib/projects/service";
 import { formatDuration, videoTitle } from "@/lib/video-display";
+import { refreshIfInProgress } from "@/lib/heygen/generate-video";
+
+const VIDEO_LIST_SELECT = {
+  id: true,
+  title: true,
+  script: true,
+  status: true,
+  engine: true,
+  thumbnailUrl: true,
+  errorMessage: true,
+  createdAt: true,
+  durationSeconds: true,
+  estimatedCostCents: true,
+  aspectRatio: true,
+  projectId: true,
+  avatar: { select: { id: true, name: true } },
+} as const;
 
 export const metadata = {
   title: "Videos | YouMimic Portal",
@@ -29,25 +46,24 @@ export default async function VideosPage({
 
   const projects = (await listProjects(session.user.id)).filter((p) => p.status !== "COMPLETED");
 
-  const videos = await prisma.generatedVideo.findMany({
+  let videos = await prisma.generatedVideo.findMany({
     where: { userId: session.user.id },
     orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      title: true,
-      script: true,
-      status: true,
-      engine: true,
-      thumbnailUrl: true,
-      errorMessage: true,
-      createdAt: true,
-      durationSeconds: true,
-      estimatedCostCents: true,
-      aspectRatio: true,
-      projectId: true,
-      avatar: { select: { id: true, name: true } },
-    },
+    select: VIDEO_LIST_SELECT,
   });
+
+  // Don't show a stale PENDING/PROCESSING status just because nobody's
+  // actively watching this page — see refreshIfInProgress's own comment.
+  // Normally 0-1 rows, never the whole list.
+  const inProgress = videos.filter((v) => v.status === "PENDING" || v.status === "PROCESSING");
+  if (inProgress.length > 0) {
+    await Promise.all(inProgress.map((v) => refreshIfInProgress(v, session.user.id)));
+    videos = await prisma.generatedVideo.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      select: VIDEO_LIST_SELECT,
+    });
+  }
 
   // Sum of every completed video's own stored estimate — not recomputed
   // live, so this total stays consistent with what each video shows even if
