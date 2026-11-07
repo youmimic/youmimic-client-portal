@@ -23,6 +23,7 @@ import { NewProjectButton } from "@/components/dashboard/project/new-project-but
 import { ProjectCard } from "@/components/dashboard/project/project-card";
 import { VideoCard, type LibraryVideo } from "@/components/dashboard/video/video-library";
 import { listAvatarOptions, listProjects } from "@/lib/projects/service";
+import { refreshIfInProgress } from "@/lib/heygen/generate-video";
 import { formatShortDate } from "@/lib/format";
 import { videoTitle } from "@/lib/video-display";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,22 @@ function startOfToday(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+const RECENT_VIDEO_SELECT = {
+  id: true,
+  title: true,
+  script: true,
+  status: true,
+  engine: true,
+  thumbnailUrl: true,
+  errorMessage: true,
+  createdAt: true,
+  durationSeconds: true,
+  estimatedCostCents: true,
+  aspectRatio: true,
+  projectId: true,
+  avatar: { select: { name: true } },
+} as const;
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -49,28 +66,14 @@ export default async function DashboardPage({
   const firstName = fullName.split(" ")[0] || fullName;
   const { joined } = await searchParams;
 
-  const [enterprise, videoRows, videoCount, inProgressCount, projects, avatars, upcoming, bookingCount] = userId
+  const [enterprise, initialVideoRows, videoCount, initialInProgressCount, projects, avatars, upcoming, bookingCount] = userId
     ? await Promise.all([
         prisma.enterprise.findFirst({ where: { ownerUserId: userId }, select: { id: true, name: true } }),
         prisma.generatedVideo.findMany({
           where: { userId },
           orderBy: { createdAt: "desc" },
           take: 4,
-          select: {
-            id: true,
-            title: true,
-            script: true,
-            status: true,
-            engine: true,
-            thumbnailUrl: true,
-            errorMessage: true,
-            createdAt: true,
-            durationSeconds: true,
-            estimatedCostCents: true,
-            aspectRatio: true,
-            projectId: true,
-            avatar: { select: { name: true } },
-          },
+          select: RECENT_VIDEO_SELECT,
         }),
         prisma.generatedVideo.count({ where: { userId } }),
         prisma.generatedVideo.count({ where: { userId, status: { in: ["PENDING", "PROCESSING"] } } }),
@@ -85,6 +88,27 @@ export default async function DashboardPage({
         prisma.booking.count({ where: { userId } }),
       ])
     : [null, [], 0, 0, [], [], [], 0];
+
+  // Don't show stale PENDING/PROCESSING statuses on the dashboard home page
+  // just because nobody's actively watching it — same freshness fix applied
+  // to /dashboard/videos and friends (lib/heygen/generate-video.ts).
+  let videoRows = initialVideoRows;
+  let inProgressCount = initialInProgressCount;
+  if (userId) {
+    const inProgressRows = videoRows.filter((v) => v.status === "PENDING" || v.status === "PROCESSING");
+    if (inProgressRows.length > 0) {
+      await Promise.all(inProgressRows.map((v) => refreshIfInProgress(v, userId)));
+      [videoRows, inProgressCount] = await Promise.all([
+        prisma.generatedVideo.findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+          take: 4,
+          select: RECENT_VIDEO_SELECT,
+        }),
+        prisma.generatedVideo.count({ where: { userId, status: { in: ["PENDING", "PROCESSING"] } } }),
+      ]);
+    }
+  }
 
   const openProjects = projects.filter((p) => p.status !== "COMPLETED");
   const drafts = openProjects.filter((p) => p.status === "DRAFT").length;
