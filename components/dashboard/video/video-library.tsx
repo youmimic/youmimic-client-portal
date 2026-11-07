@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Film, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -103,7 +104,47 @@ function SelfHealingThumb({
   );
 }
 
+// Poll gently while a card is in progress: every 6 seconds for the first two
+// minutes, then every 15 — same cadence as the single-video detail page
+// (video-detail.tsx's useStatusPolling). Paused while the tab is hidden.
+// Without this, a video queued from this list (rather than its own detail
+// page) never updates on its own — the list is otherwise a static server
+// render that only gets fresh data on the next full page load.
+function useCardStatusPolling(id: string, status: VideoStatus, onChange: () => void) {
+  const startedAt = useRef<number | null>(null);
+  const inProgress = status === "PENDING" || status === "PROCESSING";
+
+  const check = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/dashboard/videos/${id}/refresh`, { method: "POST" });
+      const json = (await res.json().catch(() => ({}))) as { status?: VideoStatus };
+      if (res.ok && json.status && json.status !== status) onChange();
+    } catch {
+      // Best-effort — the next tick, or the next full page load, will catch up.
+    }
+  }, [id, status, onChange]);
+
+  useEffect(() => {
+    if (!inProgress) return;
+    startedAt.current ??= Date.now();
+    let timer: number | undefined;
+    const tick = () => {
+      const elapsed = Date.now() - (startedAt.current ?? Date.now());
+      timer = window.setTimeout(async () => {
+        if (document.visibilityState === "visible") await check();
+        tick();
+      }, elapsed < 120_000 ? 6000 : 15000);
+    };
+    tick();
+    return () => window.clearTimeout(timer);
+  }, [inProgress, check]);
+}
+
 export function VideoCard({ v, canViewCost }: { v: LibraryVideo; canViewCost: boolean }) {
+  const router = useRouter();
+  const onChange = useCallback(() => router.refresh(), [router]);
+  useCardStatusPolling(v.id, v.status, onChange);
+
   return (
     // Always this specific render's own id, even for a project video — every
     // past render for the same project previously shared one href (the
