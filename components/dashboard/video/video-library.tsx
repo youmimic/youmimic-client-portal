@@ -7,6 +7,7 @@ import { Film, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { VideoStatusBadge } from "@/components/dashboard/video/video-status-badge";
+import { MarkPulseLoader } from "@/components/dashboard/video/generating-indicator";
 import {
   ASPECT_RATIO_LABEL,
   ENGINE_LABEL,
@@ -78,6 +79,10 @@ function SelfHealingThumb({
         else setBroken(true);
       })
       .catch(() => setBroken(true));
+  }
+
+  if ((status === "PENDING" || status === "PROCESSING") && (!src || broken)) {
+    return <MarkPulseLoader className="relative h-12 w-12" />;
   }
 
   if (!src || broken) {
