@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Copy, Download, Pencil, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { GeneratingIndicator } from "@/components/dashboard/video/generating-indicator";
 import type { ProjectView } from "@/lib/projects/service";
 import {
@@ -64,11 +65,17 @@ export function FinalView({
   // connection doesn't retry forever. Declared before the early return below
   // so this hook always runs, keeping hook order stable across renders.
   const autoHealed = useRef(false);
+  // Defaults to the captioned render when one exists — that's what was
+  // asked for by turning captions on for the project. Declared before the
+  // early return below so hook order stays stable across renders, same as
+  // autoHealed above.
+  const [showCaptions, setShowCaptions] = useState(true);
   if (!video) return null;
 
   const snapshot = video.sceneSnapshot ?? [];
   const estimate = estimateGeneration(snapshot.map((s) => s.script).join("\n"), project.engine as VideoEngineValue);
   const vertical = project.aspectRatio === "9:16" || project.aspectRatio === "4:5";
+  const playableUrl = showCaptions && video.captionedVideoUrl ? video.captionedVideoUrl : video.videoUrl;
 
   function handlePlaybackError() {
     if (autoHealed.current || busy) return;
@@ -80,9 +87,9 @@ export function FinalView({
     <div className="space-y-4">
       <Card className="overflow-hidden">
         <div className="flex items-center justify-center bg-black/90">
-          {project.status === "COMPLETED" && video.videoUrl ? (
+          {project.status === "COMPLETED" && playableUrl ? (
             <video
-              key={video.videoUrl}
+              key={playableUrl}
               controls
               playsInline
               preload="metadata"
@@ -90,7 +97,7 @@ export function FinalView({
               onError={handlePlaybackError}
               className={vertical ? "max-h-[70vh] w-auto max-w-full" : "aspect-video w-full"}
             >
-              <source src={video.videoUrl} type="video/mp4" />
+              <source src={playableUrl} type="video/mp4" />
             </video>
           ) : (
             <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 p-6 text-center text-white/90">
@@ -121,7 +128,7 @@ export function FinalView({
                   </div>
                 </>
               )}
-              {project.status === "COMPLETED" && !video.videoUrl && (
+              {project.status === "COMPLETED" && !playableUrl && (
                 <>
                   <TriangleAlert className="h-8 w-8 text-yellow-300" aria-hidden="true" />
                   <p className="text-sm">The video link has expired. Refresh it to watch again.</p>
@@ -131,6 +138,13 @@ export function FinalView({
           )}
         </div>
       </Card>
+
+      {video.captionedVideoUrl && (
+        <label className="flex w-fit items-center gap-2.5 text-sm">
+          <Checkbox checked={showCaptions} onCheckedChange={(checked) => setShowCaptions(checked === true)} />
+          <span>Show burned-in captions</span>
+        </label>
+      )}
 
       {generating && (
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -157,11 +171,11 @@ export function FinalView({
       )}
 
       <div className="flex flex-wrap gap-2">
-        {project.status === "COMPLETED" && video.videoUrl && (
+        {project.status === "COMPLETED" && playableUrl && (
           <Button asChild>
-            <a href={video.videoUrl} download target="_blank" rel="noopener noreferrer">
+            <a href={playableUrl} download target="_blank" rel="noopener noreferrer">
               <Download className="h-4 w-4" aria-hidden="true" />
-              Download
+              Download{showCaptions && video.captionedVideoUrl ? " with captions" : ""}
             </a>
           </Button>
         )}

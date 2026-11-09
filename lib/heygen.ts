@@ -50,6 +50,16 @@ export interface HeyGenVideoStatus {
   video_id?: string;
   status: "pending" | "processing" | "completed" | "failed";
   video_url: string | null;
+  // Only present when the job was created with `caption` set (see
+  // createHeyGenStudioVideo) — a separate rendered file with subtitles
+  // burned into the frame, distinct from video_url's plain version.
+  // Confirmed live (2026-11-09): absent entirely (not null) on an
+  // uncaptioned job, present alongside subtitle_url on a captioned one.
+  // Whoever reads this field should prefer it over video_url whenever it's
+  // set, or a captioned render silently shows the uncaptioned file instead.
+  captioned_video_url?: string | null;
+  // The downloadable .srt itself, same gating as captioned_video_url.
+  subtitle_url?: string | null;
   thumbnail_url: string | null;
   // Seconds, only meaningful once status is "completed" — confirmed via a
   // real API response that this endpoint returns duration but no

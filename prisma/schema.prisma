@@ -458,7 +458,7 @@ model CheckoutDraft {
   // allowance (lib/pricing/plans.ts) — defaults to 1 for any draft created
   // before this field existed. Carried onto the resulting Subscription's
   // avatarAllowance once payment completes (see activate-guest-account.ts).
-  avatarCount Int @default(1)
+  avatarCount Int         @default(1)
 
   email       String
   fullName    String
@@ -781,18 +781,25 @@ enum WatermarkPosition {
 // manual status-refresh route re-fetches from HeyGen directly as a fallback
 // for whenever the webhook endpoint isn't registered yet or was missed.
 model GeneratedVideo {
-  id            String                @id @default(cuid())
-  userId        String
-  avatarId      String
-  script        String
-  status        VideoGenerationStatus @default(PROCESSING)
-  engine        VideoEngine           @default(AVATAR_IV)
-  heygenVideoId String?               @unique
-  videoUrl      String?
-  thumbnailUrl  String?
-  errorMessage  String?
-  createdAt     DateTime              @default(now())
-  completedAt   DateTime?
+  id                String                @id @default(cuid())
+  userId            String
+  avatarId          String
+  script            String
+  status            VideoGenerationStatus @default(PROCESSING)
+  engine            VideoEngine           @default(AVATAR_IV)
+  heygenVideoId     String?               @unique
+  videoUrl          String?
+  // HeyGen renders this as a second, separate file when captions were
+  // requested (VideoProject.captionsEnabled) — never derived from videoUrl,
+  // since HeyGen returns distinct signed URLs for each. Null whenever no
+  // captions were requested for this render, which is also how the player
+  // knows whether to offer the toggle at all. See
+  // HeyGenVideoStatus.captioned_video_url in lib/heygen.ts.
+  captionedVideoUrl String?
+  thumbnailUrl      String?
+  errorMessage      String?
+  createdAt         DateTime              @default(now())
+  completedAt       DateTime?
 
   // Both populated only once HeyGen reports the video COMPLETED (from its
   // `duration` field, which the video-status API does return, unlike any
@@ -824,10 +831,10 @@ model GeneratedVideo {
   // before the workspace existed (and API callers that omit them) stay valid.
   // A null aspectRatio/resolution means the provider default was used, and a
   // null voiceId means the look's own default voice was used.
-  title        String?
-  aspectRatio  String?
-  resolution   String?
-  voiceId      String?
+  title             String?
+  aspectRatio       String?
+  resolution        String?
+  voiceId           String?
   voiceName         String?
   watermarkUrl      String?
   watermarkPosition WatermarkPosition?

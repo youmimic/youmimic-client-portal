@@ -252,7 +252,13 @@ export async function reconcileVideoWithHeyGen(
       where: { id: row.id },
       data: {
         status: mapped,
+        // Stored separately, not one-or-the-other — HeyGen renders these as
+        // two distinct files when captions were requested (absent, not
+        // null, otherwise — see HeyGenVideoStatus.captioned_video_url), so
+        // the player can let the viewer toggle between them rather than us
+        // picking one.
         videoUrl: remote.video_url ?? undefined,
+        captionedVideoUrl: remote.captioned_video_url ?? undefined,
         thumbnailUrl: remote.thumbnail_url ?? undefined,
         errorMessage: isFailed ? (remote.error?.message ?? "Video generation failed") : undefined,
         completedAt,
@@ -362,18 +368,23 @@ const EXPIRY_REFRESH_BUFFER_MS = 24 * 60 * 60 * 1000; // refresh a day ahead of 
 
 // Shared by the cron sweep and the single-video manual refresh below —
 // re-fetches a COMPLETED video's status from HeyGen (which returns the
-// same underlying file with a freshly-signed URL) and updates only
-// videoUrl/thumbnailUrl; status/duration/cost are already final for a
-// COMPLETED row and untouched here.
+// same underlying file(s) with freshly-signed URLs) and updates only
+// videoUrl/captionedVideoUrl/thumbnailUrl; status/duration/cost are already
+// final for a COMPLETED row and untouched here. Refreshes both URLs the
+// same way reconcileVideoWithHeyGen stores them initially — without this, a
+// captioned video's toggle would quietly lose its captioned option the
+// next time its signed URL expires and gets healed (~weekly, see
+// getUrlExpiryMs).
 async function refetchVideoUrlFields(row: { id: string; heygenVideoId: string }) {
   const remote = await getHeyGenVideoStatus(row.heygenVideoId);
   return prisma.generatedVideo.update({
     where: { id: row.id },
     data: {
       videoUrl: remote.video_url ?? undefined,
+      captionedVideoUrl: remote.captioned_video_url ?? undefined,
       thumbnailUrl: remote.thumbnail_url ?? undefined,
     },
-    select: { videoUrl: true, thumbnailUrl: true },
+    select: { videoUrl: true, captionedVideoUrl: true, thumbnailUrl: true },
   });
 }
 

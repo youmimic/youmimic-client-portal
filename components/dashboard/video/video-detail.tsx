@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +47,9 @@ export type VideoDetailData = {
   status: VideoStatus;
   engine: VideoEngineValue;
   videoUrl: string | null;
+  // Set only when captions were requested for this render — lets the
+  // viewer toggle which file to watch (see VideoPlayer below).
+  captionedVideoUrl: string | null;
   thumbnailUrl: string | null;
   errorMessage: string | null;
   createdAt: string;
@@ -146,6 +150,11 @@ export function VideoDetail({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [regenOpen, setRegenOpen] = useState(false);
   const [checking, setChecking] = useState(false);
+  // Defaults to the captioned render when one exists — that's what the
+  // viewer asked for by turning captions on in the first place. Only
+  // meaningful (and only shown) when captionedVideoUrl is actually set.
+  const [showCaptions, setShowCaptions] = useState(true);
+  const playableUrl = showCaptions && video.captionedVideoUrl ? video.captionedVideoUrl : video.videoUrl;
 
   const onChange = useCallback(() => router.refresh(), [router]);
   const { pollError, checkedAt, checkNow } = useStatusPolling(video, onChange);
@@ -270,9 +279,9 @@ export function VideoDetail({
         {/* Preview area */}
         <Card className="overflow-hidden">
           <div className="flex items-center justify-center bg-black/90">
-            {video.status === "COMPLETED" && video.videoUrl ? (
+            {video.status === "COMPLETED" && playableUrl ? (
               <video
-                key={video.videoUrl}
+                key={playableUrl}
                 controls
                 playsInline
                 preload="metadata"
@@ -280,7 +289,7 @@ export function VideoDetail({
                 onError={handlePlaybackError}
                 className={isVertical ? "max-h-[70vh] w-auto max-w-full" : "aspect-video w-full"}
               >
-                <source src={video.videoUrl} type="video/mp4" />
+                <source src={playableUrl} type="video/mp4" />
               </video>
             ) : (
               <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 p-6 text-center text-white/90">
@@ -304,7 +313,7 @@ export function VideoDetail({
                     </div>
                   </>
                 )}
-                {video.status === "COMPLETED" && !video.videoUrl && (
+                {video.status === "COMPLETED" && !playableUrl && (
                   <>
                     <TriangleAlert className="h-8 w-8 text-yellow-300" aria-hidden="true" />
                     <p className="text-sm">The video link has expired. Refresh it to watch again.</p>
@@ -314,6 +323,13 @@ export function VideoDetail({
             )}
           </div>
         </Card>
+
+        {video.captionedVideoUrl && (
+          <label className="flex w-fit items-center gap-2.5 text-sm">
+            <Checkbox checked={showCaptions} onCheckedChange={(checked) => setShowCaptions(checked === true)} />
+            <span>Show burned-in captions</span>
+          </label>
+        )}
 
         {inProgress && (
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -347,11 +363,11 @@ export function VideoDetail({
 
         {/* Contextual actions */}
         <div className="flex flex-wrap gap-2">
-          {video.status === "COMPLETED" && video.videoUrl && (
+          {video.status === "COMPLETED" && playableUrl && (
             <Button asChild>
-              <a href={video.videoUrl} download target="_blank" rel="noopener noreferrer">
+              <a href={playableUrl} download target="_blank" rel="noopener noreferrer">
                 <Download className="h-4 w-4" aria-hidden="true" />
-                Download
+                Download{showCaptions && video.captionedVideoUrl ? " with captions" : ""}
               </a>
             </Button>
           )}

@@ -38,6 +38,10 @@ export type FinalVideoView = {
   id: string;
   status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
   videoUrl: string | null;
+  // Set only when captions were requested — see GeneratedVideo's schema
+  // comment. Lets the viewer toggle which rendered file to watch instead of
+  // us picking one.
+  captionedVideoUrl: string | null;
   thumbnailUrl: string | null;
   durationSeconds: number | null;
   estimatedCostCents: number | null;
@@ -202,6 +206,7 @@ export async function getProjectView(userId: string, projectId: string): Promise
           id: latest.id,
           status: latest.status,
           videoUrl: latest.videoUrl,
+          captionedVideoUrl: latest.captionedVideoUrl,
           thumbnailUrl: latest.thumbnailUrl,
           durationSeconds: latest.durationSeconds,
           estimatedCostCents: latest.estimatedCostCents,

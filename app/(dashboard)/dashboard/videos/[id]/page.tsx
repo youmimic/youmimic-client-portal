@@ -103,6 +103,7 @@ export default async function VideoPage({
           status: video.status,
           engine: video.engine,
           videoUrl: video.videoUrl,
+          captionedVideoUrl: video.captionedVideoUrl,
           thumbnailUrl: video.thumbnailUrl,
           errorMessage: video.errorMessage,
           createdAt: video.createdAt.toISOString(),

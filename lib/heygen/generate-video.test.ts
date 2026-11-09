@@ -104,6 +104,39 @@ describe("sweepStuckGenerations", () => {
     expect(reconcileCredits).toHaveBeenCalledWith({ videoId: "video_1", engine: "AVATAR_III", actualDurationSeconds: 5.2 });
   });
 
+  it("stores both the plain and captioned renders when captions were requested, letting the viewer choose", async () => {
+    findManyGeneratedVideo.mockResolvedValue([STUCK_ROW]);
+    getHeyGenVideoStatus.mockResolvedValue({
+      status: "completed",
+      duration: 5.2,
+      video_url: "https://x/plain.mp4",
+      captioned_video_url: "https://x/captioned.mp4",
+    });
+    updateGeneratedVideo.mockResolvedValue({ status: "COMPLETED", videoUrl: "https://x/plain.mp4" });
+    reconcileCredits.mockResolvedValue(undefined);
+
+    await sweepStuckGenerations();
+
+    expect(updateGeneratedVideo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ videoUrl: "https://x/plain.mp4", captionedVideoUrl: "https://x/captioned.mp4" }),
+      }),
+    );
+  });
+
+  it("leaves captionedVideoUrl unset when no captions were requested", async () => {
+    findManyGeneratedVideo.mockResolvedValue([STUCK_ROW]);
+    getHeyGenVideoStatus.mockResolvedValue({ status: "completed", duration: 5.2, video_url: "https://x/plain.mp4" });
+    updateGeneratedVideo.mockResolvedValue({ status: "COMPLETED", videoUrl: "https://x/plain.mp4" });
+    reconcileCredits.mockResolvedValue(undefined);
+
+    await sweepStuckGenerations();
+
+    expect(updateGeneratedVideo).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ videoUrl: "https://x/plain.mp4", captionedVideoUrl: undefined }) }),
+    );
+  });
+
   it("uses HeyGen's own completed_at timestamp, not the moment the sweep happens to run", async () => {
     findManyGeneratedVideo.mockResolvedValue([STUCK_ROW]);
     // A video that actually finished 25 minutes ago, found by a sweep
