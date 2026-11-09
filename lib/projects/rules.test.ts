@@ -5,6 +5,7 @@ import {
   evaluateProject,
   resolveScene,
   sceneDurationSeconds,
+  supportsBackgroundOverride,
   validateScene,
   type AvatarOption,
   type ProjectDefaults,
@@ -309,5 +310,18 @@ describe("evaluateProject with image/video scenes", () => {
   it("reports a scene-level duration of null for a silent video scene", () => {
     const v = scene({ id: "c", orderIndex: 0, kind: "VIDEO", script: "", mediaUrl: "https://example.com/a.mp4" });
     expect(sceneDurationSeconds(v, "AVATAR_III")).toBeNull();
+  });
+});
+
+describe("supportsBackgroundOverride", () => {
+  it("is false for every known avatar type, confirmed live to silently ignore the override", () => {
+    expect(supportsBackgroundOverride("digital_twin")).toBe(false);
+    expect(supportsBackgroundOverride("photo_avatar")).toBe(false);
+  });
+
+  it("is false for null/unknown types", () => {
+    expect(supportsBackgroundOverride(null)).toBe(false);
+    expect(supportsBackgroundOverride(undefined)).toBe(false);
+    expect(supportsBackgroundOverride("something_new")).toBe(false);
   });
 });
