@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AvatarGallery, type GalleryAvatar } from "@/components/dashboard/avatar/avatar-gallery";
 import { syncAvatarFromHeyGen, syncAvatarLookFromHeyGen, rollupAvatarDisplay } from "@/lib/heygen/sync";
+import { ownAvatarWhere } from "@/lib/avatar-access";
 
 export const metadata = {
   title: "Avatars | YouMimic Portal",
@@ -14,7 +15,25 @@ export const metadata = {
 
 async function fetchAvatars(userId: string) {
   return prisma.avatar.findMany({
-    where: { userId },
+    where: ownAvatarWhere(userId),
+    include: {
+      enterprise: { select: { name: true } },
+      looks: {
+        orderBy: { name: "asc" },
+        select: { id: true, heygenLookId: true, name: true, status: true, previewUrl: true, videoUrl: true },
+      },
+      _count: { select: { generatedVideos: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+// Admin-managed avatars (/admin/avatars) usable by every signed-in user —
+// never excludes the admin account that owns the row (see ownAvatarWhere):
+// a public avatar is never "one of your own avatars", even for its owner.
+async function fetchPublicAvatars() {
+  return prisma.avatar.findMany({
+    where: { isPublic: true },
     include: {
       enterprise: { select: { name: true } },
       looks: {
@@ -102,8 +121,12 @@ export default async function AvatarsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const dbAvatars = await fetchAvatars(session.user.id);
+  const [dbAvatars, dbPublicAvatars] = await Promise.all([
+    fetchAvatars(session.user.id),
+    fetchPublicAvatars(),
+  ]);
   const avatars = (await withLiveHeyGenStatus(dbAvatars)).map(toGalleryAvatar);
+  const publicAvatars = (await withLiveHeyGenStatus(dbPublicAvatars)).map(toGalleryAvatar);
   const ready = avatars.filter((a) => a.usable);
 
   return (
@@ -148,6 +171,18 @@ export default async function AvatarsPage() {
         </Card>
       ) : (
         <AvatarGallery avatars={avatars} />
+      )}
+
+      {publicAvatars.length > 0 && (
+        <div id="shared-avatars" className="space-y-3 scroll-mt-20">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Shared avatars</h2>
+            <p className="text-sm text-muted-foreground">
+              Available to every user — a good way to make a video while your own avatar isn&apos;t ready yet.
+            </p>
+          </div>
+          <AvatarGallery avatars={publicAvatars} />
+        </div>
       )}
     </div>
   );

@@ -9,6 +9,7 @@ import {
 import type { VideoEngine, VideoGenerationStatus } from "@/app/generated/prisma/enums";
 import { estimatedCostCents } from "@/lib/heygen/pricing";
 import { reserveCreditsForGeneration, releaseReservation, reconcileCredits, releaseReservationForVideo } from "@/lib/usage/ledger";
+import { avatarAccessWhere } from "@/lib/avatar-access";
 
 // Maps the lowercase HeyGen API value (also what lib/validations/video.ts's
 // generateVideoSchema accepts from the client) to the Prisma enum value
@@ -73,7 +74,7 @@ export async function generateAvatarVideo(
   options: GenerateVideoOptions = {},
 ): Promise<GenerateVideoResult> {
   const avatar = await prisma.avatar.findFirst({
-    where: { id: avatarId, userId },
+    where: { id: avatarId, ...avatarAccessWhere(userId) },
     select: {
       id: true,
       heygenAvatarId: true,

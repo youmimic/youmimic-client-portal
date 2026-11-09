@@ -18,13 +18,14 @@ const avatars: AvatarOption[] = [
     name: "Neil",
     previewUrl: null,
     usable: true,
+    isPublic: false,
     avatarType: null,
     looks: [
       { id: "l1", name: "Suit", ready: true, previewUrl: null, videoUrl: null, defaultVoiceId: null, avatarType: null },
       { id: "l2", name: "Casual", ready: false, previewUrl: null, videoUrl: null, defaultVoiceId: null, avatarType: null },
     ],
   },
-  { id: "a2", name: "Chris", previewUrl: null, usable: false, avatarType: null, looks: [] },
+  { id: "a2", name: "Chris", previewUrl: null, usable: false, isPublic: false, avatarType: null, looks: [] },
 ];
 
 const defaults: ProjectDefaults = {

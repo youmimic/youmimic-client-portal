@@ -255,11 +255,19 @@ export default async function DashboardPage({
               id="avatars-heading"
               title="Your avatars"
               action={
-                avatars.length > 0 ? (
-                  <Link href="/dashboard/avatars" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
-                    View all
+                <div className="flex items-center gap-3">
+                  {avatars.length > 0 && (
+                    <Link href="/dashboard/avatars" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+                      View all
+                    </Link>
+                  )}
+                  <Link
+                    href="/dashboard/avatars#shared-avatars"
+                    className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    Browse shared avatars
                   </Link>
-                ) : undefined
+                </div>
               }
             />
             {avatars.length === 0 ? (

@@ -10,8 +10,9 @@ import {
 } from "@/lib/heygen";
 import { projectContentHash } from "@/lib/projects/hash";
 import { DEFAULT_MEDIA_DURATION, evaluateProject, resolveScene, sceneLabel, type SceneData, type SceneIssue } from "@/lib/projects/rules";
-import { listAvatarOptions, ProjectError, type SnapshotScene } from "@/lib/projects/service";
+import { listAvatarOptions, listPublicAvatarOptions, ProjectError, type SnapshotScene } from "@/lib/projects/service";
 import { releaseReservation, reserveCreditsForGeneration } from "@/lib/usage/ledger";
+import { avatarAccessWhere } from "@/lib/avatar-access";
 
 export type GenerateProjectResult =
   | { ok: true; generatedVideoId: string }
@@ -60,7 +61,8 @@ export async function generateProject(userId: string, projectId: string, expecte
   });
   if (!project) throw new ProjectError("NOT_FOUND", 404, "We couldn't find that project.");
 
-  const avatars = await listAvatarOptions(userId);
+  const [ownedAvatars, publicAvatars] = await Promise.all([listAvatarOptions(userId), listPublicAvatarOptions()]);
+  const avatars = [...ownedAvatars, ...publicAvatars];
   const scenes: SceneData[] = project.scenes;
   const defaults = {
     defaultAvatarId: project.defaultAvatarId,
@@ -96,7 +98,7 @@ export async function generateProject(userId: string, projectId: string, expecte
   // don't use an avatar at all, so they're left out of this lookup.
   const avatarRows = await prisma.avatar.findMany({
     where: {
-      userId,
+      ...avatarAccessWhere(userId),
       id: {
         in: scenes
           .filter((s) => s.kind === "AVATAR")

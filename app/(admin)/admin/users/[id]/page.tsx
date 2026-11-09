@@ -64,7 +64,12 @@ export default async function AdminUserDetailPage({
           enterprise: { select: { id: true, name: true, status: true, createdAt: true } },
         },
       },
+      // isPublic avatars are managed exclusively at /admin/avatars, never
+      // here — excluded so the admin account that happens to own one
+      // (bookkeeping only, see lib/avatar-access.ts) doesn't see it mixed
+      // into their own "personal" avatars card.
       avatars: {
+        where: { isPublic: false },
         orderBy: { createdAt: "desc" },
         select: {
           id: true,

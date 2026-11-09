@@ -515,6 +515,16 @@ model Avatar {
   id             String   @id @default(cuid())
   userId         String
   enterpriseId   String?
+  // When true, every signed-in user can use this avatar to generate a
+  // video, regardless of userId — an admin-curated exception to normal
+  // ownership, for stock/shared avatars (managed at /admin/avatars, not
+  // the per-customer "Link Avatar" flow). Still owned by exactly one user
+  // (userId is unaffected) purely for bookkeeping; this only widens who
+  // may *use* it. lib/avatar-access.ts is the one place that turns this
+  // into a Prisma where-clause — every access-control site must go
+  // through it, or this becomes as inert as enterpriseId already is for
+  // access control.
+  isPublic       Boolean  @default(false)
   // Legacy single-look identifier — still the only HeyGen link for avatars
   // created via the manual admin "Link Avatar" flow (no group/looks
   // involved). For avatars imported in bulk from HeyGen, prefer `looks`;

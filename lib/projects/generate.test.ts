@@ -177,6 +177,14 @@ describe("generateProject", () => {
     expect(prismaMock.videoProject.findFirst.mock.calls[0][0].where).toMatchObject({ id: "p1", userId: "intruder" });
   });
 
+  it("resolves a scene's avatar at render time even when the user doesn't own it, as long as it's public", async () => {
+    // The avatarRows lookup (the only avatar.findMany call filtered by a
+    // specific id list) must accept a public avatar regardless of owner.
+    await generateProject("u1", "p1", 3);
+    const avatarRowsCall = prismaMock.avatar.findMany.mock.calls.find((call) => call[0]?.where?.id);
+    expect(avatarRowsCall?.[0].where).toMatchObject({ OR: [{ userId: "u1" }, { isPublic: true }] });
+  });
+
   it("refuses a project made only of image/video scenes, since a render must link to an avatar", async () => {
     prismaMock.videoProject.findFirst.mockResolvedValue(
       project({

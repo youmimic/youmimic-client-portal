@@ -74,6 +74,11 @@ export type AvatarOption = {
   // Thumbnail for the avatar itself: its first ready look, else any look.
   previewUrl: string | null;
   usable: boolean;
+  // True for an admin-marked public avatar (managed at /admin/avatars),
+  // usable by every user regardless of who actually owns the row — see
+  // lib/avatar-access.ts. Purely a display/grouping flag here; access
+  // control itself is enforced server-side, not by trusting this field.
+  isPublic: boolean;
   // Only meaningful for a manually-linked avatar with no looks at all (see
   // Avatar.avatarType's schema comment) — ignored whenever looks is
   // non-empty, since each look carries its own avatarType instead.
