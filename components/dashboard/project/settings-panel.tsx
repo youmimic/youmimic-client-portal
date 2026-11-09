@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -40,6 +40,8 @@ export type ProjectSettingsPatch = Partial<
 >;
 
 export type WatermarkPosition = "top_left" | "top_right" | "bottom_left" | "bottom_right";
+
+type SavedWatermark = { id: string; url: string; createdAt: string };
 
 const WATERMARK_POSITION_OPTIONS: { value: WatermarkPosition; label: string }[] = [
   { value: "top_left", label: "Top left" },
@@ -85,6 +87,26 @@ export function SettingsPanel({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [watermarkBusy, setWatermarkBusy] = useState(false);
   const [watermarkError, setWatermarkError] = useState<string | null>(null);
+  const [savedWatermarks, setSavedWatermarks] = useState<SavedWatermark[] | null>(null);
+  const [deletingWatermarkId, setDeletingWatermarkId] = useState<string | null>(null);
+
+  // Loaded once per panel mount — the library only changes through this same
+  // panel's own upload/delete actions, both of which keep local state in
+  // sync, so there's no need to re-fetch on every render.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/dashboard/media/watermarks")
+      .then((res) => (res.ok ? res.json() : { watermarks: [] }))
+      .then((json: { watermarks?: SavedWatermark[] }) => {
+        if (!cancelled) setSavedWatermarks(json.watermarks ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setSavedWatermarks([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function uploadWatermark(file: File) {
     setWatermarkError(null);
@@ -93,16 +115,38 @@ export function SettingsPanel({
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/dashboard/media/upload-watermark", { method: "POST", body: formData });
-      const json = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      const json = (await res.json().catch(() => ({}))) as SavedWatermark & { error?: string };
       if (!res.ok || !json.url) {
         setWatermarkError(json.error ?? "Couldn't upload that image.");
         return;
       }
+      setSavedWatermarks((prev) => [{ id: json.id, url: json.url, createdAt: json.createdAt }, ...(prev ?? [])]);
       onProjectChange({ watermarkUrl: json.url });
     } catch {
       setWatermarkError("Couldn't upload that image.");
     } finally {
       setWatermarkBusy(false);
+    }
+  }
+
+  async function deleteSavedWatermark(saved: SavedWatermark) {
+    setWatermarkError(null);
+    setDeletingWatermarkId(saved.id);
+    try {
+      const res = await fetch(`/api/dashboard/media/watermarks/${saved.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        setWatermarkError(json.error ?? "Couldn't delete that image.");
+        return;
+      }
+      setSavedWatermarks((prev) => (prev ?? []).filter((w) => w.id !== saved.id));
+      // The deleted blob stops resolving, so clear it if it's the one in use
+      // rather than leaving the project pointed at a dead image.
+      if (watermarkUrl === saved.url) onProjectChange({ watermarkUrl: null });
+    } catch {
+      setWatermarkError("Couldn't delete that image.");
+    } finally {
+      setDeletingWatermarkId(null);
     }
   }
   const resolved = resolveScene(scene, defaults);
@@ -313,25 +357,57 @@ export function SettingsPanel({
               </div>
             )}
             {!watermarkUrl && (
-              <div className="space-y-1.5">
-                <Label htmlFor="project-watermark-upload" className="sr-only">
-                  Upload a watermark image
-                </Label>
-                <input
-                  id="project-watermark-upload"
-                  type="file"
-                  accept="image/png,image/jpeg"
-                  disabled={disabled || watermarkBusy}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = "";
-                    if (file) void uploadWatermark(file);
-                  }}
-                  className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-transparent file:px-2.5 file:py-1 file:text-xs file:font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                />
-                <p className="text-xs text-muted-foreground">
-                  PNG or JPEG, shown as a small corner mark on the video. Optional.
-                </p>
+              <div className="space-y-3">
+                {savedWatermarks && savedWatermarks.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">Saved watermarks</p>
+                    <div role="group" aria-label="Saved watermarks" className="flex flex-wrap gap-2">
+                      {savedWatermarks.map((w) => (
+                        <div key={w.id} className="group/saved relative">
+                          <button
+                            type="button"
+                            disabled={disabled || watermarkBusy}
+                            onClick={() => onProjectChange({ watermarkUrl: w.url })}
+                            className="flex h-12 w-12 items-center justify-center rounded border border-input bg-muted p-1 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label="Use this watermark"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element -- Vercel Blob URL, same as image-crop-picker.tsx */}
+                            <img src={w.url} alt="" className="h-full w-full object-contain" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={disabled || deletingWatermarkId === w.id}
+                            onClick={() => void deleteSavedWatermark(w)}
+                            aria-label="Delete this saved watermark"
+                            className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 group-hover/saved:opacity-100"
+                          >
+                            <Trash2 className="h-3 w-3" aria-hidden="true" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="project-watermark-upload" className="sr-only">
+                    Upload a watermark image
+                  </Label>
+                  <input
+                    id="project-watermark-upload"
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    disabled={disabled || watermarkBusy}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void uploadWatermark(file);
+                    }}
+                    className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-transparent file:px-2.5 file:py-1 file:text-xs file:font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    PNG or JPEG, shown as a small corner mark on the video. Saved for reuse in later videos. Optional.
+                  </p>
+                </div>
               </div>
             )}
             {watermarkBusy && <p className="text-xs text-muted-foreground">Uploading…</p>}

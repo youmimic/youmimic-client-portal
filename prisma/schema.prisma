@@ -129,6 +129,7 @@ model User {
   avatars                 Avatar[]
   generatedVideos         GeneratedVideo[]
   videoProjects           VideoProject[]
+  watermarks              Watermark[]
   bookings                Booking[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -664,6 +665,24 @@ model VideoProject {
 
   @@index([userId, updatedAt])
   @@map("video_projects")
+}
+
+// A user's reusable watermark library (Vercel Blob-hosted images). Separate
+// from VideoProject.watermarkUrl, which just stores a URL by value, copied
+// from here — not a foreign key — so deleting a saved watermark never
+// breaks a project that already picked it; that project's image simply
+// stops resolving once the blob itself is removed, same as any other
+// dead-link image. See app/api/dashboard/media/watermarks/route.ts.
+model Watermark {
+  id        String   @id @default(cuid())
+  userId    String
+  url       String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("watermarks")
 }
 
 // Confirmed live against the provider (2026-09-26): the "studio" job accepts
