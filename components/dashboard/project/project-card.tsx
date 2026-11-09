@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -17,6 +17,44 @@ import {
 import { ProjectStatusBadge, type ProjectStatusValue } from "@/components/dashboard/project/project-status-badge";
 import { MarkPulseLoader } from "@/components/dashboard/video/generating-indicator";
 import { formatDateTime } from "@/lib/video-display";
+
+// Poll gently while a card is generating: every 6 seconds for the first two
+// minutes, then every 15 — same cadence as video-library.tsx's
+// useCardStatusPolling. GET /api/dashboard/projects/{id} reconciles the
+// project's stored status against its latest render (see getProjectView),
+// so this is the same endpoint the project page itself relies on. Without
+// this, a project card showing "Generating" never updates on its own once
+// the render actually finishes — the list is otherwise a static server
+// render that only gets fresh data on the next full page load.
+function useProjectStatusPolling(id: string, status: ProjectStatusValue, onChange: () => void) {
+  const startedAt = useRef<number | null>(null);
+  const inProgress = status === "GENERATING";
+
+  const check = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/dashboard/projects/${id}`);
+      const json = (await res.json().catch(() => ({}))) as { status?: ProjectStatusValue };
+      if (res.ok && json.status && json.status !== status) onChange();
+    } catch {
+      // Best-effort — the next tick, or the next full page load, will catch up.
+    }
+  }, [id, status, onChange]);
+
+  useEffect(() => {
+    if (!inProgress) return;
+    startedAt.current ??= Date.now();
+    let timer: number | undefined;
+    const tick = () => {
+      const elapsed = Date.now() - (startedAt.current ?? Date.now());
+      timer = window.setTimeout(async () => {
+        if (document.visibilityState === "visible") await check();
+        tick();
+      }, elapsed < 120_000 ? 6000 : 15000);
+    };
+    tick();
+    return () => window.clearTimeout(timer);
+  }, [inProgress, check]);
+}
 
 // One in-progress project on the Videos page, with a delete button that always
 // asks first. Generating projects can't be deleted until they finish.
@@ -43,6 +81,9 @@ export function ProjectCard({
   const name = title.trim() || "Untitled video";
   const isDraft = status === "DRAFT";
   const canDelete = status !== "GENERATING";
+
+  const onChange = useCallback(() => router.refresh(), [router]);
+  useProjectStatusPolling(id, status, onChange);
 
   async function remove() {
     setDeleting(true);
