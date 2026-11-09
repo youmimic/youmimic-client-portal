@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { put } from "@vercel/blob";
 import { requireDashboardSession } from "@/lib/auth/api-guards";
 import { checkRateLimit } from "@/lib/rate-limit";
+import prisma from "@/lib/prisma";
 
 // HeyGen's watermark.image field only documents PNG or JPEG support (see
 // lib/heygen.ts's createHeyGenStudioVideo) — accepting anything else here
@@ -17,11 +18,18 @@ const MAX_BYTES = 5 * 1024 * 1024; // 5MB
 // only, with height following automatically, so a tall/narrow logo isn't
 // squashed or cropped.
 const MAX_WATERMARK_WIDTH = 220;
+// Keeps a user's reusable library from growing without bound — plenty for
+// a handful of logo variants, small enough that re-uploading past it is a
+// reasonable ask rather than a real limitation.
+const MAX_SAVED_WATERMARKS = 5;
 
 // A plain file upload (not a pasted URL, unlike the scene-media crop route)
 // re-hosted on Vercel Blob, so the project just stores a URL. Downscaled by
 // width (aspect ratio preserved, never upscaled) before upload so it can't
-// render oversized on the video — see MAX_WATERMARK_WIDTH.
+// render oversized on the video — see MAX_WATERMARK_WIDTH. Also saved as a
+// Watermark row so it shows up in the user's reusable library (see
+// app/api/dashboard/media/watermarks/route.ts) instead of being a one-off
+// tied to a single project.
 export async function POST(req: Request) {
   const guard = await requireDashboardSession({ requireEmailVerified: true });
   if (!guard.ok) return guard.response;
@@ -58,6 +66,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "That image is too large (max 5MB)." }, { status: 422 });
   }
 
+  const savedCount = await prisma.watermark.count({ where: { userId: session.user.id } });
+  if (savedCount >= MAX_SAVED_WATERMARKS) {
+    return NextResponse.json(
+      { error: `You've saved ${MAX_SAVED_WATERMARKS} watermarks already. Delete one first to add another.` },
+      { status: 422 },
+    );
+  }
+
   let buffer: Buffer;
   try {
     const original = Buffer.from(await file.arrayBuffer());
@@ -82,7 +98,11 @@ export async function POST(req: Request) {
       access: "public",
       contentType: file.type,
     });
-    return NextResponse.json({ url: blob.url });
+    const saved = await prisma.watermark.create({
+      data: { userId: session.user.id, url: blob.url },
+      select: { id: true, url: true, createdAt: true },
+    });
+    return NextResponse.json({ id: saved.id, url: saved.url, createdAt: saved.createdAt.toISOString() });
   } catch (err) {
     console.error("Watermark upload (Blob) failed:", err);
     return NextResponse.json({ error: "Couldn't save that image. Please try again." }, { status: 500 });
