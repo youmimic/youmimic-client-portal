@@ -715,6 +715,7 @@ export function ProjectWorkspace({
                 onGenerate={() => void generate()}
                 onJump={jumpToScene}
                 onDismissError={() => setGenError(null)}
+                canViewCost={canViewCost}
               />
               {activeScene && (
                 <SettingsPanel
@@ -745,7 +746,8 @@ export function ProjectWorkspace({
                 {readiness.totalDurationSeconds > 0 && (
                   <>
                     {" "}
-                    · {formatDuration(readiness.totalDurationSeconds)} · ~{formatCents(readiness.totalCostCents)}
+                    · {formatDuration(readiness.totalDurationSeconds)}
+                    {canViewCost && <> · ~{formatCents(readiness.totalCostCents)}</>}
                   </>
                 )}
               </p>

@@ -34,6 +34,7 @@ export function GenerationPanel({
   onGenerate,
   onJump,
   onDismissError,
+  canViewCost,
 }: {
   readiness: ProjectReadiness;
   submitting: boolean;
@@ -44,6 +45,9 @@ export function GenerationPanel({
   onGenerate: () => void;
   onJump: (sceneId: string) => void;
   onDismissError: () => void;
+  // Dollar figures only — the credits estimate below stays visible to
+  // everyone, same as video-workspace.tsx's single-video estimate.
+  canViewCost: boolean;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [showIssues, setShowIssues] = useState(false);
@@ -84,7 +88,9 @@ export function GenerationPanel({
             value={readiness.totalDurationSeconds > 0 ? formatDuration(readiness.totalDurationSeconds) : "0s"}
           />
           <Row label="Estimated credits" value={readiness.totalDurationSeconds > 0 ? `~${readiness.totalCredits.toFixed(1)}` : "0"} />
-          <Row label="Estimated cost" value={readiness.totalDurationSeconds > 0 ? `~${formatCents(readiness.totalCostCents)}` : "$0.00"} />
+          {canViewCost && (
+            <Row label="Estimated cost" value={readiness.totalDurationSeconds > 0 ? `~${formatCents(readiness.totalCostCents)}` : "$0.00"} />
+          )}
           <Row
             label="Ready in"
             value={readiness.totalDurationSeconds > 0 ? `${readiness.waitMinutesLow} to ${readiness.waitMinutesHigh} min` : "-"}
@@ -190,8 +196,8 @@ export function GenerationPanel({
             <DialogDescription>
               All {readiness.sceneCount} {readiness.sceneCount === 1 ? "scene is" : "scenes are"} made into one video
               of about {formatDuration(readiness.totalDurationSeconds)}. It will use about{" "}
-              {readiness.totalCredits.toFixed(1)} credits (around {formatCents(readiness.totalCostCents)}) and usually
-              takes {readiness.waitMinutesLow} to {readiness.waitMinutesHigh} minutes.
+              {readiness.totalCredits.toFixed(1)} credits{canViewCost && <> (around {formatCents(readiness.totalCostCents)})</>} and
+              usually takes {readiness.waitMinutesLow} to {readiness.waitMinutesHigh} minutes.
             </DialogDescription>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
