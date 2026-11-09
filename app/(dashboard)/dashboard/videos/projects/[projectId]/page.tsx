@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { ProjectWorkspace } from "@/components/dashboard/project/project-workspace";
-import { getProjectView, listAvatarOptions, ProjectError } from "@/lib/projects/service";
+import { getProjectView, listAvatarOptions, listPublicAvatarOptions, ProjectError } from "@/lib/projects/service";
 import { refreshIfInProgress } from "@/lib/heygen/generate-video";
 
 export const metadata = {
@@ -37,7 +37,11 @@ export default async function VideoProjectPage({ params }: { params: Promise<{ p
     }
   }
 
-  const avatars = await listAvatarOptions(session.user.id);
+  const [ownedAvatars, publicAvatars] = await Promise.all([
+    listAvatarOptions(session.user.id),
+    listPublicAvatarOptions(),
+  ]);
+  const avatars = [...ownedAvatars, ...publicAvatars];
 
   return (
     <ProjectWorkspace

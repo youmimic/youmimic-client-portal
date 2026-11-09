@@ -311,6 +311,32 @@ export const addAvatarLookSchema = z.object({
 
 export type AddAvatarLookInput = z.infer<typeof addAvatarLookSchema>;
 
+// Renames a look — the one look-level edit that doesn't exist for the
+// per-user "Link Avatar" flow today (only add/remove/reorder do); added here
+// for the /admin/avatars public-avatar surface's full CRUD requirement.
+export const updateAvatarLookSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200),
+});
+
+export type UpdateAvatarLookInput = z.infer<typeof updateAvatarLookSchema>;
+
+// Public avatars (/admin/avatars) — no enterprise concept, since they aren't
+// any one customer's property; a platform-wide pool any user can generate
+// with. See lib/avatar-access.ts.
+export const createPublicAvatarSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200),
+  heygenAvatarId: z.string().trim().min(1).max(200).optional(),
+});
+
+export type CreatePublicAvatarInput = z.infer<typeof createPublicAvatarSchema>;
+
+export const updatePublicAvatarSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200).optional(),
+  heygenAvatarId: z.string().trim().min(1).max(200).nullable().optional(),
+});
+
+export type UpdatePublicAvatarInput = z.infer<typeof updatePublicAvatarSchema>;
+
 // "Test avatar" — links a known-working HeyGen id to the acting admin's own
 // account (never another user's) so an admin can generate a real video with
 // it and confirm it actually works, without touching the client's own

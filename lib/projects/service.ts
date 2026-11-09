@@ -10,6 +10,7 @@ import {
   type SceneData,
 } from "@/lib/projects/rules";
 import type { UpdateProjectInput, UpdateSceneInput } from "@/lib/projects/schemas";
+import { avatarAccessWhere, ownAvatarWhere } from "@/lib/avatar-access";
 
 // Data access for multi-scene projects. Every function takes the signed-in
 // user's id and only ever reads or writes rows that user owns, so callers
@@ -108,7 +109,7 @@ function mapVideoStatus(status: VideoGenerationStatus): VideoProjectStatus {
 
 async function assertAvatarRefs(tx: Tx, userId: string, avatarId: string | null | undefined, lookId: string | null | undefined) {
   if (avatarId) {
-    const avatar = await tx.avatar.findFirst({ where: { id: avatarId, userId }, select: { id: true } });
+    const avatar = await tx.avatar.findFirst({ where: { id: avatarId, ...avatarAccessWhere(userId) }, select: { id: true } });
     if (!avatar) throw new ProjectError("BAD_AVATAR", 422, "That avatar isn't available on your account.");
   }
   if (lookId) {
@@ -216,44 +217,64 @@ export async function getProjectView(userId: string, projectId: string): Promise
   };
 }
 
+const AVATAR_OPTION_SELECT = {
+  id: true,
+  name: true,
+  status: true,
+  previewUrl: true,
+  heygenAvatarId: true,
+  avatarType: true,
+  looks: {
+    orderBy: { name: "asc" as const },
+    select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, defaultVoiceId: true, avatarType: true },
+  },
+} satisfies Prisma.AvatarSelect;
+
+type AvatarOptionRow = Prisma.AvatarGetPayload<{ select: typeof AVATAR_OPTION_SELECT }>;
+
+function toAvatarOption(a: AvatarOptionRow, isPublic: boolean): AvatarOption {
+  const readyLooks = a.looks.filter((l) => l.status === "ready");
+  const usable = a.looks.length > 0 ? readyLooks.length > 0 : a.status === "ready" && !!a.heygenAvatarId;
+  return {
+    id: a.id,
+    name: a.name,
+    previewUrl: readyLooks[0]?.previewUrl ?? a.looks[0]?.previewUrl ?? a.previewUrl,
+    usable,
+    isPublic,
+    avatarType: a.avatarType,
+    looks: a.looks.map((l) => ({
+      id: l.id,
+      name: l.name,
+      ready: l.status === "ready",
+      previewUrl: l.previewUrl,
+      videoUrl: l.videoUrl,
+      defaultVoiceId: l.defaultVoiceId,
+      avatarType: l.avatarType,
+    })),
+  };
+}
+
 export async function listAvatarOptions(userId: string): Promise<AvatarOption[]> {
   const avatars = await prisma.avatar.findMany({
-    where: { userId },
+    where: ownAvatarWhere(userId),
     orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      previewUrl: true,
-      heygenAvatarId: true,
-      avatarType: true,
-      looks: {
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, defaultVoiceId: true, avatarType: true },
-      },
-    },
+    select: AVATAR_OPTION_SELECT,
   });
+  return avatars.map((a) => toAvatarOption(a, false));
+}
 
-  return avatars.map((a) => {
-    const readyLooks = a.looks.filter((l) => l.status === "ready");
-    const usable = a.looks.length > 0 ? readyLooks.length > 0 : a.status === "ready" && !!a.heygenAvatarId;
-    return {
-      id: a.id,
-      name: a.name,
-      previewUrl: readyLooks[0]?.previewUrl ?? a.looks[0]?.previewUrl ?? a.previewUrl,
-      usable,
-      avatarType: a.avatarType,
-      looks: a.looks.map((l) => ({
-        id: l.id,
-        name: l.name,
-        ready: l.status === "ready",
-        previewUrl: l.previewUrl,
-        videoUrl: l.videoUrl,
-        defaultVoiceId: l.defaultVoiceId,
-        avatarType: l.avatarType,
-      })),
-    };
+// Every avatar an admin has marked public (managed at /admin/avatars) —
+// usable by any signed-in user regardless of owner, and never mixed into
+// listAvatarOptions above even for the admin account that owns the row —
+// callers that need "my avatars + shared avatars" call this alongside
+// listAvatarOptions and merge; the two lists can never overlap.
+export async function listPublicAvatarOptions(): Promise<AvatarOption[]> {
+  const avatars = await prisma.avatar.findMany({
+    where: { isPublic: true },
+    orderBy: { createdAt: "desc" },
+    select: AVATAR_OPTION_SELECT,
   });
+  return avatars.map((a) => toAvatarOption(a, true));
 }
 
 // Scenes always carry their own avatar (there is no project-wide avatar in
@@ -267,7 +288,7 @@ async function pickStartingAvatar(tx: Tx, userId: string, requested?: string): P
     await assertAvatarRefs(tx, userId, avatarId, null);
   } else {
     const candidates = await tx.avatar.findMany({
-      where: { userId },
+      where: ownAvatarWhere(userId),
       select: { id: true, status: true, heygenAvatarId: true, _count: { select: { looks: true } }, looks: { where: { status: "ready" }, take: 1, select: { id: true } } },
     });
     const usable = candidates.filter((a) => a.looks.length > 0 || (a._count.looks === 0 && a.status === "ready" && !!a.heygenAvatarId));
@@ -512,7 +533,7 @@ export async function listProjects(userId: string): Promise<ProjectSummary[]> {
       : Promise.resolve([]),
     avatarIds.length
       ? prisma.avatar.findMany({
-          where: { id: { in: avatarIds }, userId },
+          where: { id: { in: avatarIds }, ...avatarAccessWhere(userId) },
           select: {
             id: true,
             previewUrl: true,

@@ -10,6 +10,7 @@ import { VideoStatusBadge } from "@/components/dashboard/video/video-status-badg
 import { formatDateTime, videoTitle } from "@/lib/video-display";
 import { VIDEO_ASPECT_RATIOS } from "@/lib/validations/video";
 import { NewProjectButton } from "@/components/dashboard/project/new-project-button";
+import { avatarAccessWhere } from "@/lib/avatar-access";
 
 export const metadata = {
   title: "Create video | YouMimic Portal",
@@ -37,13 +38,14 @@ export default async function AvatarStudioPage({
   const { from, script: scriptParam } = await searchParams;
 
   const avatar = await prisma.avatar.findFirst({
-    where: { id: avatarId, userId: session.user.id },
+    where: { id: avatarId, ...avatarAccessWhere(session.user.id) },
     select: {
       id: true,
       name: true,
       status: true,
       heygenAvatarId: true,
       previewUrl: true,
+      isPublic: true,
       looks: {
         orderBy: { name: "asc" },
         select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true },
@@ -130,7 +132,14 @@ export default async function AvatarStudioPage({
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Create a video</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Create a video</h1>
+            {avatar.isPublic && (
+              <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                Shared avatar
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground">
             Write a script, choose how it looks and sounds, then generate a video of{" "}
             <span className="font-medium text-foreground">{avatar.name}</span>.

@@ -68,8 +68,19 @@ describe("ownership", () => {
     tx.videoScene.findFirst.mockResolvedValue({ id: "s1", avatarId: null });
     tx.avatar.findFirst.mockResolvedValue(null);
     expect(await code(updateScene("user-1", "p1", "s1", { expectedVersion: 1, avatarId: "not-mine" }))).toBe("BAD_AVATAR");
-    expect(tx.avatar.findFirst.mock.calls[0][0].where).toMatchObject({ id: "not-mine", userId: "user-1" });
+    expect(tx.avatar.findFirst.mock.calls[0][0].where).toMatchObject({
+      id: "not-mine",
+      OR: [{ userId: "user-1" }, { isPublic: true }],
+    });
     expect(tx.videoScene.update).not.toHaveBeenCalled();
+  });
+
+  it("allows pointing a scene at a public avatar the user doesn't own", async () => {
+    tx.videoScene.findFirst.mockResolvedValue({ id: "s1", avatarId: null });
+    tx.avatar.findFirst.mockResolvedValue({ id: "public-avatar" });
+    tx.videoScene.update.mockResolvedValue({ id: "s1" });
+    expect(await code(updateScene("user-1", "p1", "s1", { expectedVersion: 1, avatarId: "public-avatar" }))).toBeNull();
+    expect(tx.videoScene.update).toHaveBeenCalled();
   });
 
   it("cannot use a look from a different avatar", async () => {

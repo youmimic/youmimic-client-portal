@@ -31,10 +31,73 @@ export function Thumb({
   );
 }
 
+// One labeled grid of avatar cards — used twice below, once for the user's
+// own avatars and once for shared ones, so the two stay visually separate
+// (never merged into one grid with just a badge).
+function AvatarGrid({
+  groupKey,
+  label,
+  avatars,
+  avatarId,
+  disabled,
+  onSelect,
+}: {
+  groupKey: string;
+  label: string;
+  avatars: AvatarOption[];
+  avatarId: string | null;
+  disabled: boolean;
+  onSelect: (a: AvatarOption) => void;
+}) {
+  const labelId = `scene-avatar-label-${groupKey}`;
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium" id={labelId}>
+        {label}
+      </p>
+      <div role="group" aria-labelledby={labelId} className={cn("grid gap-2", avatars.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
+        {avatars.map((a) => {
+          const isSelected = a.id === avatarId;
+          return (
+            <button
+              key={a.id}
+              type="button"
+              disabled={disabled || !a.usable}
+              aria-pressed={isSelected}
+              onClick={() => onSelect(a)}
+              className={cn(
+                "flex items-center gap-2 rounded-lg border p-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-40",
+                isSelected ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
+              )}
+            >
+              <Thumb src={a.previewUrl} className="h-11 w-11 rounded-md" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{a.name}</span>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  {!a.usable
+                    ? "Not ready"
+                    : a.looks.length === 0
+                      ? "Single look"
+                      : `${a.looks.filter((l) => l.ready).length} ${a.looks.filter((l) => l.ready).length === 1 ? "look" : "looks"}`}
+                </span>
+              </span>
+              {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Picks who speaks in a scene. Avatars are shown as cards with their own
 // thumbnail, and every look of the chosen avatar is shown as a thumbnail too,
 // so people choose by seeing rather than by reading names. Every scene has
-// its own avatar, so there is no "inherit" option here.
+// its own avatar, so there is no "inherit" option here. `avatars` is a
+// combined list of the user's own avatars and admin-marked public ones
+// (AvatarOption.isPublic), split into two separately-headed sections below
+// rather than one merged grid, so a shared avatar is never mistaken for the
+// user's own.
 export function AvatarLookPicker({
   avatars,
   avatarId,
@@ -49,12 +112,19 @@ export function AvatarLookPicker({
   onChange: (avatarId: string, lookId: string | null) => void;
 }) {
   const [introOpen, setIntroOpen] = useState(false);
+  const owned = avatars.filter((a) => !a.isPublic);
+  const shared = avatars.filter((a) => a.isPublic);
   const selected = avatars.find((a) => a.id === avatarId) ?? null;
   // With no look stored yet, the first ready look is what will be used.
   const activeLookId = lookId ?? selected?.looks.find((l) => l.ready)?.id ?? null;
   const activeLook = selected?.looks.find((l) => l.id === activeLookId) ?? null;
 
-  if (avatars.length === 0) {
+  function selectAvatar(a: AvatarOption) {
+    setIntroOpen(false);
+    onChange(a.id, a.looks.find((l) => l.ready)?.id ?? null);
+  }
+
+  if (owned.length === 0 && shared.length === 0) {
     return (
       <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
         You don&apos;t have any avatars yet. Once your avatar has been set up, you can pick it here.
@@ -64,49 +134,17 @@ export function AvatarLookPicker({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        <p className="text-sm font-medium" id="scene-avatar-label">
-          Avatar
+      {owned.length > 0 ? (
+        <AvatarGrid groupKey="own" label="Avatar" avatars={owned} avatarId={avatarId} disabled={disabled} onSelect={selectAvatar} />
+      ) : (
+        <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+          You don&apos;t have any avatars yet. Once your avatar has been set up, you can pick it here.
         </p>
-        <div
-          role="group"
-          aria-labelledby="scene-avatar-label"
-          className={cn("grid gap-2", avatars.length === 1 ? "grid-cols-1" : "grid-cols-2")}
-        >
-          {avatars.map((a) => {
-            const isSelected = a.id === avatarId;
-            return (
-              <button
-                key={a.id}
-                type="button"
-                disabled={disabled || !a.usable}
-                aria-pressed={isSelected}
-                onClick={() => {
-                  setIntroOpen(false);
-                  onChange(a.id, a.looks.find((l) => l.ready)?.id ?? null);
-                }}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border p-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-40",
-                  isSelected ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
-                )}
-              >
-                <Thumb src={a.previewUrl} className="h-11 w-11 rounded-md" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{a.name}</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">
-                    {!a.usable
-                      ? "Not ready"
-                      : a.looks.length === 0
-                        ? "Single look"
-                        : `${a.looks.filter((l) => l.ready).length} ${a.looks.filter((l) => l.ready).length === 1 ? "look" : "looks"}`}
-                  </span>
-                </span>
-                {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      )}
+
+      {shared.length > 0 && (
+        <AvatarGrid groupKey="shared" label="Shared avatars" avatars={shared} avatarId={avatarId} disabled={disabled} onSelect={selectAvatar} />
+      )}
 
       {selected && selected.looks.length > 1 && (
         <div className="space-y-2">

@@ -1,25 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sweepStuckGenerations } from "@/lib/heygen/generate-video";
+import { generateAvatarVideo, sweepStuckGenerations } from "@/lib/heygen/generate-video";
 
 const findManyGeneratedVideo = vi.fn();
 const updateGeneratedVideo = vi.fn();
+const createGeneratedVideo = vi.fn();
+const findFirstAvatar = vi.fn();
+const updateUsageLedgerEntry = vi.fn();
 const getHeyGenVideoStatus = vi.fn();
+const getHeyGenAvatarLook = vi.fn();
+const createHeyGenVideo = vi.fn();
 const reconcileCredits = vi.fn();
 const releaseReservationForVideo = vi.fn();
+const reserveCreditsForGeneration = vi.fn();
+const releaseReservation = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   default: {
     generatedVideo: {
       findMany: (...args: unknown[]) => findManyGeneratedVideo(...args),
       update: (...args: unknown[]) => updateGeneratedVideo(...args),
+      create: (...args: unknown[]) => createGeneratedVideo(...args),
+    },
+    avatar: {
+      findFirst: (...args: unknown[]) => findFirstAvatar(...args),
+    },
+    usageLedgerEntry: {
+      update: (...args: unknown[]) => updateUsageLedgerEntry(...args),
     },
   },
 }));
 
 vi.mock("@/lib/heygen", () => ({
   getHeyGenVideoStatus: (...args: unknown[]) => getHeyGenVideoStatus(...args),
-  getHeyGenAvatarLook: vi.fn(),
-  createHeyGenVideo: vi.fn(),
+  getHeyGenAvatarLook: (...args: unknown[]) => getHeyGenAvatarLook(...args),
+  createHeyGenVideo: (...args: unknown[]) => createHeyGenVideo(...args),
   HeyGenApiError: class HeyGenApiError extends Error {},
 }));
 
@@ -28,8 +42,8 @@ vi.mock("@/lib/heygen/pricing", () => ({
 }));
 
 vi.mock("@/lib/usage/ledger", () => ({
-  reserveCreditsForGeneration: vi.fn(),
-  releaseReservation: vi.fn(),
+  reserveCreditsForGeneration: (...args: unknown[]) => reserveCreditsForGeneration(...args),
+  releaseReservation: (...args: unknown[]) => releaseReservation(...args),
   reconcileCredits: (...args: unknown[]) => reconcileCredits(...args),
   releaseReservationForVideo: (...args: unknown[]) => releaseReservationForVideo(...args),
 }));
@@ -44,9 +58,16 @@ const STUCK_ROW = {
 beforeEach(() => {
   findManyGeneratedVideo.mockReset();
   updateGeneratedVideo.mockReset();
+  createGeneratedVideo.mockReset();
+  findFirstAvatar.mockReset();
+  updateUsageLedgerEntry.mockReset();
   getHeyGenVideoStatus.mockReset();
+  getHeyGenAvatarLook.mockReset();
+  createHeyGenVideo.mockReset();
   reconcileCredits.mockReset();
   releaseReservationForVideo.mockReset();
+  reserveCreditsForGeneration.mockReset();
+  releaseReservation.mockReset();
 });
 
 describe("sweepStuckGenerations", () => {
@@ -154,5 +175,58 @@ describe("sweepStuckGenerations", () => {
     expect(result.checked).toBe(2);
     expect(result.failed).toEqual([{ generatedVideoId: "video_1", error: "Unknown error" }]);
     expect(result.stillProcessing).toBe(1);
+  });
+});
+
+describe("generateAvatarVideo", () => {
+  const PUBLIC_AVATAR = {
+    id: "public-avatar",
+    heygenAvatarId: "heygen-public-avatar",
+    status: "ready",
+    looks: [],
+  };
+
+  beforeEach(() => {
+    findFirstAvatar.mockResolvedValue(PUBLIC_AVATAR);
+    getHeyGenAvatarLook.mockResolvedValue({ default_voice_id: "voice-1" });
+    reserveCreditsForGeneration.mockResolvedValue({ ok: true, ledgerEntryId: "ledger-1" });
+    createGeneratedVideo.mockResolvedValue({ id: "gv-1" });
+    updateUsageLedgerEntry.mockResolvedValue(undefined);
+    createHeyGenVideo.mockResolvedValue({ video_id: "provider-1" });
+    updateGeneratedVideo.mockResolvedValue({ id: "gv-1" });
+  });
+
+  it("looks up the avatar as owned-by-this-user OR public, not owned-only", async () => {
+    await generateAvatarVideo("non-owner", "public-avatar", "A script");
+
+    expect(findFirstAvatar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "public-avatar", OR: [{ userId: "non-owner" }, { isPublic: true }] },
+      }),
+    );
+  });
+
+  it("succeeds generating with a public avatar the caller doesn't own, charged to the caller's own credits", async () => {
+    const result = await generateAvatarVideo("non-owner", "public-avatar", "A script");
+
+    expect(result).toEqual({ ok: true, generatedVideoId: "gv-1" });
+    // Credits are reserved against the generating user, never the avatar's owner.
+    expect(reserveCreditsForGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "non-owner" }),
+    );
+    expect(createGeneratedVideo).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userId: "non-owner", avatarId: "public-avatar" }) }),
+    );
+  });
+
+  it("still fails when the avatar is neither owned nor public", async () => {
+    findFirstAvatar.mockResolvedValue(null);
+    const result = await generateAvatarVideo("non-owner", "someone-elses-avatar", "A script");
+    expect(result).toEqual({
+      ok: false,
+      code: "AVATAR_NOT_READY",
+      error: "This avatar isn't ready to generate videos from yet.",
+    });
+    expect(reserveCreditsForGeneration).not.toHaveBeenCalled();
   });
 });
