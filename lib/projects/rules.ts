@@ -23,17 +23,16 @@ export const MOTION_PROMPT_MAX = 500;
 
 // Which HeyGen avatar_type values actually honor the studio background.color
 // field. Confirmed live (2026-11-02): "digital_twin" avatars — recorded
-// video footage, which is every avatar in this app at the time of writing —
-// silently ignore it; the request succeeds and a video renders, but the
-// background stays whatever was in the original footage. "photo_avatar" is
-// listed as the one type where a colour override is plausible (a still
-// image composited live, not baked video) based on HeyGen's docs and how
-// the feature is architecturally described there — not yet live-confirmed
-// working, since no photo_avatar exists in this app's fleet to test against.
-// Treat anything not in this set (including null/unknown) as unsupported:
-// the UI control should stay hidden rather than show something that quietly
-// does nothing, the way it did for digital_twin.
-export const SUPPORTED_BACKGROUND_AVATAR_TYPES = new Set(["photo_avatar"]);
+// video footage — silently ignore it; the request succeeds and a video
+// renders, but the background stays whatever was in the original footage.
+// "photo_avatar" was initially listed here as plausible (a still image
+// composited live, not baked video) based on HeyGen's docs — confirmed live
+// (2026-11-09, Chris Veltheim's "Etihad Tactician" look) to behave exactly
+// the same as digital_twin: request succeeds, override is silently ignored.
+// Empty until a type is found that actually honors it. Treat anything not
+// in this set (including null/unknown) as unsupported: the UI control
+// should stay hidden rather than show something that quietly does nothing.
+export const SUPPORTED_BACKGROUND_AVATAR_TYPES = new Set<string>([]);
 
 export function supportsBackgroundOverride(avatarType: string | null | undefined): boolean {
   return !!avatarType && SUPPORTED_BACKGROUND_AVATAR_TYPES.has(avatarType);
