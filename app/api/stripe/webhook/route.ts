@@ -515,13 +515,36 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 
   // Never attach a payment to an already-canceled row, even in the
   // unambiguous (<=1 live subscription) case.
-  const localSub = await prisma.subscription.findFirst({
+  let localSub = await prisma.subscription.findFirst({
     where: subId
       ? { stripeSubscriptionId: subId }
       : { stripeCustomerId: cid, status: { not: SubscriptionStatus.CANCELED } },
     orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
+
+  // Races with checkout.session.completed, which is what first links a
+  // local row's stripeSubscriptionId (see handleCheckoutCompleted) — Stripe
+  // can and does deliver invoice.payment_succeeded before that link exists
+  // yet, since both fire off the same checkout. Without this fallback the
+  // lookup above finds nothing and this return()s silently: no payment, no
+  // error, nothing logged (confirmed live, 2026-11-10 — a real paid
+  // subscription with zero Payment rows and no trace of the invoice event
+  // anywhere). Same still-unlinked-placeholder match handleSubscriptionUpsert
+  // already does below for the identical race on the subscription row
+  // itself; scoped to subId-known invoices only, so it doesn't widen the
+  // deliberately strict ambiguous-invoice guard above (that guard exists
+  // specifically for the subId-unknown case).
+  if (!localSub && subId) {
+    localSub = await prisma.subscription.findFirst({
+      where: { stripeCustomerId: cid, stripeSubscriptionId: null },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true },
+    });
+    if (localSub) {
+      await prisma.subscription.updateMany({ where: { id: localSub.id }, data: { stripeSubscriptionId: subId } });
+    }
+  }
   if (!localSub) return;
 
   await prisma.payment.upsert({
