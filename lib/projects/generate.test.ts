@@ -77,8 +77,8 @@ describe("generateProject", () => {
     expect(heygen.createHeyGenStudioVideo).toHaveBeenCalledOnce();
     const call = heygen.createHeyGenStudioVideo.mock.calls[0][0];
     expect(call.scenes).toEqual([
-      { kind: "avatar", avatarId: "hl-1", script: "Welcome to the launch", voiceId: "v-default", backgroundColor: null, motionPrompt: null },
-      { kind: "avatar", avatarId: "hl-1", script: "Here is what is new", voiceId: "v-own", backgroundColor: "#112233", motionPrompt: null },
+      { kind: "avatar", avatarId: "hl-1", script: "Welcome to the launch", voiceId: "v-default", backgroundColor: null, motionPrompt: null, voiceLocale: null },
+      { kind: "avatar", avatarId: "hl-1", script: "Here is what is new", voiceId: "v-own", backgroundColor: "#112233", motionPrompt: null, voiceLocale: null },
     ]);
     expect(call).toMatchObject({ engine: "avatar_iii", aspectRatio: "16:9", title: "Launch video" });
 
@@ -185,6 +185,13 @@ describe("generateProject", () => {
     expect(avatarRowsCall?.[0].where).toMatchObject({ OR: [{ userId: "u1" }, { isPublic: true }] });
   });
 
+  it("requests the en-AU locale for scenes using a public avatar, but not an owned one", async () => {
+    prismaMock.avatar.findMany.mockResolvedValue([{ ...avatarRow, isPublic: true }]);
+    await generateProject("u1", "p1", 3);
+    const call = heygen.createHeyGenStudioVideo.mock.calls[0][0];
+    expect(call.scenes.every((s: { voiceLocale?: string | null }) => s.voiceLocale === "en-AU")).toBe(true);
+  });
+
   it("refuses a project made only of image/video scenes, since a render must link to an avatar", async () => {
     prismaMock.videoProject.findFirst.mockResolvedValue(
       project({
@@ -219,7 +226,7 @@ describe("generateProject", () => {
     expect(call.captions).toBe(true);
     expect(call.engine).toBe("avatar_v");
     expect(call.scenes).toEqual([
-      { kind: "avatar", avatarId: "hl-1", script: "Welcome", voiceId: "v-default", backgroundColor: null, motionPrompt: "smiles warmly" },
+      { kind: "avatar", avatarId: "hl-1", script: "Welcome", voiceId: "v-default", backgroundColor: null, motionPrompt: "smiles warmly", voiceLocale: null },
       { kind: "image", mediaUrl: "https://example.com/logo.png", script: undefined, voiceId: undefined, durationSeconds: 4 },
       { kind: "video", mediaUrl: "https://example.com/clip.mp4", script: "Here's a look at the product", voiceId: "v-own" },
     ]);

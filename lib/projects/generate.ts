@@ -4,6 +4,7 @@ import {
   createHeyGenStudioVideo,
   getHeyGenAvatarLook,
   HeyGenApiError,
+  PUBLIC_AVATAR_VOICE_LOCALE,
   type HeyGenEngine,
   type HeyGenStudioScene,
   type HeyGenWatermarkPosition,
@@ -106,7 +107,13 @@ export async function generateProject(userId: string, projectId: string, expecte
           .filter((x): x is string => !!x),
       },
     },
-    select: { id: true, name: true, heygenAvatarId: true, looks: { select: { id: true, heygenLookId: true, status: true }, orderBy: { name: "asc" } } },
+    select: {
+      id: true,
+      name: true,
+      heygenAvatarId: true,
+      isPublic: true,
+      looks: { select: { id: true, heygenLookId: true, status: true }, orderBy: { name: "asc" } },
+    },
   });
 
   const providerScenes: HeyGenStudioScene[] = [];
@@ -170,6 +177,7 @@ export async function generateProject(userId: string, projectId: string, expecte
           // Schema-valid only on Avatar V per the provider's docs — sending
           // it on another engine would be rejected, so it's left out.
           motionPrompt: engineValue === "AVATAR_V" ? scene.motionPrompt : null,
+          voiceLocale: avatar.isPublic ? PUBLIC_AVATAR_VOICE_LOCALE : null,
         });
         snapshot.push({
           order: i + 1,

@@ -35,6 +35,7 @@ vi.mock("@/lib/heygen", () => ({
   getHeyGenAvatarLook: (...args: unknown[]) => getHeyGenAvatarLook(...args),
   createHeyGenVideo: (...args: unknown[]) => createHeyGenVideo(...args),
   HeyGenApiError: class HeyGenApiError extends Error {},
+  PUBLIC_AVATAR_VOICE_LOCALE: "en-AU",
 }));
 
 vi.mock("@/lib/heygen/pricing", () => ({
@@ -216,6 +217,7 @@ describe("generateAvatarVideo", () => {
     id: "public-avatar",
     heygenAvatarId: "heygen-public-avatar",
     status: "ready",
+    isPublic: true,
     looks: [],
   };
 
@@ -250,6 +252,16 @@ describe("generateAvatarVideo", () => {
     expect(createGeneratedVideo).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ userId: "non-owner", avatarId: "public-avatar" }) }),
     );
+  });
+
+  it("requests the en-AU locale for a public avatar, but not for an owned one", async () => {
+    await generateAvatarVideo("non-owner", "public-avatar", "A script");
+    expect(createHeyGenVideo).toHaveBeenCalledWith(expect.objectContaining({ voiceLocale: "en-AU" }));
+
+    createHeyGenVideo.mockClear();
+    findFirstAvatar.mockResolvedValue({ ...PUBLIC_AVATAR, isPublic: false });
+    await generateAvatarVideo("owner", "owned-avatar", "A script");
+    expect(createHeyGenVideo).toHaveBeenCalledWith(expect.objectContaining({ voiceLocale: undefined }));
   });
 
   it("still fails when the avatar is neither owned nor public", async () => {
