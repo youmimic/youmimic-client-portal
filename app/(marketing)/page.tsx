@@ -710,6 +710,51 @@ export default async function HomePage() {
         </section>
       )}
 
+      {/* Proud Partner (Tasmanian Mark) — pending Brand Tasmania licence
+          approval, not yet live. Hardcoded rather than Sanity-managed: this
+          is a certification mark with contractually fixed artwork and usage
+          (Code of Practice §12(f) forbids modifying it), not editable
+          marketing copy, so it shouldn't be swappable from the CMS. Positive
+          lockup renders on the light theme, Negative on the dark theme —
+          both are the exact supplied files, swapped via CSS only, never
+          recoloured or inverted like the greyscale treatment above.
+
+          Deliberately separated from Awards and Nominations above with its
+          own divider rather than just relying on section spacing: a
+          certification/partner mark sitting directly under an "Awards and
+          Nominations" heading with no visual break could be misread as us
+          claiming it as an award, which the Code of Practice's
+          no-misrepresentation clause (§11.5) makes a real risk to avoid, not
+          just a style preference. */}
+      <section className="py-8 sm:py-10">
+        <div className="mx-auto w-full px-4 text-center sm:px-6 lg:w-[90vw] lg:px-0">
+          <div className="mx-auto mb-6 h-px w-24 bg-border dark:bg-muted-foreground" aria-hidden="true" />
+          <div className="flex items-center justify-center">
+            <a
+              href="https://mark.tasmanian.com.au/tasmanian-licensees/youmimic"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block"
+            >
+              <NextImage
+                src="/partners/tasmanian-proud-partner-pos-primary.png"
+                alt="A Proud Partner Of Tasmanian"
+                width={285}
+                height={56}
+                className="h-14 w-auto dark:hidden"
+              />
+              <NextImage
+                src="/partners/tasmanian-proud-partner-neg-primary.png"
+                alt="A Proud Partner Of Tasmanian"
+                width={285}
+                height={56}
+                className="hidden h-14 w-auto dark:block"
+              />
+            </a>
+          </div>
+        </div>
+      </section>
+
       <FinalCtaSection isLoggedIn={isLoggedIn} />
     </>
   );
