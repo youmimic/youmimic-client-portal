@@ -15,6 +15,7 @@ export const corporate = {
   name: "Corporate",
   tagline: "For large organizations using AI avatars across every department.",
   priceDisplay: "$4,999 p/m",
+  priceCents: 499_900,
   features: [
     "Unlimited avatars",
     "Priority video processing",

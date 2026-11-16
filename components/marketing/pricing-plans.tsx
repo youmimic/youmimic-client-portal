@@ -20,6 +20,7 @@ import {
   smallBusiness,
   type BillingTermKey,
 } from "@/lib/pricing/plans";
+import { formatGstBreakdown } from "@/lib/pricing/gst";
 
 function bookNowHref(planType: "MID_MARKET" | "SMALL_BUSINESS", term: BillingTermKey): string {
   // Public review page; redirects an authenticated visitor to /dashboard/checkout.
@@ -74,8 +75,11 @@ export function PricingPlans() {
             <CardDescription>{corporate.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <p className="mb-4 text-lg font-semibold text-foreground">
+            <p className="mb-1 text-lg font-semibold text-foreground">
               {corporate.priceDisplay}
+            </p>
+            <p className="mb-4 text-xs text-muted-foreground">
+              {formatGstBreakdown(corporate.priceCents)} incl.
             </p>
             <ul className="space-y-2">
               {corporate.features.map((feature) => (
@@ -114,8 +118,11 @@ export function PricingPlans() {
               <CardDescription>{midMarket.tagline}</CardDescription>
             </CardHeader>
             <CardContent className="flex-1">
-              <p className="mb-4 text-lg font-semibold text-foreground">
+              <p className="mb-1 text-lg font-semibold text-foreground">
                 {midMarketTier.priceDisplay}
+              </p>
+              <p className="mb-4 text-xs text-muted-foreground">
+                {formatGstBreakdown(midMarketTier.priceCents)} incl.
               </p>
               <ul className="space-y-2">
                 {[
@@ -157,8 +164,11 @@ export function PricingPlans() {
             <CardDescription>{smallBusiness.tagline}</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <p className="mb-4 text-lg font-semibold text-foreground">
+            <p className="mb-1 text-lg font-semibold text-foreground">
               {smallBusinessTier.priceDisplay}
+            </p>
+            <p className="mb-4 text-xs text-muted-foreground">
+              {formatGstBreakdown(smallBusinessTier.priceCents)} incl.
             </p>
             <ul className="space-y-2">
               {[

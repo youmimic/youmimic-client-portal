@@ -339,6 +339,7 @@ type SendCheckoutReminderEmailParams = {
   name: string;
   planLabel: string;
   priceDisplay: string;
+  gstBreakdown: string;
   resumeUrl: string;
   idempotencyKey: string;
 };
@@ -352,6 +353,7 @@ export async function sendCheckoutReminder2dEmail({
   name,
   planLabel,
   priceDisplay,
+  gstBreakdown,
   resumeUrl,
   idempotencyKey,
 }: SendCheckoutReminderEmailParams) {
@@ -362,7 +364,7 @@ export async function sendCheckoutReminder2dEmail({
       from,
       to: [to],
       subject: `Finish setting up your ${planLabel} plan`,
-      react: CheckoutReminder2dEmail({ name, planLabel, priceDisplay, resumeUrl }),
+      react: CheckoutReminder2dEmail({ name, planLabel, priceDisplay, gstBreakdown, resumeUrl }),
       tags: [{ name: "category", value: "checkout_reminder_2d" }],
     },
     { idempotencyKey },
@@ -382,6 +384,7 @@ export async function sendCheckoutReminder7dEmail({
   name,
   planLabel,
   priceDisplay,
+  gstBreakdown,
   resumeUrl,
   idempotencyKey,
 }: SendCheckoutReminderEmailParams) {
@@ -392,7 +395,7 @@ export async function sendCheckoutReminder7dEmail({
       from,
       to: [to],
       subject: `Last reminder: your ${planLabel} plan is waiting`,
-      react: CheckoutReminder7dEmail({ name, planLabel, priceDisplay, resumeUrl }),
+      react: CheckoutReminder7dEmail({ name, planLabel, priceDisplay, gstBreakdown, resumeUrl }),
       tags: [{ name: "category", value: "checkout_reminder_7d" }],
     },
     { idempotencyKey },

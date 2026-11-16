@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { sendCheckoutReminder2dEmail, sendCheckoutReminder7dEmail } from "@/lib/mailer";
 import { CHECKOUT_PLANS, type CheckoutPlanKey } from "@/lib/checkout/plan-keys";
 import type { BillingTermKey } from "@/lib/pricing/plans";
+import { formatGstBreakdown } from "@/lib/pricing/gst";
 import { deleteDraftAndStripeCustomer } from "@/lib/checkout/delete-draft";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -33,6 +34,15 @@ function priceDisplay(planType: string, billingTerm: string): string {
   return plan?.byTerm[billingTerm as BillingTermKey]?.priceDisplay ?? "";
 }
 
+// Platform-fee only, same scope as priceDisplay above — these reminder
+// emails never fetch the draft's avatarCount, so there's no avatar-storage
+// total to break out here, only the base plan price already shown.
+function gstBreakdown(planType: string, billingTerm: string): string {
+  const plan = CHECKOUT_PLANS[planType as CheckoutPlanKey];
+  const cents = plan?.byTerm[billingTerm as BillingTermKey]?.priceCents;
+  return cents ? formatGstBreakdown(cents) : "";
+}
+
 function resumeUrl(draft: { id: string; planType: string; billingTerm: string }): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const url = new URL("/checkout", appUrl);
@@ -62,6 +72,7 @@ async function sendReminders(): Promise<{ sent2d: number; sent7d: number }> {
         name: draft.fullName,
         planLabel: planLabel(draft.planType),
         priceDisplay: priceDisplay(draft.planType, draft.billingTerm),
+        gstBreakdown: gstBreakdown(draft.planType, draft.billingTerm),
         resumeUrl: resumeUrl(draft),
         idempotencyKey: `checkout-reminder-2d/${draft.id}`,
       });
@@ -92,6 +103,7 @@ async function sendReminders(): Promise<{ sent2d: number; sent7d: number }> {
         name: draft.fullName,
         planLabel: planLabel(draft.planType),
         priceDisplay: priceDisplay(draft.planType, draft.billingTerm),
+        gstBreakdown: gstBreakdown(draft.planType, draft.billingTerm),
         resumeUrl: resumeUrl(draft),
         idempotencyKey: `checkout-reminder-7d/${draft.id}`,
       });

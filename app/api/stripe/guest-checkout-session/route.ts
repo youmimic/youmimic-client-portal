@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import stripe from "@/lib/stripe";
 import { resolveGuestPriceId } from "@/lib/checkout/create-draft";
 import type { GuestCheckoutPlanType, GuestCheckoutBillingTerm } from "@/lib/validations/checkout-draft";
+import { gstTaxRates } from "@/lib/stripe/tax";
 
 const bodySchema = z.object({
   draftId: z.string().min(1),
@@ -112,8 +113,8 @@ export async function POST(req: Request) {
       // (app/api/stripe/webhook/route.ts) reads items.data[0] as "the" price/
       // product for this row, which should reflect the plan, not the add-on.
       line_items: [
-        { price: priceId, quantity: 1 },
-        { price: avatarStoragePriceId, quantity: draft.avatarCount },
+        { price: priceId, quantity: 1, tax_rates: gstTaxRates() },
+        { price: avatarStoragePriceId, quantity: draft.avatarCount, tax_rates: gstTaxRates() },
       ],
       client_reference_id: draft.id,
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,

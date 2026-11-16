@@ -85,6 +85,7 @@ describe("processCheckoutDraftLifecycle — reminder queries", () => {
     expect(emailArgs.name).toBe("Jane Buyer");
     expect(emailArgs.planLabel).toBe("Mid Market");
     expect(emailArgs.priceDisplay).toBe("$1,499 p/m");
+    expect(emailArgs.gstBreakdown).toBe("$1362.73 + $136.27 GST");
     expect(emailArgs.resumeUrl).toContain("draftId=draft_1");
     expect(emailArgs.idempotencyKey).toBe("checkout-reminder-2d/draft_1");
 

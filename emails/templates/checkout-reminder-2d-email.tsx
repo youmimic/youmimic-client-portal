@@ -6,6 +6,7 @@ type CheckoutReminder2dEmailProps = {
   name: string;
   planLabel: string;
   priceDisplay: string;
+  gstBreakdown: string;
   resumeUrl: string;
 };
 
@@ -13,6 +14,7 @@ export function CheckoutReminder2dEmail({
   name,
   planLabel,
   priceDisplay,
+  gstBreakdown,
   resumeUrl,
 }: CheckoutReminder2dEmailProps) {
   return (
@@ -32,8 +34,8 @@ export function CheckoutReminder2dEmail({
           margin: 0,
         }}
       >
-        Your details are saved — {planLabel} at {priceDisplay}. Pick up right where you left
-        off whenever you&apos;re ready.
+        Your details are saved — {planLabel} at {priceDisplay} (includes GST: {gstBreakdown}).
+        Pick up right where you left off whenever you&apos;re ready.
       </Text>
     </EmailLayout>
   );

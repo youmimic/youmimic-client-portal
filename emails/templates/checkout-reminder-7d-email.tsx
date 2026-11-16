@@ -6,6 +6,7 @@ type CheckoutReminder7dEmailProps = {
   name: string;
   planLabel: string;
   priceDisplay: string;
+  gstBreakdown: string;
   resumeUrl: string;
 };
 
@@ -13,6 +14,7 @@ export function CheckoutReminder7dEmail({
   name,
   planLabel,
   priceDisplay,
+  gstBreakdown,
   resumeUrl,
 }: CheckoutReminder7dEmailProps) {
   return (
@@ -32,9 +34,9 @@ export function CheckoutReminder7dEmail({
           margin: 0,
         }}
       >
-        Your details are saved — {planLabel} at {priceDisplay}. This is the last reminder
-        we&apos;ll send. If we don&apos;t hear from you, we&apos;ll remove your saved details
-        30 days after you started checkout.
+        Your details are saved — {planLabel} at {priceDisplay} (includes GST: {gstBreakdown}).
+        This is the last reminder we&apos;ll send. If we don&apos;t hear from you, we&apos;ll
+        remove your saved details 30 days after you started checkout.
       </Text>
     </EmailLayout>
   );
