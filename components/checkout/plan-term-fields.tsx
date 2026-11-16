@@ -13,6 +13,7 @@ import { CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatCurrencyCents } from "@/lib/format";
 import { AVATAR_STORAGE_MONTHLY_CENTS, TERM_LABEL, type BillingTermKey } from "@/lib/pricing/plans";
+import { formatGstBreakdown } from "@/lib/pricing/gst";
 import { CHECKOUT_PLANS, type CheckoutPlanKey } from "@/lib/checkout/plan-keys";
 
 export type { CheckoutPlanKey } from "@/lib/checkout/plan-keys";
@@ -161,6 +162,9 @@ export function PlanTermDetailFields({
           <span className="text-sm font-semibold text-foreground">Total</span>
           <span className="text-lg font-semibold text-foreground">{formatCurrencyCents(totalCents)}/mo</span>
         </div>
+        <p className="text-right text-xs text-muted-foreground">
+          Includes GST: {formatGstBreakdown(totalCents)}
+        </p>
       </div>
     </>
   );

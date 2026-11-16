@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import stripe from "@/lib/stripe";
 import { maxAvatarsFor } from "@/lib/pricing/plans";
+import { gstTaxRates } from "@/lib/stripe/tax";
 
 // MID_MARKET/SMALL_BUSINESS both bill monthly regardless of the 12mo/24mo
 // commitment term shown on the pricing page — the term only changes which
@@ -215,6 +216,8 @@ export async function POST(req: Request) {
     // after paying — not just CREATOR as before.
     const redirectAfterCheckout = "/dashboard/bookings";
 
+    const taxRates = gstTaxRates();
+
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "subscription",
@@ -223,10 +226,10 @@ export async function POST(req: Request) {
       // product for this row, which should reflect the plan, not the add-on.
       line_items: needsAvatarStorage
         ? [
-            { price: priceId, quantity: 1 },
-            { price: avatarStoragePriceId!, quantity: avatarCount! },
+            { price: priceId, quantity: 1, tax_rates: taxRates },
+            { price: avatarStoragePriceId!, quantity: avatarCount!, tax_rates: taxRates },
           ]
-        : [{ price: priceId, quantity: 1 }],
+        : [{ price: priceId, quantity: 1, tax_rates: taxRates }],
       success_url: `${appUrl}/dashboard/checkout/success?redirect=${encodeURIComponent(redirectAfterCheckout)}`,
       cancel_url: `${appUrl}/dashboard/billing`,
       phone_number_collection: { enabled: true },
