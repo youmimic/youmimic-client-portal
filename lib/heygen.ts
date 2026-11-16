@@ -1,5 +1,13 @@
 const HEYGEN_API_BASE = "https://api.heygen.com";
 
+// Applied to every generation that uses a public/shared Avatar (see
+// lib/avatar-access.ts) — their voices otherwise render in a generic/US
+// accent by default. Confirmed live (2026-11-16): an A/B test with and
+// without this set on the same avatar/voice/script produced an audibly
+// different accent, so this is a real behavioural fix, not just
+// accepted-but-ignored metadata.
+export const PUBLIC_AVATAR_VOICE_LOCALE = "en-AU";
+
 // Matches GET /v3/avatars/looks/{look_id}. For older avatars, this
 // "look_id" was confirmed identical to Avatar.heygenAvatarId (the v2
 // list-avatars endpoint's avatar_id) — but that stopped holding for at
@@ -166,6 +174,12 @@ export async function createHeyGenVideo(params: {
   title?: string;
   aspectRatio?: string;
   resolution?: string;
+  // Confirmed live (2026-11-16) to actually change the rendered accent, not
+  // just accepted-but-ignored metadata like background.color was — an A/B
+  // test against the same avatar/voice/script with and without this set
+  // produced audibly different results. "en-AU" confirmed as a real,
+  // supported locale via GET /v3/videos/voice-capabilities.
+  voiceLocale?: string;
 }): Promise<{ video_id: string }> {
   return heygenFetch<{ video_id: string }>("/v3/videos", {
     method: "POST",
@@ -184,6 +198,7 @@ export async function createHeyGenVideo(params: {
       ...(params.title ? { title: params.title } : {}),
       ...(params.aspectRatio ? { aspect_ratio: params.aspectRatio } : {}),
       ...(params.resolution ? { resolution: params.resolution } : {}),
+      ...(params.voiceLocale ? { voice_settings: { locale: params.voiceLocale } } : {}),
     }),
   });
 }
@@ -192,8 +207,18 @@ export async function createHeyGenVideo(params: {
 // deliberately fake ids/URLs per the safe-probing convention:
 //  - avatar: same as before. motionPrompt is schema-valid only on the
 //    Avatar V engine (rejected on III/IV) — not yet exercised on a real
-//    avatar. Background stays colour-only; an "image" background type is
-//    explicitly rejected by the provider, confirmed live.
+//    avatar. This type only implements background.color (confirmed live,
+//    2026-11-02/09, to be schema-valid but visually ineffective on every
+//    avatar type in this app's fleet — see SUPPORTED_BACKGROUND_AVATAR_TYPES
+//    in lib/projects/rules.ts). The provider's background also supports
+//    "image"/"video" types — corrects an earlier wrong note here that
+//    "image" was rejected; it wasn't, the nested shape just needed to be
+//    background.source (not background.image.source) — confirmed live
+//    (2026-11-10), schema-valid, not yet implemented or visually verified.
+//    There's also a sibling input.remove_background: true flag, confirmed
+//    schema-valid live (2026-11-10) but not yet implemented — HeyGen's docs
+//    say it needs a look "trained with matting" for a video (digital_twin)
+//    avatar or it 400s; photo_avatar looks are supported without that.
 //  - image: a hosted image URL, shown either for a fixed duration (silent)
 //    or for as long as its narration takes (voiceId + script). Exactly one
 //    of durationSeconds or script should be set.
@@ -214,6 +239,10 @@ export type HeyGenStudioScene =
       voiceId: string;
       backgroundColor?: string | null;
       motionPrompt?: string | null;
+      // See createHeyGenVideo's voiceLocale comment — same confirmed-live
+      // behaviour, same field, just on a studio scene instead of a single
+      // video.
+      voiceLocale?: string | null;
     }
   | {
       kind: "image";
@@ -241,6 +270,7 @@ function toStudioScene(scene: HeyGenStudioScene, engine: HeyGenEngine) {
         engine: { type: engine },
         ...(scene.backgroundColor ? { background: { type: "color", color: scene.backgroundColor } } : {}),
         ...(scene.motionPrompt ? { motion_prompt: scene.motionPrompt } : {}),
+        ...(scene.voiceLocale ? { voice_settings: { locale: scene.voiceLocale } } : {}),
       },
     };
   }

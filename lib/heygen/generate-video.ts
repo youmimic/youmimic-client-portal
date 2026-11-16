@@ -4,6 +4,7 @@ import {
   getHeyGenVideoStatus,
   createHeyGenVideo,
   HeyGenApiError,
+  PUBLIC_AVATAR_VOICE_LOCALE,
   type HeyGenEngine,
 } from "@/lib/heygen";
 import type { VideoEngine, VideoGenerationStatus } from "@/app/generated/prisma/enums";
@@ -79,6 +80,7 @@ export async function generateAvatarVideo(
       id: true,
       heygenAvatarId: true,
       status: true,
+      isPublic: true,
       looks: { select: { id: true, heygenLookId: true, status: true } },
     },
   });
@@ -179,6 +181,7 @@ export async function generateAvatarVideo(
       title: options.title,
       aspectRatio: options.aspectRatio,
       resolution: options.resolution,
+      voiceLocale: avatar.isPublic ? PUBLIC_AVATAR_VOICE_LOCALE : undefined,
     });
 
     await prisma.generatedVideo.update({
