@@ -5,6 +5,7 @@ import { isPermutation, insertAfter, moveItem } from "@/lib/projects/ordering";
 import { projectContentHash } from "@/lib/projects/hash";
 import {
   MAX_SCENES,
+  SCENE_SCRIPT_MAX,
   type AvatarOption,
   type ProjectDefaults,
   type SceneData,
@@ -25,7 +26,8 @@ export class ProjectError extends Error {
       | "LIMIT"
       | "LAST_SCENE"
       | "BAD_REORDER"
-      | "BAD_AVATAR",
+      | "BAD_AVATAR"
+      | "BAD_FILE",
     public readonly status: number,
     message: string,
   ) {
@@ -424,6 +426,92 @@ export async function addScene(userId: string, projectId: string, expectedVersio
   });
 }
 
+// One AVATAR scene per page/slide of text, appended at the end of the
+// project — the import route (app/api/dashboard/projects/[projectId]/
+// scenes/import-document/route.ts) extracts pageTexts server-side before
+// calling this (via the pdf-parse package for a PDF, or lib/pptx-extract.ts
+// for a .pptx), so this function only ever deals with
+// plain strings, not the source document itself — same code path for both
+// file types. Pages with no extractable text (a title slide, a full-page
+// image) are skipped rather than creating an empty, silent scene nobody
+// would notice.
+export async function importScenesFromDocument(
+  userId: string,
+  projectId: string,
+  expectedVersion: number,
+  pageTexts: string[],
+  // Just scene-title wording ("Page 1" vs "Slide 1") — the route passes
+  // whichever fits the source file type. Purely cosmetic, no effect on
+  // behaviour.
+  label: "Page" | "Slide" = "Page",
+  // When true, every existing scene is deleted first and the import starts
+  // the project fresh — asked up front in the UI (an irreversible choice,
+  // so it's never assumed) rather than always appending.
+  replaceExisting: boolean = false,
+): Promise<{ version: number; firstSceneId: string | null; scenesAdded: number; pagesSkipped: number }> {
+  return prisma.$transaction(async (tx) => {
+    await lockAndBump(tx, userId, projectId, expectedVersion);
+    const existing = await tx.videoScene.findMany({
+      where: { projectId },
+      orderBy: { orderIndex: "asc" },
+      select: { id: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true },
+    });
+
+    const pages = pageTexts.map((t) => t.trim()).filter((t) => t.length > 0);
+    const pagesSkipped = pageTexts.length - pages.length;
+    if (pages.length === 0) {
+      throw new ProjectError("BAD_FILE", 422, `Couldn't find any readable text in that ${label === "Slide" ? "presentation" : "PDF"}.`);
+    }
+
+    // Nothing to inherit from, and nothing to append after, once the
+    // project's existing scenes are being thrown away — treat it the same
+    // as a brand new project for the rest of this function.
+    const kept = replaceExisting ? [] : existing;
+    if (kept.length + pages.length > MAX_SCENES) {
+      throw new ProjectError(
+        "LIMIT",
+        422,
+        `This would add ${pages.length} scenes, but a video can have up to ${MAX_SCENES} in total${
+          replaceExisting ? "" : ` (this project already has ${kept.length})`
+        }.`,
+      );
+    }
+
+    if (replaceExisting && existing.length > 0) {
+      await tx.videoScene.deleteMany({ where: { projectId } });
+    }
+
+    // Same inheritance as addScene: every imported scene starts on the
+    // project's current avatar/look/voice (whatever the last kept scene
+    // used) rather than nobody, so the user doesn't have to re-pick an
+    // avatar for every single imported page. Nothing to inherit when
+    // replacing everything — every imported scene starts with no avatar.
+    const anchor = kept[kept.length - 1];
+    let firstSceneId: string | null = null;
+    const newIds: string[] = [];
+    for (const [i, text] of pages.entries()) {
+      const created = await tx.videoScene.create({
+        data: {
+          projectId,
+          orderIndex: kept.length + i,
+          kind: "AVATAR",
+          title: `${label} ${i + 1}`,
+          script: text.slice(0, SCENE_SCRIPT_MAX * 2),
+          avatarId: anchor?.avatarId ?? null,
+          avatarLookId: anchor?.avatarLookId ?? null,
+          voiceId: anchor?.voiceId ?? null,
+          voiceName: anchor?.voiceName ?? null,
+        },
+        select: { id: true },
+      });
+      if (firstSceneId === null) firstSceneId = created.id;
+      newIds.push(created.id);
+    }
+    await renumber(tx, [...kept.map((s) => s.id), ...newIds]);
+    return { version: expectedVersion + 1, firstSceneId, scenesAdded: pages.length, pagesSkipped };
+  });
+}
+
 export async function duplicateScene(userId: string, projectId: string, sceneId: string, expectedVersion: number): Promise<{ version: number; sceneId: string }> {
   return prisma.$transaction(async (tx) => {
     await lockAndBump(tx, userId, projectId, expectedVersion);
@@ -467,6 +555,33 @@ export async function deleteScene(userId: string, projectId: string, sceneId: st
     await tx.videoScene.delete({ where: { id: sceneId } });
     await renumber(tx, scenes.filter((s) => s.id !== sceneId).map((s) => s.id));
     return { version: expectedVersion + 1 };
+  });
+}
+
+// Deletes several scenes in one transaction, so a selection is removed
+// entirely or not at all. Same rules as deleteScene: every id must belong to
+// this project and at least one scene must remain.
+export async function deleteScenes(
+  userId: string,
+  projectId: string,
+  sceneIds: string[],
+  expectedVersion: number,
+): Promise<{ version: number; deleted: number }> {
+  return prisma.$transaction(async (tx) => {
+    await lockAndBump(tx, userId, projectId, expectedVersion);
+    const scenes = await tx.videoScene.findMany({ where: { projectId }, orderBy: { orderIndex: "asc" }, select: { id: true } });
+    const toDelete = new Set(sceneIds);
+    const known = new Set(scenes.map((s) => s.id));
+    if ([...toDelete].some((id) => !known.has(id))) {
+      throw new ProjectError("NOT_FOUND", 404, "We couldn't find one or more of those scenes. Reload and try again.");
+    }
+    const remaining = scenes.filter((s) => !toDelete.has(s.id));
+    if (remaining.length === 0) {
+      throw new ProjectError("LAST_SCENE", 422, "A video needs at least one scene. Keep at least one scene when deleting.");
+    }
+    await tx.videoScene.deleteMany({ where: { projectId, id: { in: [...toDelete] } } });
+    await renumber(tx, remaining.map((s) => s.id));
+    return { version: expectedVersion + 1, deleted: toDelete.size };
   });
 }
 

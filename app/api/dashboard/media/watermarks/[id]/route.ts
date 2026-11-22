@@ -11,13 +11,12 @@ import prisma from "@/lib/prisma";
 // entry from their own library.
 //
 // A project stores this watermark's URL by value, not a foreign key (see
-// Watermark's schema comment) — so deleting the blob out from under a
-// project that still references it would leave that project pointed at a
-// dead image the next time it's opened or regenerated. Blocked outright
-// below rather than left as a silent dangling reference; the one place
-// this route doesn't need to check is the open editor's own in-memory
-// state, which clears itself client-side when its current selection is the
-// thing being deleted (see settings-panel.tsx's deleteSavedWatermark).
+// Watermark's schema comment). Deleting always removes the library entry,
+// but the image file is only deleted once no project of this user still
+// points at it. Otherwise an older project would show a broken image or
+// regenerate without its watermark. Blocking the delete instead left people
+// stuck, since the projects named in the error were often several
+// identically titled "Untitled video" drafts with no way to tell them apart.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireDashboardSession({ requireEmailVerified: true });
   if (!guard.ok) return guard.response;
@@ -33,27 +32,18 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const inUse = await prisma.videoProject.findMany({
+  const projectsUsingIt = await prisma.videoProject.count({
     where: { userId: session.user.id, watermarkUrl: existing.url },
-    select: { title: true },
-    take: 5,
   });
-  if (inUse.length > 0) {
-    const names = inUse.map((p) => p.title.trim() || "Untitled video").join(", ");
-    return NextResponse.json(
-      {
-        error: `Still used by ${inUse.length === 1 ? "a project" : `${inUse.length} projects`} (${names}). Remove it from ${inUse.length === 1 ? "that project" : "those projects"} first.`,
-      },
-      { status: 409 },
-    );
-  }
 
   let blobWarning: string | null = null;
-  try {
-    await del(existing.url);
-  } catch (err) {
-    console.error("Watermark delete (Blob) failed:", err);
-    blobWarning = "Removed from your library, but the image file may still exist in storage.";
+  if (projectsUsingIt === 0) {
+    try {
+      await del(existing.url);
+    } catch (err) {
+      console.error("Watermark delete (Blob) failed:", err);
+      blobWarning = "Removed from your library, but the image file may still exist in storage.";
+    }
   }
 
   await prisma.watermark.delete({ where: { id } });

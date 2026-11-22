@@ -1,32 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronDown, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { AvatarLookPicker } from "@/components/dashboard/project/avatar-look-picker";
+import type { SettingTarget } from "@/components/dashboard/project/generation-panel";
 import { EnginePicker } from "@/components/dashboard/engine-picker";
 import { VoicePicker, type SelectedVoice } from "@/components/dashboard/video/voice-picker";
 import type { HeyGenEngine } from "@/lib/heygen";
 import { VIDEO_ASPECT_RATIOS, VIDEO_RESOLUTIONS } from "@/lib/validations/video";
-import {
-  HEX_COLOR,
-  MOTION_PROMPT_MAX,
-  resolveScene,
-  supportsBackgroundOverride,
-  type AvatarOption,
-  type ProjectDefaults,
-  type SceneData,
-} from "@/lib/projects/rules";
+import type { AvatarOption, ProjectDefaults } from "@/lib/projects/rules";
 import { ASPECT_RATIO_LABEL, avatarVoiceShortcuts } from "@/lib/video-display";
 import { cn } from "@/lib/utils";
-
-export type SceneSettingsPatch = Partial<
-  Pick<SceneData, "avatarId" | "avatarLookId" | "voiceId" | "voiceName" | "backgroundColor" | "motionPrompt">
->;
 
 export type ProjectSettingsPatch = Partial<
   Pick<ProjectDefaults, "defaultVoiceId" | "defaultVoiceName"> & {
@@ -50,12 +37,32 @@ const WATERMARK_POSITION_OPTIONS: { value: WatermarkPosition; label: string }[] 
   { value: "bottom_right", label: "Bottom right" },
 ];
 
-const selectClass =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
+const optionClass = (selected: boolean) =>
+  cn(
+    "rounded-md border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
+    selected ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
+  );
 
-export function SettingsPanel({
-  scene,
-  sceneNumber,
+// Where each jumpable setting lives in the DOM, kept as one map so the
+// highlight effect and the section ids below can't drift apart. "title" is
+// excluded: it lives in the page header (project-workspace.tsx's
+// jumpToSetting handles it directly).
+const SETTING_ELEMENT_ID: Record<Exclude<SettingTarget, "title">, string> = {
+  format: "project-format-setting",
+  resolution: "project-resolution-setting",
+  engine: "project-engine-setting",
+  voice: "project-voice-setting",
+  captions: "project-captions-setting",
+  watermark: "project-watermark-setting",
+};
+
+function highlightClass(active: boolean): string {
+  return cn("rounded-lg transition-all", active && "-m-2 bg-primary/5 p-2 ring-2 ring-primary ring-offset-2");
+}
+
+// Settings that apply to the whole video. Per-scene settings (avatar, look,
+// voice override, background) live in the scene editor.
+export function VideoSettingsPanel({
   defaults,
   avatars,
   aspectRatio,
@@ -65,12 +72,10 @@ export function SettingsPanel({
   watermarkUrl,
   watermarkPosition,
   disabled,
-  onSceneChange,
   onProjectChange,
   canViewCost,
+  highlight,
 }: {
-  scene: SceneData;
-  sceneNumber: number;
   defaults: ProjectDefaults;
   avatars: AvatarOption[];
   aspectRatio: string;
@@ -80,9 +85,13 @@ export function SettingsPanel({
   watermarkUrl: string | null;
   watermarkPosition: WatermarkPosition;
   disabled: boolean;
-  onSceneChange: (patch: SceneSettingsPatch) => void;
   onProjectChange: (patch: ProjectSettingsPatch) => void;
   canViewCost: boolean;
+  // Set briefly (see project-workspace.tsx's jumpToSetting) after the user
+  // clicks a row in GenerationPanel's summary or one of its checks. This
+  // panel scrolls to and flashes the matching control itself, since
+  // resolution/engine sit behind its own collapsed "Advanced" toggle.
+  highlight?: SettingTarget | null;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [watermarkBusy, setWatermarkBusy] = useState(false);
@@ -90,9 +99,28 @@ export function SettingsPanel({
   const [savedWatermarks, setSavedWatermarks] = useState<SavedWatermark[] | null>(null);
   const [deletingWatermarkId, setDeletingWatermarkId] = useState<string | null>(null);
 
-  // Loaded once per panel mount — the library only changes through this same
-  // panel's own upload/delete actions, both of which keep local state in
-  // sync, so there's no need to re-fetch on every render.
+  // Expand "Advanced" the moment a highlight for resolution or engine
+  // arrives. Adjusted during render rather than in an effect (React's
+  // "update state in response to a prop change" pattern).
+  const [lastHighlight, setLastHighlight] = useState(highlight);
+  if (highlight !== lastHighlight) {
+    setLastHighlight(highlight);
+    if (highlight === "resolution" || highlight === "engine") setAdvancedOpen(true);
+  }
+
+  // The DOM scroll is a real effect: it runs after the render above has
+  // committed, so a just-expanded section already exists.
+  useEffect(() => {
+    if (!highlight || highlight === "title") return;
+    const id = SETTING_ELEMENT_ID[highlight];
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [highlight]);
+
+  // Loaded once per panel mount. The library only changes through this
+  // panel's own upload/delete actions, which keep local state in sync.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/dashboard/media/watermarks")
@@ -140,191 +168,81 @@ export function SettingsPanel({
         return;
       }
       setSavedWatermarks((prev) => (prev ?? []).filter((w) => w.id !== saved.id));
-      // The deleted blob stops resolving, so clear it if it's the one in use
-      // rather than leaving the project pointed at a dead image.
-      if (watermarkUrl === saved.url) onProjectChange({ watermarkUrl: null });
     } catch {
       setWatermarkError("Couldn't delete that image.");
     } finally {
       setDeletingWatermarkId(null);
     }
   }
-  const resolved = resolveScene(scene, defaults);
-  const bgOn = scene.backgroundColor !== null;
-  const bgValid = scene.backgroundColor === null || HEX_COLOR.test(scene.backgroundColor);
-  const isAvatarScene = scene.kind === "AVATAR";
 
-  // Only certain HeyGen avatar types actually honour a background colour
-  // override — see SUPPORTED_BACKGROUND_AVATAR_TYPES's comment in
-  // lib/projects/rules.ts. Resolve the scene's current avatar+look to its
-  // avatarType the same way the rest of this panel resolves avatar/voice.
-  const resolvedAvatarForBg = avatars.find((a) => a.id === resolved.avatarId);
-  const resolvedLookForBg = resolvedAvatarForBg?.looks.find((l) => l.id === resolved.avatarLookId);
-  const resolvedAvatarType = resolvedLookForBg
-    ? resolvedLookForBg.avatarType
-    : (resolvedAvatarForBg?.looks.length ?? 0) === 0
-      ? (resolvedAvatarForBg?.avatarType ?? null)
-      : null;
-  const backgroundOverrideAvailable = isAvatarScene && supportsBackgroundOverride(resolvedAvatarType);
-  // Confirmed live against the provider: motion_prompt is schema-valid only
-  // on the Avatar V engine — sending it elsewhere is rejected. Not yet
-  // exercised on a real avatar, only fake ones.
-  const motionPromptAvailable = isAvatarScene && engine === "avatar_v";
-
-  const voiceShortcuts = avatarVoiceShortcuts(avatars);
-
-  const voiceValue: SelectedVoice = scene.voiceId ? { id: scene.voiceId, name: scene.voiceName ?? "Chosen voice" } : null;
   const projectVoiceValue: SelectedVoice = defaults.defaultVoiceId
     ? { id: defaults.defaultVoiceId, name: defaults.defaultVoiceName ?? "Chosen voice" }
     : null;
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Scene {sceneNumber} settings</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {isAvatarScene && (
-            <AvatarLookPicker
-              avatars={avatars}
-              avatarId={resolved.avatarId}
-              lookId={resolved.avatarLookId}
-              disabled={disabled}
-              onChange={(avatarId, lookId) => onSceneChange({ avatarId, avatarLookId: lookId })}
-            />
-          )}
-
-          <div className="space-y-2">
-            <VoicePicker
-              value={voiceValue}
-              disabled={disabled}
-              shortcuts={voiceShortcuts}
-              defaultLabel={
-                defaults.defaultVoiceId
-                  ? `Using project voice: ${defaults.defaultVoiceName ?? "Chosen voice"}`
-                  : isAvatarScene
-                    ? "Avatar's own voice (default)"
-                    : "No voice chosen"
-              }
-              onChange={(v) => onSceneChange({ voiceId: v?.id ?? null, voiceName: v?.name ?? null })}
-            />
-            {!isAvatarScene && (
-              <p className="text-xs text-muted-foreground">Only used if this scene has narration.</p>
-            )}
-            {!resolved.voiceInherited && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={disabled}
-                onClick={() => onSceneChange({ voiceId: null, voiceName: null })}
-              >
-                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                Reset to project voice
-              </Button>
-            )}
-          </div>
-
-          {backgroundOverrideAvailable && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Background colour</p>
-              {bgOn ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    aria-label="Pick a background colour"
-                    disabled={disabled}
-                    value={bgValid && scene.backgroundColor ? scene.backgroundColor : "#1f2937"}
-                    onChange={(e) => onSceneChange({ backgroundColor: e.target.value })}
-                    className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent p-0.5"
-                  />
-                  <input
-                    type="text"
-                    aria-label="Background colour hex value"
-                    disabled={disabled}
-                    value={scene.backgroundColor ?? ""}
-                    onChange={(e) => onSceneChange({ backgroundColor: e.target.value })}
-                    aria-invalid={!bgValid ? true : undefined}
-                    className={cn(selectClass, "w-28 font-mono")}
-                    maxLength={7}
-                  />
-                  <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onSceneChange({ backgroundColor: null })}>
-                    Remove
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">Using the avatar&apos;s own background.</p>
-                  <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onSceneChange({ backgroundColor: "#1f2937" })}>
-                    Set a colour
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {motionPromptAvailable && (
-            <div className="space-y-1.5">
-              <Label htmlFor="scene-motion-prompt">Motion and gestures (optional)</Label>
-              <Textarea
-                id="scene-motion-prompt"
-                value={scene.motionPrompt ?? ""}
-                maxLength={MOTION_PROMPT_MAX}
-                disabled={disabled}
-                onChange={(e) => onSceneChange({ motionPrompt: e.target.value || null })}
-                placeholder="e.g. gestures warmly while speaking, calm and steady"
-                className="min-h-20"
-              />
-              <p className="text-xs text-muted-foreground">
-                Describes how animated this scene looks. Only applies with the Avatar V engine, and hasn&apos;t been
-                tried against a real avatar yet, so treat it as experimental.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Project settings</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <p className="text-xs text-muted-foreground">
-            Scenes use the project voice unless you choose a different one for a scene. Format and quality apply to
-            the whole video.
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Video settings</CardTitle>
+        <CardDescription className="text-xs">These apply to the whole video.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div id={SETTING_ELEMENT_ID.format} className={cn("space-y-2", highlightClass(highlight === "format"))}>
+          <p className="text-sm font-medium" id="project-format">
+            Format
           </p>
+          <div role="group" aria-labelledby="project-format" className="grid grid-cols-2 gap-2">
+            {VIDEO_ASPECT_RATIOS.map((r) => (
+              <button
+                key={r}
+                type="button"
+                disabled={disabled}
+                aria-pressed={aspectRatio === r}
+                onClick={() => onProjectChange({ aspectRatio: r })}
+                className={optionClass(aspectRatio === r)}
+              >
+                {ASPECT_RATIO_LABEL[r]}
+              </button>
+            ))}
+          </div>
+        </div>
 
-          <label className="group/field flex items-start gap-2.5 text-sm">
-            <Checkbox
-              checked={captionsEnabled}
-              disabled={disabled}
-              onCheckedChange={(checked) => onProjectChange({ captionsEnabled: checked === true })}
-            />
-            <span>
-              <span className="block font-medium">Add captions</span>
-              <span className="block text-xs text-muted-foreground">
-                Burns readable subtitles into the video and gives you a downloadable subtitle file.
-              </span>
+        <label
+          id={SETTING_ELEMENT_ID.captions}
+          className={cn("group/field flex items-start gap-2.5 text-sm", highlightClass(highlight === "captions"))}
+        >
+          <Checkbox
+            checked={captionsEnabled}
+            disabled={disabled}
+            onCheckedChange={(checked) => onProjectChange({ captionsEnabled: checked === true })}
+          />
+          <span>
+            <span className="block font-medium">Add captions</span>
+            <span className="block text-xs text-muted-foreground">
+              Burns readable subtitles into the video and gives you a downloadable subtitle file.
             </span>
-          </label>
+          </span>
+        </label>
 
+        <div id={SETTING_ELEMENT_ID.voice} className={cn("space-y-1", highlightClass(highlight === "voice"))}>
           <VoicePicker
             value={projectVoiceValue}
             disabled={disabled}
-            shortcuts={voiceShortcuts}
+            shortcuts={avatarVoiceShortcuts(avatars)}
             onChange={(v) => onProjectChange({ defaultVoiceId: v?.id ?? null, defaultVoiceName: v?.name ?? null })}
           />
+          <p className="text-xs text-muted-foreground">Used by every scene that doesn&apos;t pick its own voice.</p>
+        </div>
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Watermark</p>
-            {watermarkUrl ? (
+        <div id={SETTING_ELEMENT_ID.watermark} className={cn("space-y-2", highlightClass(highlight === "watermark"))}>
+          <p className="text-sm font-medium">Watermark</p>
+          {watermarkUrl ? (
+            <>
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element -- Vercel Blob URL, same as image-crop-picker.tsx */}
                 <img
                   src={watermarkUrl}
                   alt="Watermark preview"
-                  className="h-10 w-10 rounded border border-input object-contain bg-muted p-1"
+                  className="h-10 w-10 rounded border border-input bg-muted object-contain p-1"
                 />
                 <Button
                   type="button"
@@ -336,8 +254,6 @@ export function SettingsPanel({
                   Remove
                 </Button>
               </div>
-            ) : null}
-            {watermarkUrl && (
               <div role="group" aria-label="Watermark position" className="grid grid-cols-2 gap-2">
                 {WATERMARK_POSITION_OPTIONS.map((opt) => (
                   <button
@@ -346,149 +262,128 @@ export function SettingsPanel({
                     disabled={disabled}
                     aria-pressed={watermarkPosition === opt.value}
                     onClick={() => onProjectChange({ watermarkPosition: opt.value })}
-                    className={cn(
-                      "rounded-md border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
-                      watermarkPosition === opt.value ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
-                    )}
+                    className={optionClass(watermarkPosition === opt.value)}
                   >
                     {opt.label}
                   </button>
                 ))}
               </div>
-            )}
-            {!watermarkUrl && (
-              <div className="space-y-3">
-                {savedWatermarks && savedWatermarks.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground">Saved watermarks</p>
-                    <div role="group" aria-label="Saved watermarks" className="flex flex-wrap gap-2">
-                      {savedWatermarks.map((w) => (
-                        <div key={w.id} className="group/saved relative">
-                          <button
-                            type="button"
-                            disabled={disabled || watermarkBusy}
-                            onClick={() => onProjectChange({ watermarkUrl: w.url })}
-                            className="flex h-12 w-12 items-center justify-center rounded border border-input bg-muted p-1 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-                            aria-label="Use this watermark"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element -- Vercel Blob URL, same as image-crop-picker.tsx */}
-                            <img src={w.url} alt="" className="h-full w-full object-contain" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={disabled || deletingWatermarkId === w.id}
-                            onClick={() => void deleteSavedWatermark(w)}
-                            aria-label="Delete this saved watermark"
-                            className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 group-hover/saved:opacity-100"
-                          >
-                            <Trash2 className="h-3 w-3" aria-hidden="true" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+            </>
+          ) : (
+            <div className="space-y-3">
+              {savedWatermarks && savedWatermarks.length > 0 && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="project-watermark-upload" className="sr-only">
-                    Upload a watermark image
-                  </Label>
-                  <input
-                    id="project-watermark-upload"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    disabled={disabled || watermarkBusy}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      e.target.value = "";
-                      if (file) void uploadWatermark(file);
-                    }}
-                    className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-transparent file:px-2.5 file:py-1 file:text-xs file:font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    PNG or JPEG, shown as a small corner mark on the video. Saved for reuse in later videos. Optional.
-                  </p>
+                  <p className="text-xs text-muted-foreground">Saved watermarks</p>
+                  <div role="group" aria-label="Saved watermarks" className="flex flex-wrap gap-2">
+                    {savedWatermarks.map((w) => (
+                      <div key={w.id} className="group/saved relative">
+                        <button
+                          type="button"
+                          disabled={disabled || watermarkBusy}
+                          onClick={() => onProjectChange({ watermarkUrl: w.url })}
+                          className="flex h-12 w-12 items-center justify-center rounded border border-input bg-muted p-1 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label="Use this watermark"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- Vercel Blob URL, same as image-crop-picker.tsx */}
+                          <img src={w.url} alt="" className="h-full w-full object-contain" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={disabled || deletingWatermarkId === w.id}
+                          onClick={() => void deleteSavedWatermark(w)}
+                          aria-label="Delete this saved watermark"
+                          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-input bg-background text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 group-hover/saved:opacity-100"
+                        >
+                          <Trash2 className="h-3 w-3" aria-hidden="true" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="project-watermark-upload" className="sr-only">
+                  Upload a watermark image
+                </Label>
+                <input
+                  id="project-watermark-upload"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  disabled={disabled || watermarkBusy}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void uploadWatermark(file);
+                  }}
+                  className="w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-transparent file:px-2.5 file:py-1 file:text-xs file:font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  PNG or JPEG, shown as a small corner mark on the video. Saved for reuse in later videos. Optional.
+                </p>
+              </div>
+            </div>
+          )}
+          {watermarkBusy && (
+            <p role="status" className="text-xs text-muted-foreground">
+              Uploading...
+            </p>
+          )}
+          {watermarkError && (
+            <p role="alert" className="text-xs text-destructive">
+              {watermarkError}
+            </p>
+          )}
+        </div>
+
+        <div className="border-t pt-4">
+          <button
+            type="button"
+            aria-expanded={advancedOpen}
+            aria-controls="project-advanced"
+            onClick={() => setAdvancedOpen((o) => !o)}
+            className="flex items-center gap-1.5 rounded-sm text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <ChevronDown className={cn("h-4 w-4 transition-transform", advancedOpen && "rotate-180")} aria-hidden="true" />
+            Advanced: resolution and engine
+          </button>
+          {advancedOpen && (
+            <div id="project-advanced" className="mt-4 space-y-5">
+              <div id={SETTING_ELEMENT_ID.resolution} className={cn("space-y-2", highlightClass(highlight === "resolution"))}>
+                <p className="text-sm font-medium" id="project-resolution">
+                  Resolution
+                </p>
+                <div role="group" aria-labelledby="project-resolution" className="grid grid-cols-3 gap-2">
+                  {[null, ...VIDEO_RESOLUTIONS]
+                    .filter((r) => r !== "4k" || engine === "avatar_iii")
+                    .map((r) => (
+                      <button
+                        key={r ?? "default"}
+                        type="button"
+                        disabled={disabled}
+                        aria-pressed={resolution === r}
+                        onClick={() => onProjectChange({ resolution: r })}
+                        className={optionClass(resolution === r)}
+                      >
+                        {r === "4k" ? "4K" : (r ?? "Standard")}
+                      </button>
+                    ))}
                 </div>
               </div>
-            )}
-            {watermarkBusy && <p className="text-xs text-muted-foreground">Uploading…</p>}
-            {watermarkError && <p className="text-xs text-destructive">{watermarkError}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-sm font-medium" id="project-format">
-              Format
-            </p>
-            <div role="group" aria-labelledby="project-format" className="grid grid-cols-2 gap-2">
-              {VIDEO_ASPECT_RATIOS.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  disabled={disabled}
-                  aria-pressed={aspectRatio === r}
-                  onClick={() => onProjectChange({ aspectRatio: r })}
-                  className={cn(
-                    "rounded-md border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
-                    aspectRatio === r ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
-                  )}
-                >
-                  {ASPECT_RATIO_LABEL[r]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="button"
-              aria-expanded={advancedOpen}
-              aria-controls="project-advanced"
-              onClick={() => setAdvancedOpen((o) => !o)}
-              className="flex items-center gap-1.5 rounded-sm text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <ChevronDown className={cn("h-4 w-4 transition-transform", advancedOpen && "rotate-180")} aria-hidden="true" />
-              Advanced settings
-            </button>
-            {advancedOpen && (
-              <div id="project-advanced" className="mt-4 space-y-5">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium" id="project-resolution">
-                    Resolution
-                  </p>
-                  <div role="group" aria-labelledby="project-resolution" className="grid grid-cols-3 gap-2">
-                    {[null, ...VIDEO_RESOLUTIONS]
-                      .filter((r) => r !== "4k" || engine === "avatar_iii")
-                      .map((r) => (
-                        <button
-                          key={r ?? "default"}
-                          type="button"
-                          disabled={disabled}
-                          aria-pressed={resolution === r}
-                          onClick={() => onProjectChange({ resolution: r })}
-                          className={cn(
-                            "rounded-md border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
-                            resolution === r ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
-                          )}
-                        >
-                          {r === "4k" ? "4K" : r ?? "Standard"}
-                        </button>
-                      ))}
-                  </div>
-                </div>
+              <div id={SETTING_ELEMENT_ID.engine} className={highlightClass(highlight === "engine")}>
                 <EnginePicker
                   value={engine}
                   onChange={(e) => {
-                    // 4K is only available on Avatar III (lib/heygen/pricing.ts)
-                    // — clear it when switching away so no unsupported
-                    // engine+resolution combination lingers.
+                    // 4K is only available on Avatar III (lib/heygen/pricing.ts),
+                    // so clear it when switching away.
                     onProjectChange(e !== "avatar_iii" && resolution === "4k" ? { engine: e, resolution: null } : { engine: e });
                   }}
                   canViewCost={canViewCost}
                 />
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

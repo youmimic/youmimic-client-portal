@@ -146,12 +146,21 @@ export type SceneIssue = {
     | "AVATAR_NOT_READY"
     | "BAD_COLOR"
     | "LONG_SCENE"
+    | "PLACEHOLDER_TEXT"
     | "NO_MEDIA"
     | "BAD_MEDIA_URL"
     | "NO_DURATION"
     | "NO_VOICE";
   message: string;
 };
+
+// Catches leftover placeholder text like "[name]" or "[Company]" — most
+// often a hand-written draft that was never filled in, or an AI-generated
+// script (see lib/ai/generate-script.ts) that left a bracket for a detail
+// it couldn't know. A real script essentially never contains a literal
+// square bracket, so this is a reliable enough signal for a warning without
+// needing a fixed word list.
+export const PLACEHOLDER_PATTERN = /\[[^[\]]+\]/;
 
 export function sceneLabel(scene: SceneData, number: number): string {
   return scene.title.trim() ? `Scene ${number} (${scene.title.trim()})` : `Scene ${number}`;
@@ -182,6 +191,17 @@ function pushScriptIssues(
       severity: "warning",
       code: "LONG_SCENE",
       message: `${label} is about ${formatDuration(seconds)}. For faster and more reliable results, consider splitting it into two scenes.`,
+    });
+  }
+
+  const placeholder = script.match(PLACEHOLDER_PATTERN);
+  if (placeholder) {
+    issues.push({
+      sceneId: scene.id,
+      sceneNumber: 0,
+      severity: "warning",
+      code: "PLACEHOLDER_TEXT",
+      message: `${label} still has placeholder text: "${placeholder[0]}". Replace it before generating.`,
     });
   }
 }

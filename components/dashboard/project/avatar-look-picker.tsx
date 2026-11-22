@@ -90,6 +90,68 @@ function AvatarGrid({
   );
 }
 
+// The chosen avatar's looks — pulled out so it can be rendered directly
+// under whichever avatar section (owned or shared) the selection actually
+// came from, rather than always after both sections regardless of which
+// one was picked from (confusing when someone picks an owned avatar but
+// has to scroll past the whole shared-avatars grid to reach its looks).
+function LookPicker({
+  selected,
+  activeLookId,
+  disabled,
+  onChange,
+  onSelect,
+}: {
+  selected: AvatarOption;
+  activeLookId: string | null;
+  disabled: boolean;
+  onChange: (avatarId: string, lookId: string | null) => void;
+  onSelect: () => void;
+}) {
+  if (selected.looks.length <= 1) return null;
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium" id="scene-look-label">
+        Look
+      </p>
+      <div role="group" aria-labelledby="scene-look-label" className="grid grid-cols-3 gap-2">
+        {selected.looks.map((look) => {
+          const isSelected = look.id === activeLookId;
+          return (
+            <button
+              key={look.id}
+              type="button"
+              disabled={disabled || !look.ready}
+              aria-pressed={isSelected}
+              onClick={() => {
+                onSelect();
+                onChange(selected.id, look.id);
+              }}
+              className={cn(
+                "space-y-1 rounded-lg border p-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed",
+                isSelected ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
+                !look.ready && "opacity-50",
+              )}
+            >
+              <span className="relative block">
+                <Thumb src={look.previewUrl} className="aspect-square w-full rounded-md" iconClass="h-7 w-7" />
+                {isSelected && (
+                  <span className="absolute right-1 top-1 rounded-full bg-primary p-0.5 text-primary-foreground">
+                    <Check className="h-3 w-3" aria-hidden="true" />
+                  </span>
+                )}
+              </span>
+              <span className="block truncate px-0.5 text-[11px] text-muted-foreground">
+                {look.ready ? look.name : `${look.name} (not ready)`}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Picks who speaks in a scene. Avatars are shown as cards with their own
 // thumbnail, and every look of the chosen avatar is shown as a thumbnail too,
 // so people choose by seeing rather than by reading names. Every scene has
@@ -142,50 +204,28 @@ export function AvatarLookPicker({
         </p>
       )}
 
+      {selected && !selected.isPublic && (
+        <LookPicker
+          selected={selected}
+          activeLookId={activeLookId}
+          disabled={disabled}
+          onChange={onChange}
+          onSelect={() => setIntroOpen(false)}
+        />
+      )}
+
       {shared.length > 0 && (
         <AvatarGrid groupKey="shared" label="Shared avatars" avatars={shared} avatarId={avatarId} disabled={disabled} onSelect={selectAvatar} />
       )}
 
-      {selected && selected.looks.length > 1 && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium" id="scene-look-label">
-            Look
-          </p>
-          <div role="group" aria-labelledby="scene-look-label" className="grid grid-cols-3 gap-2">
-            {selected.looks.map((look) => {
-              const isSelected = look.id === activeLookId;
-              return (
-                <button
-                  key={look.id}
-                  type="button"
-                  disabled={disabled || !look.ready}
-                  aria-pressed={isSelected}
-                  onClick={() => {
-                    setIntroOpen(false);
-                    onChange(selected.id, look.id);
-                  }}
-                  className={cn(
-                    "space-y-1 rounded-lg border p-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed",
-                    isSelected ? "border-primary ring-2 ring-primary" : "border-border hover:border-primary/50",
-                    !look.ready && "opacity-50",
-                  )}
-                >
-                  <span className="relative block">
-                    <Thumb src={look.previewUrl} className="aspect-square w-full rounded-md" iconClass="h-7 w-7" />
-                    {isSelected && (
-                      <span className="absolute right-1 top-1 rounded-full bg-primary p-0.5 text-primary-foreground">
-                        <Check className="h-3 w-3" aria-hidden="true" />
-                      </span>
-                    )}
-                  </span>
-                  <span className="block truncate px-0.5 text-[11px] text-muted-foreground">
-                    {look.ready ? look.name : `${look.name} (not ready)`}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {selected && selected.isPublic && (
+        <LookPicker
+          selected={selected}
+          activeLookId={activeLookId}
+          disabled={disabled}
+          onChange={onChange}
+          onSelect={() => setIntroOpen(false)}
+        />
       )}
 
       {activeLook?.videoUrl &&

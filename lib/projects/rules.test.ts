@@ -100,6 +100,24 @@ describe("validateScene", () => {
     const issues = validateScene(scene({ id: "s", orderIndex: 0, backgroundColor: "red" }), 1, defaults, avatars, "AVATAR_III");
     expect(issues.some((i) => i.code === "BAD_COLOR")).toBe(true);
   });
+
+  it("warns, but does not block, on leftover placeholder text", () => {
+    const issues = validateScene(
+      scene({ id: "s", orderIndex: 0, script: "Hey there, I'm [Your Name] and welcome to the show." }),
+      1,
+      defaults,
+      avatars,
+      "AVATAR_III",
+    );
+    const placeholder = issues.find((i) => i.code === "PLACEHOLDER_TEXT");
+    expect(placeholder?.severity).toBe("warning");
+    expect(placeholder?.message).toContain('"[Your Name]"');
+  });
+
+  it("does not flag a script with no brackets at all", () => {
+    const issues = validateScene(scene({ id: "s", orderIndex: 0, script: "Hey there, welcome to the show." }), 1, defaults, avatars, "AVATAR_III");
+    expect(issues.some((i) => i.code === "PLACEHOLDER_TEXT")).toBe(false);
+  });
 });
 
 describe("evaluateProject", () => {

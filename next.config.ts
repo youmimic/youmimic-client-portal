@@ -74,6 +74,13 @@ const CONTENT_SECURITY_POLICY = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // pdf-parse pulls in @napi-rs/canvas, a native (.node) addon — bundling it
+  // through webpack/Turbopack breaks its native binary loading ("Failed to
+  // load native binding", confirmed live in app/api/dashboard/projects/
+  // [projectId]/scenes/import-document/route.ts). Marking it external keeps
+  // it as a plain Node require at runtime instead, which is the documented
+  // fix for native-addon dependencies under Next.js.
+  serverExternalPackages: ["pdf-parse", "@napi-rs/canvas"],
   images: {
     // Off by default in Next.js since an SVG can embed a <script>; the
     // client-logo wall includes a vector logo (Tasmanian Leaders), so this

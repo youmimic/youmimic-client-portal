@@ -3,6 +3,7 @@ import { VIDEO_ASPECT_RATIOS, VIDEO_ENGINES, VIDEO_RESOLUTIONS, WATERMARK_POSITI
 import {
   HEX_COLOR,
   MAX_MEDIA_DURATION,
+  MAX_SCENES,
   MIN_MEDIA_DURATION,
   MOTION_PROMPT_MAX,
   PROJECT_TITLE_MAX,
@@ -77,6 +78,13 @@ export const reorderScenesSchema = z.object({
   expectedVersion,
   orderedSceneIds: z.array(id).min(1).max(50),
 });
+
+export const deleteScenesSchema = z
+  .object({
+    expectedVersion,
+    sceneIds: z.array(id).min(1).max(MAX_SCENES),
+  })
+  .strict();
 
 export const generateProjectSchema = z.object({ expectedVersion });
 
