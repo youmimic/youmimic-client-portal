@@ -235,6 +235,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
         // Best effort per page: a failed or unconfigured rewrite falls back to
         // that page's own text. Results keep page order whatever order the
         // calls finish in.
+        // Fallbacks are counted and the first reason is logged, so a missing
+        // OPENROUTER_API_KEY or a provider outage shows up in the logs and in
+        // the import notice instead of passing for a normal import.
+        let pagesWithoutAiScript = 0;
+        let aiFailureLogged = false;
         const prepareNarration = async (): Promise<string[][]> => {
           let done = 0;
           return mapWithConcurrency(pageTexts, AI_CONCURRENCY, async (text, i) => {
@@ -243,7 +248,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
             const result = await rewriteAsSpokenScript(text, contextFor(i), positionFor(i));
             done += 1;
             send({ type: "progress", message: `Prepared narration ${done} of ${textIndices.length}...` });
-            return result.ok ? result.scripts : [text];
+            if (result.ok) return result.scripts;
+            pagesWithoutAiScript += 1;
+            if (!aiFailureLogged) {
+              aiFailureLogged = true;
+              console.warn(`Document import: AI script rewrite failed, using the page's own text (${result.error})`);
+            }
+            return [text];
           });
         };
 
@@ -267,7 +278,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
           pagesSkipped: plan.pagesSkipped,
         });
         committed = true;
-        send({ type: "done", ...result, scenesNeedingNarration: plan.scenesNeedingNarration });
+        send({ type: "done", ...result, scenesNeedingNarration: plan.scenesNeedingNarration, pagesWithoutAiScript });
         // Replaced scenes may have left slide images nothing uses any more.
         if (replaceExisting) {
           await pruneUnusedSlideImages(userId).catch((e) => console.error("Slide image pruning failed:", e));

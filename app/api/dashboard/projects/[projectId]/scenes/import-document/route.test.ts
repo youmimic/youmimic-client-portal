@@ -155,10 +155,21 @@ describe("document import with slide images", () => {
     ]);
   });
 
-  it("falls back to the page's own text when the AI fails", async () => {
-    mocks.rewriteAsSpokenScript.mockResolvedValue({ ok: false, error: "down" });
-    await post(makePdf(["Raw slide text"]), PDF, { presentation: "SLIDE" });
+  it("falls back to the page's own text when the AI fails, and says so", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mocks.rewriteAsSpokenScript.mockResolvedValue({ ok: false, error: "AI script generation isn't configured yet." });
+    const { last } = await post(makePdf(["Raw slide text", "", "More text"]), PDF, { presentation: "SLIDE" });
     expect(mocks.importScenesFromDocument.mock.calls[0][3][0].script).toBe("Raw slide text");
+    // Counted per text page (the picture-only page isn't sent to the AI) and logged once.
+    expect(last).toMatchObject({ type: "done", pagesWithoutAiScript: 2 });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("isn't configured");
+    warn.mockRestore();
+  });
+
+  it("reports no fallback pages when the AI works", async () => {
+    const { last } = await post(makePdf(["One"]), PDF, { presentation: "SLIDE" });
+    expect(last).toMatchObject({ type: "done", pagesWithoutAiScript: 0 });
   });
 
   it("passes replace mode through and keeps existing scenes out of the limit", async () => {

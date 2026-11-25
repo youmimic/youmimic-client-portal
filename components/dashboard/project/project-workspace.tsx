@@ -462,6 +462,7 @@ export function ProjectWorkspace({
             const added = event.scenesAdded as number;
             const skipped = event.pagesSkipped as number;
             const needNarration = (event.scenesNeedingNarration as number | undefined) ?? 0;
+            const withoutAi = (event.pagesWithoutAiScript as number | undefined) ?? 0;
             setNotice(
               `${replaceExisting ? "Replaced the project with" : "Added"} ${added} ${added === 1 ? "scene" : "scenes"} from the file.` +
                 (needNarration > 0
@@ -469,6 +470,9 @@ export function ProjectWorkspace({
                   : "") +
                 (skipped > 0
                   ? ` ${skipped} ${skipped === 1 ? "page had" : "pages had"} no readable text and ${skipped === 1 ? "was" : "were"} skipped.`
+                  : "") +
+                (withoutAi > 0
+                  ? ` The script writer wasn't available for ${withoutAi} ${withoutAi === 1 ? "page" : "pages"}, so ${withoutAi === 1 ? "that scene uses" : "those scenes use"} the page's own text. Edit it, or use Generate with AI on the scene.`
                   : ""),
             );
             finished = true;
