@@ -96,8 +96,8 @@ export default async function VideoPage({
         }))}
         video={{
           id: video.id,
-          avatarId: video.avatar.id,
-          avatarName: video.avatar.name,
+          avatarId: video.avatar?.id ?? null,
+          avatarName: video.avatar?.name ?? null,
           title: video.title ?? "",
           script: video.script,
           status: video.status,

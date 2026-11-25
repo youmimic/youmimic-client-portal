@@ -1,64 +1,92 @@
 # Database Migration Workflow
 
-Prisma migrations for this project follow a strict PR-gate → CI-apply
-pattern. This document is the authoritative reference for the full flow.
+Prisma migrations follow a PR gate, then a **separate, explicit, approved
+production step**. Nothing migrates a database as a side effect of building,
+merging or deploying. This document is the authoritative reference.
 
 ---
 
 ## Quick reference
 
 ```
-Edit schema  →  migrate dev  →  commit both  →  PR guard  →  merge  →  GHA applies to prod
+Edit schema → create migration against an ISOLATED database → commit both
+  → PR guard + CI (no database) → merge → Vercel builds (no migrations)
+  → [approval] run "Apply Prisma Migrations (Production)" by hand
 ```
+
+Changed on 2026-11-23. Before that, `npm run build` ran `prisma migrate deploy`
+on every Vercel deployment (Preview included), and the production workflow ran
+automatically on every push to `main` that touched `prisma/migrations/`. A
+Preview build of any pushed branch could therefore migrate production if its
+`DIRECT_URL` pointed there. Both automatic paths were removed;
+`scripts/build-safety.test.ts` fails if either comes back.
 
 ---
 
 ## Local development
 
-### 1. Edit `prisma/schema.prisma`
+### ⚠ `.env` points at the live database
 
-Make your model or enum changes in the schema file.
+The local `.env` holds the production `DATABASE_URL` / `DIRECT_URL`, and
+`prisma.config.ts` loads `.env`. **Any Prisma CLI command run with the default
+config (`migrate dev`, `migrate deploy`, `migrate reset`, `db push`) targets
+production.** `migrate dev` can offer to reset the database. Don't run them.
 
-### 2. Generate the migration
-
-```bash
-npx prisma migrate dev --name <change-name>
-```
-
-Use a short, lowercase, underscore-separated name that describes the change:
+### Isolated local database (verified 2026-11-23)
 
 ```bash
-npx prisma migrate dev --name add_user_display_name
-npx prisma migrate dev --name add_booking_payment_status
-npx prisma migrate dev --name make_avatar_enterprise_nullable
+# Start a local Postgres (PGlite, no account, nothing leaves the machine)
+npx prisma dev --name youmimic-isolated --detach
+npx prisma dev ls     # shows its URL, by default on localhost:51214
+
+# prisma.isolated.config.ts never reads .env and refuses any non-localhost URL
+export ISOLATED_DATABASE_URL="postgres://postgres:postgres@localhost:51214/template1?sslmode=disable"
+npx prisma migrate status --config prisma.isolated.config.ts
+npx prisma migrate deploy --config prisma.isolated.config.ts
 ```
 
-This command:
-- Connects to the database via `DIRECT_URL` (from `.env`)
-- Generates a new timestamped directory under `prisma/migrations/`
-- Applies the migration to your local/dev database
-- Regenerates the Prisma TypeScript client
+### Creating a migration
 
-### 3. Commit both files together
+1. Edit `prisma/schema.prisma`.
+2. With the isolated database migrated to the current history, generate the
+   SQL from the difference and save it as a new migration:
 
-```bash
-git add prisma/schema.prisma
-git add prisma/migrations/
-git commit -m "migration: <change-name>"
-```
+   ```bash
+   mkdir -p prisma/migrations/<YYYYMMDDHHMMSS>_<change_name>
+   npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma \
+     --script --config prisma.isolated.config.ts \
+     > prisma/migrations/<YYYYMMDDHHMMSS>_<change_name>/migration.sql
+   npx prisma migrate deploy --config prisma.isolated.config.ts   # apply locally
+   npx prisma generate
+   ```
 
-**Never commit `schema.prisma` alone.** The PR guard will block the PR if you do.
+   Never edit a migration that has already been applied anywhere; add a new
+   one instead.
+3. Review the SQL: enum/type changes use `ALTER COLUMN TYPE ... USING`;
+   `NOT NULL` columns on non-empty tables have a backfill default; no
+   unintended `DROP`.
+4. Commit `schema.prisma` and the migration together.
 
-### 4. Review the generated SQL before pushing
+The app itself uses Neon's serverless driver, so it can't run against the
+local database. Service-level checks against it live in
+`lib/projects/isolated-db.integration.test.ts` (skipped unless
+`ISOLATED_DATABASE_URL` is set). Running the whole app on isolated data needs
+a Neon development branch (see `updates/2026-11-23-slide-narration-scenes.md`).
 
-Open `prisma/migrations/<timestamp>_<name>/migration.sql` and verify:
-- Enum/type conversions use `ALTER COLUMN TYPE ... USING` (not DROP+ADD)
-- `NOT NULL` columns on non-empty tables have a backfill `DEFAULT`
-- No unintended `DROP TABLE` or `DROP COLUMN` statements
+### Neon dev branch (full-app testing on a copy of production's schema)
 
-If Prisma generated destructive SQL (drop+recreate for an enum change), edit
-the migration file manually. See the June 2026 `BookingStatus` migration as an
-example of a safely handwritten enum conversion.
+1. In the Neon console, create a branch from production (schema-only, or with anonymised data).
+2. Put that branch's **pooled** connection string as `DATABASE_URL` in `.env.local`. The app reads it ahead of `.env`. At runtime only `DATABASE_URL` is used, so the app talks to the branch.
+3. Migrate with `prisma.branch.config.ts`. It reads only `.env.local`, uses the branch's direct endpoint, and refuses production's endpoint:
+
+   ```bash
+   npx prisma migrate status --config prisma.branch.config.ts
+   npx prisma migrate deploy --config prisma.branch.config.ts
+   ```
+
+   **Never** run plain `npx prisma migrate ...` here: `prisma.config.ts` reads `DIRECT_URL` from `.env`, which is production.
+4. A **schema-only** branch copies the tables but not the rows of `_prisma_migrations`, so every migration shows as pending. Before deploying, mark the migrations production has already applied as applied on the branch: `npx prisma migrate resolve --applied <name> --config prisma.branch.config.ts`, once per migration. Then `migrate deploy` applies only the new ones.
+5. Check: `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script --config prisma.branch.config.ts` should print an empty migration.
 
 ---
 
@@ -66,62 +94,57 @@ example of a safely handwritten enum conversion.
 
 `.github/workflows/check-prisma-migration.yml` runs on every PR to `main`.
 
-**It fails the PR if:**
-- `prisma/schema.prisma` changed in the PR, AND
-- nothing under `prisma/migrations/` changed in the same PR.
+**It fails the PR if** `prisma/schema.prisma` changed and nothing under
+`prisma/migrations/` changed in the same PR.
 
-**It warns (but does not block) if:**
-- A changed migration file contains `DROP TABLE`, `DROP COLUMN`, `DROP TYPE`,
-  `TRUNCATE`, or `DELETE FROM`.
+**It warns (but does not block) if** a changed migration file contains
+`DROP TABLE`, `DROP COLUMN`, `DROP TYPE`, `TRUNCATE`, or `DELETE FROM`.
 
-The guard has no false negatives: if a schema change ships without a migration,
-the check catches it before merge.
-
-**Edge case:** If you edit a comment or formatting in `schema.prisma` without
-any structural change, the guard will still fire. Options:
-- Add a trivial no-op migration (`-- no structural change`), or
-- Note in the PR description and have a reviewer approve manually.
+`.github/workflows/ci.yml` runs lint, typecheck, unit tests and a build with
+inert placeholder environment values. It never connects to a database.
 
 ---
 
-## Production deployment
+## Application builds never migrate
 
-### Primary path: GitHub Actions
+`package.json`: `"build": "prisma generate && next build"`.
 
-`.github/workflows/prisma-migrate-prod.yml` triggers on every push to `main`
-when any file under `prisma/migrations/**` changed.
+`prisma generate` only writes the TypeScript client from the schema; it
+doesn't connect to a database. Vercel, CI and local builds therefore compile
+only. Deploying new application code does **not** change the database
+schema: apply the matching migrations first (below), in the agreed order.
 
-Steps:
-1. `npm ci` — clean install
-2. `npx prisma generate` — regenerate TypeScript client
-3. `npx prisma migrate deploy` — apply all pending migrations
+Not verifiable from the repository: Vercel's dashboard **Build Command**
+setting. It must be `npm run build` (the default) or `next build`, never a
+command that includes `prisma migrate`.
 
-This is the **canonical** migration step. It runs before Vercel starts building
-the Next.js app (GHA and Vercel deployments are independent parallel processes,
-but `migrate deploy` is idempotent and safe to run from both).
+---
 
-### Fallback: Vercel build script (belt-and-suspenders)
+## Production migrations (explicit, approved release step)
 
-`package.json` currently has:
+`.github/workflows/prisma-migrate-prod.yml`, **"Apply Prisma Migrations
+(Production)". This changes the production database.** Never run it casually.
 
-```json
-"build": "prisma migrate deploy && next build"
-```
+- Started only by hand: GitHub → Actions → Apply Prisma Migrations
+  (Production) → Run workflow.
+- Runs only from the `main` branch.
+- Requires typing exactly `apply production migrations`.
+- Uses the `production` GitHub environment's `DIRECT_URL` secret. Add
+  required reviewers to that environment for a second approval (whether this
+  is configured isn't visible from the repository).
+- Steps: `npm ci` → `npx prisma generate` → `npx prisma migrate status`
+  (read-only, records what's pending) → `npx prisma migrate deploy`.
 
-This means every Vercel deploy also runs `prisma migrate deploy` as a fallback.
-If GHA applies the migration first, Vercel's run sees it already recorded and
-skips it. If GHA has not yet run (or failed), Vercel catches it.
-
-**This is intentional redundancy** for the current maturity of the project.
-When the team is confident that GHA is reliable and always runs before
-user-facing traffic, the build script can be simplified back to `next build`.
+Before running it: get explicit approval, confirm the pending list matches
+the release plan, and read the release checklist for that change.
 
 ### `migrate deploy` vs `migrate dev`
 
-| Command | Use case | Safe in CI/prod? |
+| Command | Use | Never against |
 |---|---|---|
-| `prisma migrate dev` | Local development only | No — prompts for confirmation, resets state |
-| `prisma migrate deploy` | CI and production | Yes — applies pending migrations, no prompts |
+| `prisma migrate dev` | Not used (it can reset a database) | Production |
+| `prisma migrate diff` | Generating SQL against the isolated database | (read-only) |
+| `prisma migrate deploy` | Isolated database (`--config prisma.isolated.config.ts`), or production via the manual workflow only | Production from a laptop |
 
 ---
 
@@ -133,44 +156,33 @@ user-facing traffic, the build script can be simplified back to `next build`.
 |---|---|---|
 | `DIRECT_URL` | Environments → production → Secrets | Direct (non-pooled) Neon connection string |
 
-To add: GitHub → Repository Settings → Environments → `production` →
-Environment secrets → New secret.
+### Vercel (runtime)
 
-### Vercel
-
-| Variable | Value |
+| Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Pooled Neon connection string (runtime) |
-| `DIRECT_URL` | Direct Neon connection string (build-time migrate deploy) |
+| `DATABASE_URL` | Pooled Neon connection used by the app at runtime |
+| `DIRECT_URL` | Read by `prisma.config.ts`. No longer needed by the build, which doesn't migrate |
 
-Both must be set in Vercel → Project Settings → Environment Variables for the
-**Production** environment.
-
-Also verify that Vercel's **Build Command** is `npm run build` (not `next build`
-directly), so the `package.json` script runs and `prisma migrate deploy` is
-included.
+Preview deployments must not use production values; see the isolated
+preview plan in `updates/2026-11-23-slide-narration-scenes.md`.
 
 ---
 
 ## Node version
 
-All GitHub Actions workflows use **Node 22**. Node 20 hit a deprecation issue
-in GitHub Actions runner images in mid-2025 and should not be used.
-
-The `node-version: 22` setting is explicit in every workflow step that uses
-`actions/setup-node@v4`.
+All GitHub Actions workflows use **Node 22**.
 
 ---
 
 ## What to do when a migration fails in production
 
-1. Check the GitHub Actions run log for the specific SQL error.
-2. Do **not** revert the migration file — the `_prisma_migrations` table may
-   have a partial record.
+1. Read the "Apply Prisma Migrations (Production)" run log for the SQL error.
+2. Don't revert or edit the migration file: `_prisma_migrations` may hold a
+   partial record.
 3. Fix the data or SQL issue, then:
-   - If the migration was never recorded: fix the SQL and re-deploy.
-   - If it was recorded as failed: use `prisma migrate resolve` to mark it
-     resolved after manual remediation.
-4. For handwritten enum-conversion migrations, always run the pre-flight
-   `DO $$ ... RAISE EXCEPTION` validation block pattern used in the June 2026
+   - never recorded: fix with a new migration and re-run the workflow;
+   - recorded as failed: `prisma migrate resolve` after manual remediation,
+     itself an approved production step.
+4. For handwritten enum conversions, use the pre-flight
+   `DO $$ ... RAISE EXCEPTION` validation pattern from the June 2026
    `add_booking_payment_status_and_payment_enums` migration.

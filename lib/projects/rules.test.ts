@@ -49,9 +49,14 @@ function scene(over: Partial<SceneData> & { id: string; orderIndex: number }): S
     mediaUrl: null,
     mediaDurationSeconds: null,
     motionPrompt: null,
+    slideImageId: null,
+    slideImage: null,
+    sourcePageNumber: null,
     ...over,
   };
 }
+
+const slide = { id: "img1", url: "https://blob.example/slides/u/abc.jpg", width: 1600, height: 900 };
 
 describe("resolveScene", () => {
   it("inherits the project avatar, look and voice when the scene sets none", () => {
@@ -99,6 +104,24 @@ describe("validateScene", () => {
   it("rejects an invalid background colour", () => {
     const issues = validateScene(scene({ id: "s", orderIndex: 0, backgroundColor: "red" }), 1, defaults, avatars, "AVATAR_III");
     expect(issues.some((i) => i.code === "BAD_COLOR")).toBe(true);
+  });
+
+  it("warns, but does not block, on leftover placeholder text", () => {
+    const issues = validateScene(
+      scene({ id: "s", orderIndex: 0, script: "Hey there, I'm [Your Name] and welcome to the show." }),
+      1,
+      defaults,
+      avatars,
+      "AVATAR_III",
+    );
+    const placeholder = issues.find((i) => i.code === "PLACEHOLDER_TEXT");
+    expect(placeholder?.severity).toBe("warning");
+    expect(placeholder?.message).toContain('"[Your Name]"');
+  });
+
+  it("does not flag a script with no brackets at all", () => {
+    const issues = validateScene(scene({ id: "s", orderIndex: 0, script: "Hey there, welcome to the show." }), 1, defaults, avatars, "AVATAR_III");
+    expect(issues.some((i) => i.code === "PLACEHOLDER_TEXT")).toBe(false);
   });
 });
 
@@ -280,7 +303,7 @@ describe("evaluateProject with image/video scenes", () => {
     const scenes = [scene({ id: "a", orderIndex: 0, kind: "IMAGE", script: "", mediaUrl: "https://example.com/a.png", mediaDurationSeconds: 5 })];
     const r = evaluateProject(scenes, defaults, avatars, "AVATAR_III");
     expect(r.canGenerate).toBe(false);
-    expect(r.projectIssue).toContain("avatar scene");
+    expect(r.projectIssue).toMatch(/at least one Avatar or Slide \+ narration scene/i);
     expect(r.summary).toBe(r.projectIssue);
   });
 
@@ -323,5 +346,94 @@ describe("supportsBackgroundOverride", () => {
     expect(supportsBackgroundOverride(null)).toBe(false);
     expect(supportsBackgroundOverride(undefined)).toBe(false);
     expect(supportsBackgroundOverride("something_new")).toBe(false);
+  });
+});
+
+describe("Slide + narration scenes", () => {
+  const noDefaults: ProjectDefaults = { defaultAvatarId: null, defaultAvatarLookId: null, defaultVoiceId: null, defaultVoiceName: null };
+  const codes = (s: SceneData, d: ProjectDefaults = defaults) => validateScene(s, 1, d, avatars, "AVATAR_III").map((i) => i.code);
+
+  it("is ready with a slide image, narration and a voice, and needs no avatar", () => {
+    expect(codes(scene({ id: "s", orderIndex: 0, kind: "SLIDE", slideImageId: slide.id, slideImage: slide, voiceId: "v1" }), noDefaults)).toEqual([]);
+  });
+
+  it("blocks generation without a slide image, and never asks for an avatar", () => {
+    const c = codes(scene({ id: "s", orderIndex: 0, kind: "SLIDE", voiceId: "v1" }), noDefaults);
+    expect(c).toContain("NO_SLIDE");
+    expect(c).not.toContain("NO_AVATAR");
+  });
+
+  it("needs narration", () => {
+    expect(codes(scene({ id: "s", orderIndex: 0, kind: "SLIDE", slideImage: slide, slideImageId: slide.id, script: "  " }))).toContain("EMPTY_SCRIPT");
+  });
+
+  it("falls back to the scene's avatar's own voice, else needs a voice", () => {
+    const withAvatar = scene({ id: "s", orderIndex: 0, kind: "SLIDE", slideImage: slide, slideImageId: slide.id, avatarId: "a1" });
+    expect(codes(withAvatar, noDefaults)).not.toContain("NO_VOICE");
+    const noVoice = scene({ id: "s", orderIndex: 0, kind: "SLIDE", slideImage: slide, slideImageId: slide.id });
+    expect(codes(noVoice, noDefaults)).toContain("NO_VOICE");
+  });
+
+  it("keeps the placeholder and long-scene warnings", () => {
+    const c = codes(scene({ id: "s", orderIndex: 0, kind: "SLIDE", slideImage: slide, slideImageId: slide.id, script: "Hi [Name]" }));
+    expect(c).toContain("PLACEHOLDER_TEXT");
+  });
+
+  it("allows a video made only of narrated Slide scenes, with no avatar anywhere", () => {
+    const noDefaults: ProjectDefaults = { defaultAvatarId: null, defaultAvatarLookId: null, defaultVoiceId: "v1", defaultVoiceName: "Emma" };
+    const r = evaluateProject(
+      [
+        scene({ id: "s1", orderIndex: 0, kind: "SLIDE", slideImage: slide, slideImageId: slide.id }),
+        scene({ id: "s2", orderIndex: 1, kind: "SLIDE", slideImage: slide, slideImageId: slide.id }),
+      ],
+      noDefaults,
+      avatars,
+      "AVATAR_III",
+    );
+    expect(r.projectIssue).toBeNull();
+    expect(r.canGenerate).toBe(true);
+  });
+
+  it("still blocks a slides-only video until every slide has narration, a voice and an image", () => {
+    const noDefaults: ProjectDefaults = { defaultAvatarId: null, defaultAvatarLookId: null, defaultVoiceId: null, defaultVoiceName: null };
+    const r = evaluateProject(
+      [scene({ id: "s1", orderIndex: 0, kind: "SLIDE", script: "", slideImageId: null })],
+      noDefaults,
+      avatars,
+      "AVATAR_III",
+    );
+    expect(r.canGenerate).toBe(false);
+    expect(r.issues.map((i) => i.code).sort()).toEqual(["EMPTY_SCRIPT", "NO_SLIDE"]);
+  });
+
+  it("keeps mixed Avatar and Slide projects working", () => {
+    const mixed = evaluateProject(
+      [scene({ id: "a", orderIndex: 0 }), scene({ id: "s", orderIndex: 1, kind: "SLIDE", slideImage: slide, slideImageId: slide.id })],
+      defaults,
+      avatars,
+      "AVATAR_III",
+    );
+    expect(mixed.canGenerate).toBe(true);
+  });
+
+  it("accepts SLIDE and a slide image id in scene updates", () => {
+    expect(updateSceneSchema.safeParse({ expectedVersion: 1, kind: "SLIDE", slideImageId: "img1" }).success).toBe(true);
+    expect(updateSceneSchema.safeParse({ expectedVersion: 1, slideImageId: null }).success).toBe(true);
+  });
+});
+
+describe("content hash and slides", () => {
+  const base = { ...defaults, aspectRatio: "16:9", resolution: null, engine: "AVATAR_III", captionsEnabled: false };
+
+  it("doesn't change for existing (non-slide) projects", () => {
+    const s = scene({ id: "a", orderIndex: 0 });
+    const withSlideField = { ...s, slideImageId: "img1", slideImage: slide };
+    expect(projectContentHash(base, [s])).toBe(projectContentHash(base, [withSlideField]));
+  });
+
+  it("changes when a slide scene shows a different slide", () => {
+    const s1 = scene({ id: "a", orderIndex: 0, kind: "SLIDE", slideImageId: "img1", slideImage: slide });
+    const s2 = { ...s1, slideImageId: "img2" };
+    expect(projectContentHash(base, [s1])).not.toBe(projectContentHash(base, [s2]));
   });
 });

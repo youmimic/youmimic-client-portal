@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sceneActionSchema, updateSceneSchema } from "@/lib/projects/schemas";
 import { deleteScene, updateScene } from "@/lib/projects/service";
 import { errorResponse, readBody, requireUserId } from "@/lib/projects/http";
+import { pruneUnusedSlideImagesQuietly } from "@/lib/slides/images";
 
 type Ctx = { params: Promise<{ projectId: string; sceneId: string }> };
 
@@ -14,7 +15,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if ("response" in body) return body.response;
 
   try {
-    return NextResponse.json(await updateScene(userId, projectId, sceneId, body.data));
+    const result = await updateScene(userId, projectId, sceneId, body.data);
+    // A replaced slide may no longer be shown anywhere.
+    if (body.data.slideImageId !== undefined) await pruneUnusedSlideImagesQuietly(userId);
+    return NextResponse.json(result);
   } catch (err) {
     return errorResponse(err);
   }
@@ -29,7 +33,9 @@ export async function DELETE(req: Request, { params }: Ctx) {
   if ("response" in body) return body.response;
 
   try {
-    return NextResponse.json(await deleteScene(userId, projectId, sceneId, body.data.expectedVersion));
+    const result = await deleteScene(userId, projectId, sceneId, body.data.expectedVersion);
+    await pruneUnusedSlideImagesQuietly(userId);
+    return NextResponse.json(result);
   } catch (err) {
     return errorResponse(err);
   }

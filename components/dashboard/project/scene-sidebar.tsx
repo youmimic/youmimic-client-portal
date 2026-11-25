@@ -1,19 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Copy,
+  FileUp,
   GripVertical,
   Image as ImageIcon,
+  Loader2,
   Plus,
+  Presentation,
   Trash2,
+  UserCircle2,
   Video as VideoIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Thumb } from "@/components/dashboard/project/avatar-look-picker";
 import {
   MAX_SCENES,
@@ -37,26 +42,30 @@ const READINESS_LABEL: Record<SceneReadiness, string> = {
 // next/image (which only serves pre-configured hostnames) — a plain tag with
 // an icon fallback if it fails to load. A video scene shows an icon only:
 // grabbing a frame from an arbitrary clip isn't worth the cost in a list.
-function SceneMediaThumb({ kind, mediaUrl }: { kind: "IMAGE" | "VIDEO"; mediaUrl: string | null }) {
+// A slide is shown whole (letterboxed on black, as in the video) rather than
+// cropped like a photo, so it stays recognisable at thumbnail size.
+function SceneMediaThumb({ kind, mediaUrl }: { kind: "IMAGE" | "VIDEO" | "SLIDE"; mediaUrl: string | null }) {
+  const Icon = kind === "VIDEO" ? VideoIcon : kind === "SLIDE" ? Presentation : ImageIcon;
   if (kind === "VIDEO" || !mediaUrl) {
     return (
       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-muted ring-1 ring-foreground/10">
-        {kind === "VIDEO" ? (
-          <VideoIcon className="h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
-        ) : (
-          <ImageIcon className="h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
-        )}
+        <Icon className="h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
       </span>
     );
   }
   return (
-    <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted ring-1 ring-foreground/10">
-      <ImageIcon className="absolute h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
+    <span
+      className={cn(
+        "relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md ring-1 ring-foreground/10",
+        kind === "SLIDE" ? "bg-black" : "bg-muted",
+      )}
+    >
+      <Icon className="absolute h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={mediaUrl}
         alt=""
-        className="relative h-full w-full object-cover"
+        className={cn("relative h-full w-full", kind === "SLIDE" ? "object-contain" : "object-cover")}
         onError={(e) => {
           e.currentTarget.style.display = "none";
         }}
@@ -78,10 +87,20 @@ export function SceneSidebar({
   busy,
   onSelect,
   onAdd,
+  onImportDocument,
+  importingDocument,
+  importProgress,
+  onCancelImport,
   onDuplicate,
   onDelete,
   onMove,
   onReorder,
+  selectedSceneIds,
+  onToggleSceneSelected,
+  onToggleSelectAll,
+  onClearSelection,
+  onDeleteSelected,
+  onSetPresentation,
 }: {
   scenes: SceneData[];
   activeSceneId: string;
@@ -93,14 +112,38 @@ export function SceneSidebar({
   busy: boolean;
   onSelect: (id: string) => void;
   onAdd: () => void;
+  onImportDocument: (file: File) => void;
+  importingDocument: boolean;
+  // Live status text streamed from the import route (e.g. "Rewrote slide 3
+  // of 7 with AI...") — null before the stream has sent anything yet.
+  importProgress: string | null;
+  // Aborts the in-flight import request — one AI call per slide can take a
+  // while, so someone who started on the wrong file shouldn't be stuck
+  // waiting it out.
+  onCancelImport: () => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void;
   onReorder: (orderedIds: string[]) => void;
+  // Ticked scenes. While the open scene is one of several, its avatar, look
+  // and voice changes in Scene settings apply to all of them (see
+  // ProjectWorkspace's editSceneSettings).
+  selectedSceneIds: Set<string>;
+  onToggleSceneSelected: (id: string) => void;
+  onToggleSelectAll: () => void;
+  onClearSelection: () => void;
+  // Asks for confirmation first (the dialog lives in ProjectWorkspace).
+  onDeleteSelected: () => void;
+  // Shows every ticked scene as Avatar or as Slide + narration. The
+  // workspace explains first if some ticked scenes have no slide image.
+  onSetPresentation: (kind: "AVATAR" | "SLIDE") => void;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const atLimit = scenes.length >= MAX_SCENES;
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const allSelected = scenes.length > 0 && selectedSceneIds.size === scenes.length;
+  const someSelected = selectedSceneIds.size > 0 && !allSelected;
 
   function handleDrop(targetId: string) {
     if (!dragId || dragId === targetId) return;
@@ -117,11 +160,65 @@ export function SceneSidebar({
   return (
     <nav aria-label="Scenes" className="space-y-2">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Scenes</h2>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={allSelected}
+            indeterminate={someSelected}
+            disabled={disabled || busy || scenes.length === 0}
+            onCheckedChange={onToggleSelectAll}
+            aria-label={allSelected ? "Deselect all scenes" : "Select all scenes"}
+          />
+          <h2 className="text-sm font-semibold">Scenes</h2>
+        </div>
         <span className="text-xs text-muted-foreground">
           {scenes.length} of {MAX_SCENES}
         </span>
       </div>
+
+      {selectedSceneIds.size > 0 && (
+        <div className="space-y-1">
+          <div className="rounded-md bg-primary/10 py-1 pl-2.5 pr-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium">{selectedSceneIds.size} selected</span>
+              <div className="flex items-center gap-0.5">
+                <Button type="button" variant="ghost" size="xs" onClick={onClearSelection}>
+                  Clear
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="text-destructive hover:text-destructive"
+                  disabled={disabled || busy || allSelected}
+                  onClick={onDeleteSelected}
+                  aria-label={`Delete ${selectedSceneIds.size} selected ${selectedSceneIds.size === 1 ? "scene" : "scenes"}`}
+                >
+                  <Trash2 aria-hidden="true" />
+                  Delete
+                </Button>
+              </div>
+            </div>
+            <div role="group" aria-label="Show the selected scenes as" className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">Show as</span>
+              <div className="flex items-center gap-0.5">
+                <Button type="button" variant="ghost" size="xs" disabled={disabled || busy} onClick={() => onSetPresentation("AVATAR")}>
+                  <UserCircle2 aria-hidden="true" />
+                  Avatar
+                </Button>
+                <Button type="button" variant="ghost" size="xs" disabled={disabled || busy} onClick={() => onSetPresentation("SLIDE")}>
+                  <Presentation aria-hidden="true" />
+                  Slide
+                </Button>
+              </div>
+            </div>
+          </div>
+          {allSelected && (
+            <p className="px-1 text-[11px] text-muted-foreground">
+              A video needs at least one scene, so untick one to delete the rest.
+            </p>
+          )}
+        </div>
+      )}
 
       <ol className="space-y-1.5">
         {scenes.map((scene, index) => {
@@ -145,6 +242,10 @@ export function SceneSidebar({
                   ? `${avatar.name} · ${look.name}`
                   : avatar.name
                 : "No avatar"
+              : scene.kind === "SLIDE"
+                ? scene.slideImage
+                  ? `Slide${scene.sourcePageNumber ? ` (page ${scene.sourcePageNumber})` : ""} + narration`
+                  : "Slide, no image yet"
               : scene.kind === "IMAGE"
                 ? scene.script.trim()
                   ? "Image, narrated"
@@ -190,6 +291,14 @@ export function SceneSidebar({
               )}
             >
               <div className="flex items-start gap-1 p-2">
+                <span className="mt-1.5 shrink-0" draggable={false}>
+                  <Checkbox
+                    checked={selectedSceneIds.has(scene.id)}
+                    disabled={disabled || busy}
+                    onCheckedChange={() => onToggleSceneSelected(scene.id)}
+                    aria-label={`Select scene ${index + 1}`}
+                  />
+                </span>
                 <span
                   aria-hidden="true"
                   className={cn(
@@ -213,6 +322,8 @@ export function SceneSidebar({
                       className="h-12 w-12 rounded-md ring-1 ring-foreground/10"
                       iconClass="h-6 w-6"
                     />
+                  ) : scene.kind === "SLIDE" ? (
+                    <SceneMediaThumb kind="SLIDE" mediaUrl={scene.slideImage?.url ?? null} />
                   ) : (
                     <SceneMediaThumb kind={scene.kind} mediaUrl={scene.mediaUrl} />
                   )}
@@ -222,12 +333,12 @@ export function SceneSidebar({
                         {index + 1}. {scene.title.trim() || "Untitled scene"}
                       </span>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {seconds === null ? "—" : seconds > 0 ? formatDuration(seconds) : "0s"}
+                        {seconds === null ? "-" : seconds > 0 ? formatDuration(seconds) : "0s"}
                       </span>
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                       {preview ||
-                        (scene.kind === "AVATAR"
+                        (scene.kind === "AVATAR" || scene.kind === "SLIDE"
                           ? "No script yet"
                           : scene.kind === "IMAGE"
                             ? "Silent title card"
@@ -326,6 +437,38 @@ export function SceneSidebar({
         <Plus className="h-4 w-4" aria-hidden="true" />
         Add scene
       </Button>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        disabled={disabled || busy || importingDocument || atLimit}
+        onClick={() => pdfInputRef.current?.click()}
+      >
+        <FileUp className="h-4 w-4" aria-hidden="true" />
+        {importingDocument ? "Importing…" : "Import from PDF or PowerPoint"}
+      </Button>
+      {importingDocument && (
+        <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+          <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden="true" />
+            {importProgress ?? "Reading your file..."}
+          </p>
+          <Button type="button" variant="outline" size="xs" onClick={onCancelImport}>
+            Cancel import
+          </Button>
+        </div>
+      )}
+      <input
+        ref={pdfInputRef}
+        type="file"
+        accept="application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx"
+        className="sr-only"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) onImportDocument(file);
+        }}
+      />
       {atLimit && (
         <p className="text-xs text-muted-foreground">
           You have reached the limit of {MAX_SCENES} scenes.

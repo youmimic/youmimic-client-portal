@@ -3,9 +3,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Check, ChevronDown, Loader2, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  Copy,
+  Info,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  RefreshCw,
+  Trash2,
+  TriangleAlert,
+  X,
+} from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { clearPendingDocumentImport, peekPendingDocumentImport } from "@/lib/projects/pending-import";
 import {
   Dialog,
   DialogContent,
@@ -14,21 +35,29 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { GenerationPanel, type GenerateError } from "@/components/dashboard/project/generation-panel";
+import { GenerationPanel, type GenerateError, type SettingTarget } from "@/components/dashboard/project/generation-panel";
 import { FinalView } from "@/components/dashboard/project/final-view";
 import { ProjectStatusBadge } from "@/components/dashboard/project/project-status-badge";
-import { SceneEditor } from "@/components/dashboard/project/scene-editor";
+import { SceneEditor, type SceneSettingsPatch } from "@/components/dashboard/project/scene-editor";
 import { SceneSidebar } from "@/components/dashboard/project/scene-sidebar";
 import { Thumb } from "@/components/dashboard/project/avatar-look-picker";
 import {
-  SettingsPanel,
+  VideoSettingsPanel,
   type ProjectSettingsPatch,
-  type SceneSettingsPatch,
   type WatermarkPosition,
 } from "@/components/dashboard/project/settings-panel";
 import type { HeyGenEngine } from "@/lib/heygen";
 import { moveItem } from "@/lib/projects/ordering";
-import { evaluateProject, PROJECT_TITLE_MAX, resolveScene, type AvatarOption, type SceneData } from "@/lib/projects/rules";
+import { cancelledImportMessage } from "@/lib/projects/import-outcome";
+import {
+  evaluateProject,
+  PROJECT_TITLE_MAX,
+  resolveScene,
+  sceneLabel,
+  type AvatarOption,
+  type SceneData,
+  type SlideImageData,
+} from "@/lib/projects/rules";
 import type { ProjectView } from "@/lib/projects/service";
 import { formatCents, formatDuration, type VideoEngineValue } from "@/lib/video-display";
 import { cn } from "@/lib/utils";
@@ -95,6 +124,16 @@ export function ProjectWorkspace({
     () => evaluateProject(project.scenes, project.defaults, avatars, project.engine as VideoEngineValue),
     [project.scenes, project.defaults, project.engine, avatars],
   );
+
+  // Scenes ticked in the sidebar for bulk avatar/look/voice changes.
+  const [rawSelectedSceneIds, setSelectedSceneIds] = useState<Set<string>>(new Set());
+  // Filtered against the live scene list on every render, so an id for a
+  // scene that's since been deleted (or replaced by an import) never shows
+  // as selected or receives a bulk change.
+  const selectedSceneIds = useMemo(() => {
+    const valid = new Set(project.scenes.map((s) => s.id));
+    return new Set([...rawSelectedSceneIds].filter((id) => valid.has(id)));
+  }, [rawSelectedSceneIds, project.scenes]);
 
   // ---- Saving ---------------------------------------------------------
 
@@ -228,8 +267,32 @@ export function ProjectWorkspace({
     queuePatch(`s:${sceneId}`, patch as Patch);
   }
 
+  // When the scene being edited is one of several ticked scenes, its avatar,
+  // look and voice go to every ticked scene. Each one still saves through
+  // the normal per-scene autosave queue, which runs saves one at a time.
   function editSceneSettings(sceneId: string, patch: SceneSettingsPatch) {
-    editScene(sceneId, patch);
+    if (!(selectedSceneIds.size > 1 && selectedSceneIds.has(sceneId))) {
+      editScene(sceneId, patch);
+      return;
+    }
+    const { avatarId, avatarLookId, voiceId, voiceName, ...own } = patch;
+    const shared = Object.fromEntries(
+      Object.entries({ avatarId, avatarLookId, voiceId, voiceName }).filter(([, v]) => v !== undefined),
+    ) as SceneSettingsPatch;
+    if (Object.keys(shared).length > 0) {
+      for (const id of selectedSceneIds) editScene(id, shared);
+    }
+    if (Object.keys(own).length > 0) editScene(sceneId, own);
+  }
+
+  // The preview needs the image's URL locally, but only its id is saved: the
+  // server re-checks that the image belongs to this user.
+  function setSceneSlide(sceneId: string, image: SlideImageData) {
+    setProject((p) => ({
+      ...p,
+      scenes: p.scenes.map((s) => (s.id === sceneId ? { ...s, slideImageId: image.id, slideImage: image } : s)),
+    }));
+    queuePatch(`s:${sceneId}`, { slideImageId: image.id });
   }
 
   function editProject(patch: ProjectSettingsPatch & { title?: string }) {
@@ -257,7 +320,11 @@ export function ProjectWorkspace({
   async function structural(
     request: (version: number) => Promise<Response>,
     after: (json: Record<string, unknown>) => Promise<void> | void,
-    announce: string,
+    // A plain string for the common case; a function when the message
+    // depends on what the response actually says (e.g. how many scenes a
+    // PDF import added) — resolved after `after` runs, so it can't be
+    // computed up front like the static callers' strings are.
+    announce: string | ((json: Record<string, unknown>) => string),
   ) {
     setBusy(true);
     try {
@@ -274,7 +341,7 @@ export function ProjectWorkspace({
         return;
       }
       await after(json);
-      setNotice(announce);
+      setNotice(typeof announce === "function" ? announce(json) : announce);
     } catch {
       setNotice("We couldn't reach the server. Check your connection and try again.");
     } finally {
@@ -299,6 +366,150 @@ export function ProjectWorkspace({
       },
       "Scene added.",
     );
+  }
+
+  const [importingDocument, setImportingDocument] = useState(false);
+  // Live status text streamed from the import route (one AI rewrite call
+  // per page/slide makes this slow enough that a plain spinner isn't
+  // enough — see the route's own comment). Bespoke, not routed through
+  // structural() above, since that helper assumes one JSON response, not a
+  // stream of progress events ending in its own "done"/"error" line.
+  const [importProgress, setImportProgress] = useState<string | null>(null);
+  // A picked file waits here until the user says whether to add to the
+  // current scenes or replace them entirely — asked every time rather than
+  // assumed, since "replace" deletes existing scenes and can't be undone.
+  // Starts with a document picked on the dashboard home before this project
+  // existed, so it opens straight into this dialog.
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(() => peekPendingDocumentImport(initial.id));
+  // Slide + narration is the default for document import, but only PDFs can
+  // become slide images, so a PowerPoint always imports as Avatar scenes and
+  // the dialog says why.
+  const [importPresentation, setImportPresentation] = useState<"SLIDE" | "AVATAR">("SLIDE");
+  const importIsPdf = pendingImportFile?.type === "application/pdf";
+  const importPresentationChoice = importIsPdf ? importPresentation : "AVATAR";
+  // Lets cancelImport() below abort the in-flight fetch — the import can
+  // take a while (one AI call per slide), so someone who started it on the
+  // wrong file shouldn't be stuck waiting it out.
+  const importAbortRef = useRef<AbortController | null>(null);
+
+  // Hand-over done (it's in state above): forget it so a later visit doesn't reopen it.
+  useEffect(() => clearPendingDocumentImport(projectId), [projectId]);
+
+  function cancelImport() {
+    importAbortRef.current?.abort();
+  }
+
+  async function runImportDocument(file: File, replaceExisting: boolean, presentation: "SLIDE" | "AVATAR") {
+    setPendingImportFile(null);
+    setImportingDocument(true);
+    setImportProgress(null);
+    setBusy(true);
+    const controller = new AbortController();
+    importAbortRef.current = controller;
+    let versionBefore = versionRef.current;
+    try {
+      if (!(await settle())) return;
+      versionBefore = versionRef.current;
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("expectedVersion", String(versionRef.current));
+      formData.append("replaceExisting", String(replaceExisting));
+      formData.append("presentation", presentation);
+      const res = await fetch(`/api/dashboard/projects/${projectId}/scenes/import-document`, {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string; code?: string };
+        if (json.code === "VERSION_CONFLICT" || json.code === "GENERATING") {
+          setSaveError(messageFor(res.status, json));
+          setSaveState("conflict");
+        } else {
+          setNotice(messageFor(res.status, json));
+        }
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setNotice("We couldn't reach the server. Check your connection and try again.");
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finished = false;
+
+      while (!finished) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+          const line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+          if (!line.trim()) continue;
+
+          const event = JSON.parse(line) as Record<string, unknown> & { type: string };
+          if (event.type === "progress") {
+            setImportProgress(event.message as string);
+          } else if (event.type === "done") {
+            await reload((event.firstSceneId as string | null) ?? undefined);
+            const added = event.scenesAdded as number;
+            const skipped = event.pagesSkipped as number;
+            const needNarration = (event.scenesNeedingNarration as number | undefined) ?? 0;
+            const withoutAi = (event.pagesWithoutAiScript as number | undefined) ?? 0;
+            setNotice(
+              `${replaceExisting ? "Replaced the project with" : "Added"} ${added} ${added === 1 ? "scene" : "scenes"} from the file.` +
+                (needNarration > 0
+                  ? ` ${needNarration} ${needNarration === 1 ? "page has" : "pages have"} no text to read from, so write narration for ${needNarration === 1 ? "it" : "them"} before generating.`
+                  : "") +
+                (skipped > 0
+                  ? ` ${skipped} ${skipped === 1 ? "page had" : "pages had"} no readable text and ${skipped === 1 ? "was" : "were"} skipped.`
+                  : "") +
+                (withoutAi > 0
+                  ? ` The script writer wasn't available for ${withoutAi} ${withoutAi === 1 ? "page" : "pages"}, so ${withoutAi === 1 ? "that scene uses" : "those scenes use"} the page's own text. Edit it, or use Generate with AI on the scene.`
+                  : ""),
+            );
+            finished = true;
+            break;
+          } else if (event.type === "error") {
+            if (event.code === "VERSION_CONFLICT" || event.code === "GENERATING") {
+              setSaveError(event.message as string);
+              setSaveState("conflict");
+            } else {
+              setNotice((event.message as string) ?? "Something went wrong.");
+            }
+            finished = true;
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // A save that had already started still completes, so reload (twice,
+        // a moment apart, in case it was still finishing) and word the
+        // message on what the project now holds. See cancelledImportMessage.
+        setImportProgress("Checking whether anything was saved...");
+        const first = await reload();
+        await new Promise((resolve) => window.setTimeout(resolve, 2500));
+        const second = await reload();
+        setNotice(
+          cancelledImportMessage({ reloaded: first && second, versionBefore, versionAfter: versionRef.current }),
+        );
+      } else {
+        setNotice("We couldn't reach the server. Check your connection and try again.");
+      }
+    } finally {
+      importAbortRef.current = null;
+      setBusy(false);
+      setImportingDocument(false);
+      setImportProgress(null);
+    }
   }
 
   function duplicateScene(id: string) {
@@ -352,6 +563,87 @@ export function ProjectWorkspace({
     const ids = project.scenes.map((s) => s.id);
     const from = ids.indexOf(id);
     reorder(moveItem(ids, from, from + direction));
+  }
+
+  // ---- Bulk scene selection and avatar/look/voice edit ----------------
+
+  function toggleSceneSelected(id: string) {
+    setSelectedSceneIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedSceneIds(
+      selectedSceneIds.size === project.scenes.length ? new Set() : new Set(project.scenes.map((s) => s.id)),
+    );
+  }
+
+  function clearSelection() {
+    setSelectedSceneIds(new Set());
+  }
+
+  // Set when some ticked scenes can't show a slide, so the user decides what
+  // happens instead of getting a silent partial switch.
+  const [slideSwitchBlocked, setSlideSwitchBlocked] = useState<{
+    missing: { id: string; label: string }[];
+    eligibleIds: string[];
+  } | null>(null);
+
+  function setSelectedPresentation(kind: "AVATAR" | "SLIDE") {
+    const selected = project.scenes.filter((s) => selectedSceneIds.has(s.id));
+    if (kind === "SLIDE") {
+      const missing = selected.filter((s) => !s.slideImageId);
+      if (missing.length > 0) {
+        setSlideSwitchBlocked({
+          missing: missing.map((s) => ({ id: s.id, label: sceneLabel(s, project.scenes.indexOf(s) + 1) })),
+          eligibleIds: selected.filter((s) => s.slideImageId).map((s) => s.id),
+        });
+        return;
+      }
+    }
+    void applyPresentation(
+      selected.map((s) => s.id),
+      kind,
+    );
+  }
+
+  async function applyPresentation(ids: string[], kind: "AVATAR" | "SLIDE") {
+    setSlideSwitchBlocked(null);
+    if (ids.length === 0) return;
+    await structural(
+      post("/scenes/presentation", { sceneIds: ids, kind }),
+      async () => {
+        await reload();
+      },
+      `${ids.length} ${ids.length === 1 ? "scene" : "scenes"} switched to ${kind === "SLIDE" ? "Slide + narration" : "Avatar"}.`,
+    );
+  }
+
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+  async function confirmDeleteSelected() {
+    setBulkDeleteOpen(false);
+    const ids = project.scenes.filter((s) => selectedSceneIds.has(s.id)).map((s) => s.id);
+    if (ids.length === 0) return;
+    // Stay on the open scene if it survives, otherwise move to the nearest
+    // one that does, preferring the next scene like a single delete.
+    const activeIdx = project.scenes.findIndex((s) => s.id === activeId);
+    const survives = (s: SceneData) => !selectedSceneIds.has(s.id);
+    const nextActive = survives(project.scenes[activeIdx] ?? project.scenes[0])
+      ? activeId
+      : (project.scenes.slice(activeIdx + 1).find(survives) ?? project.scenes.slice(0, activeIdx).reverse().find(survives))?.id;
+    await structural(
+      post("/scenes/bulk-delete", { sceneIds: ids }),
+      async () => {
+        clearSelection();
+        await reload(nextActive);
+      },
+      `${ids.length} ${ids.length === 1 ? "scene" : "scenes"} deleted.`,
+    );
   }
 
   // ---- Generation -----------------------------------------------------
@@ -454,6 +746,8 @@ export function ProjectWorkspace({
   async function duplicateProject() {
     setBusy(true);
     try {
+      // The copy is made server-side, so pending edits must land first.
+      if (!(await settle())) return;
       const res = await fetch(`/api/dashboard/projects/${projectId}/duplicate`, { method: "POST" });
       const json = (await res.json().catch(() => ({}))) as { projectId?: string; error?: string };
       if (res.status === 201 && json.projectId) {
@@ -492,6 +786,28 @@ export function ProjectWorkspace({
     window.requestAnimationFrame(() => document.getElementById("scene-script")?.focus());
   }
 
+  // Briefly highlights a project-level setting — triggered from
+  // GenerationPanel's per-setting summary row/warnings, same idea as
+  // jumpToScene but for a setting rather than a scene, so there's no scene
+  // to select. The actual scrollIntoView lives inside SettingsPanel itself
+  // (not here), since resolution/engine sit behind its own collapsed
+  // "Advanced settings" toggle that only it knows how to expand first.
+  const [settingHighlight, setSettingHighlight] = useState<SettingTarget | null>(null);
+
+  function jumpToSetting(target: SettingTarget) {
+    // Title lives in this page's own header, not SettingsPanel — focusing
+    // it is its own clear visual highlight (the input's normal focus ring),
+    // so this doesn't need the ring-flash treatment the others get below.
+    if (target === "title") {
+      const el = document.getElementById("project-title");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      (el as HTMLInputElement | null)?.focus();
+      return;
+    }
+    setSettingHighlight(target);
+    window.setTimeout(() => setSettingHighlight((cur) => (cur === target ? null : cur)), 2000);
+  }
+
   function editSceneByNumber(number: number) {
     const scene = project.scenes[number - 1] ?? project.scenes[0];
     if (scene) jumpToScene(scene.id);
@@ -511,19 +827,38 @@ export function ProjectWorkspace({
 
   return (
     <div className="space-y-4">
-      <div aria-live="polite" role="status" className="sr-only">
-        {notice}
+      {/* Short confirmations float in a corner instead of pushing the page
+          down for a few seconds. Also the screen-reader live region. */}
+      <div
+        aria-live="polite"
+        role="status"
+        className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex justify-center sm:inset-x-auto sm:right-6 sm:bottom-6"
+      >
+        {notice && (
+          <div className="pointer-events-auto flex max-w-sm items-start gap-3 rounded-lg bg-popover px-4 py-3 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10 animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <p className="flex-1">{notice}</p>
+            <button
+              type="button"
+              onClick={() => setNotice("")}
+              aria-label="Dismiss message"
+              className="-mr-1 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </div>
 
-      <header className="space-y-3">
+      <header className="space-y-2">
         <Link
           href="/dashboard/videos"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-1 rounded-sm text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
           Back to videos
         </Link>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-3">
           <Thumb
             src={projectThumb}
             className="h-12 w-12 rounded-lg ring-1 ring-foreground/10"
@@ -533,42 +868,65 @@ export function ProjectWorkspace({
             <label htmlFor="project-title" className="sr-only">
               Video title
             </label>
-            <Input
-              id="project-title"
-              value={project.title}
-              maxLength={PROJECT_TITLE_MAX}
-              disabled={locked}
-              placeholder="Untitled video"
-              onChange={(e) => editProject({ title: e.target.value })}
-              className="h-10 border-transparent bg-transparent px-2 text-xl font-semibold tracking-tight hover:border-input focus-visible:border-ring md:text-xl"
-            />
+            <div className="group/title relative">
+              <Input
+                id="project-title"
+                value={project.title}
+                maxLength={PROJECT_TITLE_MAX}
+                disabled={locked}
+                placeholder="Untitled video"
+                onChange={(e) => editProject({ title: e.target.value })}
+                className="h-10 border-transparent bg-transparent px-2 pr-9 text-xl font-semibold tracking-tight hover:border-input focus-visible:border-ring md:text-xl"
+              />
+              {!locked && (
+                <Pencil
+                  className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground opacity-60 transition-opacity group-hover/title:opacity-100 group-focus-within/title:opacity-0"
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 px-2">
+              <ProjectStatusBadge status={project.status} />
+              <span className="text-xs text-muted-foreground">
+                {project.scenes.length} {project.scenes.length === 1 ? "scene" : "scenes"}
+              </span>
+              <span
+                className={cn(
+                  "flex items-center gap-1.5 text-xs",
+                  saveState === "failed" || saveState === "conflict" ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {saveState === "saving" && <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+                {saveState === "saved" && <Check className="h-3 w-3" aria-hidden="true" />}
+                {(saveState === "failed" || saveState === "conflict") && <TriangleAlert className="h-3 w-3" aria-hidden="true" />}
+                {saveLabel[saveState]}
+              </span>
+            </div>
           </div>
-          <ProjectStatusBadge status={project.status} />
-          {!generating && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="More project actions"
               disabled={busy}
-              onClick={() => setDeleteProjectOpen(true)}
+              className={buttonVariants({ variant: "outline", size: "icon" })}
             >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-              {project.status === "DRAFT" ? "Delete draft" : "Delete project"}
-            </Button>
-          )}
-          <p
-            aria-live="polite"
-            className={cn(
-              "flex items-center gap-1.5 text-xs",
-              saveState === "failed" || saveState === "conflict" ? "text-destructive" : "text-muted-foreground",
-            )}
-          >
-            {saveState === "saving" && <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
-            {saveState === "saved" && <Check className="h-3 w-3" aria-hidden="true" />}
-            {(saveState === "failed" || saveState === "conflict") && <TriangleAlert className="h-3 w-3" aria-hidden="true" />}
-            {saveLabel[saveState]}
-          </p>
+              <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => void duplicateProject()}>
+                <Copy aria-hidden="true" />
+                Duplicate project
+              </DropdownMenuItem>
+              {!generating && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive" onClick={() => setDeleteProjectOpen(true)}>
+                    <Trash2 aria-hidden="true" />
+                    {project.status === "DRAFT" ? "Delete draft" : "Delete project"}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -601,12 +959,6 @@ export function ProjectWorkspace({
         </div>
       )}
 
-      {notice && (
-        <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground" aria-hidden="true">
-          {notice}
-        </p>
-      )}
-
       {mode === "result" && project.finalVideo ? (
         <FinalView
           project={project}
@@ -624,13 +976,14 @@ export function ProjectWorkspace({
       ) : (
         <>
           {project.status === "COMPLETED" && project.finalVideo && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted px-3 py-2 text-sm">
-              <span className="text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm">
+              <span className="flex items-start gap-2 text-muted-foreground">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 {project.isOutdated
                   ? "You've changed scenes since your video was made. Generate again to include your edits."
                   : "You're editing a project that already has a finished video."}
               </span>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setMode("result")}>
+              <Button type="button" variant="outline" size="sm" onClick={() => setMode("result")}>
                 View finished video
               </Button>
             </div>
@@ -656,9 +1009,16 @@ export function ProjectWorkspace({
             </Button>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)_20rem]">
-            <div id="scene-list-panel" className={cn(scenesOpen ? "block" : "hidden", "lg:block")}>
-              <div className="lg:sticky lg:top-6">
+          {/* Three columns only from xl: below that the app sidebar leaves too
+              little room, so the whole-video panels drop under the editor. */}
+          <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[15rem_minmax(0,1fr)_20rem] 2xl:grid-cols-[16rem_minmax(0,1fr)_22rem]">
+            <div
+              id="scene-list-panel"
+              className={cn(scenesOpen ? "block" : "hidden", "lg:row-span-2 lg:block xl:row-span-1")}
+            >
+              {/* Pinned with its own scroll, so a long scene list stays
+                  reachable. The padding keeps focus rings from being clipped. */}
+              <div className="lg:sticky lg:top-5 lg:-m-1 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto lg:p-1">
                 <SceneSidebar
                   scenes={project.scenes}
                   activeSceneId={activeScene?.id ?? ""}
@@ -673,10 +1033,20 @@ export function ProjectWorkspace({
                     setScenesOpen(false);
                   }}
                   onAdd={addScene}
+                  onImportDocument={setPendingImportFile}
+                  importingDocument={importingDocument}
+                  importProgress={importProgress}
+                  onCancelImport={cancelImport}
                   onDuplicate={duplicateScene}
                   onDelete={requestDelete}
                   onMove={moveScene}
                   onReorder={reorder}
+                  selectedSceneIds={selectedSceneIds}
+                  onToggleSceneSelected={toggleSceneSelected}
+                  onToggleSelectAll={toggleSelectAll}
+                  onClearSelection={clearSelection}
+                  onDeleteSelected={() => setBulkDeleteOpen(true)}
+                  onSetPresentation={setSelectedPresentation}
                 />
                 <p className="mt-2 hidden text-xs text-muted-foreground lg:block">
                   Drag a scene to reorder it, or use the arrow buttons on the selected scene.
@@ -698,14 +1068,21 @@ export function ProjectWorkspace({
                   disabled={locked}
                   showIssues={showIssues}
                   aspectRatio={project.aspectRatio}
+                  selection={
+                    selectedSceneIds.size > 0
+                      ? { count: selectedSceneIds.size, includesThisScene: selectedSceneIds.has(activeScene.id) }
+                      : null
+                  }
                   onChange={(patch) => editScene(activeScene.id, patch)}
+                  onSettingsChange={(patch) => editSceneSettings(activeScene.id, patch)}
+                  onSlideImageChange={(image) => setSceneSlide(activeScene.id, image)}
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">This project has no scenes yet.</p>
               )}
             </div>
 
-            <div className="space-y-4" id="generate-panel">
+            <div className="min-w-0 space-y-4" id="generate-panel">
               <GenerationPanel
                 readiness={readiness}
                 submitting={submitting}
@@ -716,30 +1093,37 @@ export function ProjectWorkspace({
                 onJump={jumpToScene}
                 onDismissError={() => setGenError(null)}
                 canViewCost={canViewCost}
+                watermarkUrl={project.watermarkUrl}
+                captionsEnabled={project.captionsEnabled}
+                onJumpToSetting={jumpToSetting}
+                title={project.title}
+                aspectRatio={project.aspectRatio}
+                resolution={project.resolution}
+                engine={project.engine as VideoEngineValue}
+                voiceName={project.defaults.defaultVoiceName}
               />
-              {activeScene && (
-                <SettingsPanel
-                  scene={activeScene}
-                  sceneNumber={activeIndex + 1}
-                  defaults={project.defaults}
-                  avatars={avatars}
-                  aspectRatio={project.aspectRatio}
-                  resolution={project.resolution}
-                  engine={engineLower}
-                  captionsEnabled={project.captionsEnabled}
-                  watermarkUrl={project.watermarkUrl}
-                  watermarkPosition={watermarkPositionLower}
-                  disabled={locked}
-                  onSceneChange={(patch) => editSceneSettings(activeScene.id, patch)}
-                  onProjectChange={editProject}
-                  canViewCost={canViewCost}
-                />
-              )}
+              <VideoSettingsPanel
+                defaults={project.defaults}
+                highlight={settingHighlight}
+                avatars={avatars}
+                aspectRatio={project.aspectRatio}
+                resolution={project.resolution}
+                engine={engineLower}
+                captionsEnabled={project.captionsEnabled}
+                watermarkUrl={project.watermarkUrl}
+                watermarkPosition={watermarkPositionLower}
+                disabled={locked}
+                onProjectChange={editProject}
+                canViewCost={canViewCost}
+              />
             </div>
           </div>
 
-          {/* Small screens: a summary that stays in reach and jumps to the generate panel. */}
-          <div className="sticky bottom-0 -mx-6 border-t bg-background/95 px-6 py-3 backdrop-blur lg:hidden">
+          {/* Until the three-column layout (xl), the generate panel sits below
+              the editor, so keep a summary in reach that jumps to it. The
+              negative margin matches the page padding (p-4, then sm:p-6) so
+              the bar spans edge to edge without overflowing sideways. */}
+          <div className="sticky bottom-0 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 xl:hidden">
             <div className="flex items-center justify-between gap-3">
               <p className="min-w-0 truncate text-sm">
                 <span className="font-medium">{readiness.sceneCount}</span> {readiness.sceneCount === 1 ? "scene" : "scenes"}
@@ -777,6 +1161,157 @@ export function ProjectWorkspace({
             </Button>
             <Button type="button" variant="destructive" onClick={() => deleteSceneId && void confirmDeleteScene(deleteSceneId)}>
               Delete scene
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!slideSwitchBlocked} onOpenChange={(o) => !o && setSlideSwitchBlocked(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {slideSwitchBlocked?.missing.length === 1 ? "A scene has no slide image" : "Some scenes have no slide image"}
+            </DialogTitle>
+            <DialogDescription>
+              {slideSwitchBlocked?.missing.length === 1 ? "This scene" : "These scenes"} can&apos;t show a slide until{" "}
+              {slideSwitchBlocked?.missing.length === 1 ? "it has" : "they have"} one. Nothing has been changed yet.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-48 space-y-1 overflow-y-auto rounded-lg bg-muted/60 p-3 text-sm">
+            {slideSwitchBlocked?.missing.map((m) => (
+              <li key={m.id} className="truncate">
+                {m.label}
+              </li>
+            ))}
+          </ul>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSlideSwitchBlocked(null)}>
+              Cancel
+            </Button>
+            {slideSwitchBlocked && slideSwitchBlocked.eligibleIds.length > 0 && (
+              <Button type="button" disabled={busy} onClick={() => void applyPresentation(slideSwitchBlocked.eligibleIds, "SLIDE")}>
+                Switch the other {slideSwitchBlocked.eligibleIds.length}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete {selectedSceneIds.size} {selectedSceneIds.size === 1 ? "scene" : "scenes"}?
+            </DialogTitle>
+            <DialogDescription>
+              {selectedSceneIds.size === 1 ? "This scene and its script" : "These scenes and their scripts"} will be
+              removed from the video. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-48 space-y-1 overflow-y-auto rounded-lg bg-muted/60 p-3 text-sm">
+            {project.scenes.map((s, i) =>
+              selectedSceneIds.has(s.id) ? (
+                <li key={s.id} className="truncate">
+                  <span className="text-muted-foreground">{i + 1}.</span> {s.title.trim() || "Untitled scene"}
+                </li>
+              ) : null,
+            )}
+          </ul>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setBulkDeleteOpen(false)}>
+              Keep scenes
+            </Button>
+            <Button type="button" variant="destructive" disabled={busy} onClick={() => void confirmDeleteSelected()}>
+              Delete {selectedSceneIds.size} {selectedSceneIds.size === 1 ? "scene" : "scenes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pendingImportFile} onOpenChange={(o) => !o && setPendingImportFile(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import scenes from this file?</DialogTitle>
+            <DialogDescription>
+              {project.scenes.length === 1 && !project.scenes[0].script.trim() && !project.scenes[0].title.trim()
+                ? "You can add the imported scenes after the current one, or replace it since it's still empty."
+                : `This project already has ${project.scenes.length} ${project.scenes.length === 1 ? "scene" : "scenes"}. Add the imported ones after ${project.scenes.length === 1 ? "it" : "them"}, or remove everything and start fresh from this file.`}
+            </DialogDescription>
+          </DialogHeader>
+          <fieldset className="space-y-2">
+            <legend className="mb-1.5 text-sm font-medium">Show each page as</legend>
+            {(
+              [
+                {
+                  value: "SLIDE",
+                  title: "Slide + narration",
+                  detail: importIsPdf
+                    ? "The page fills the screen while the voice reads the script."
+                    : "Only available for PDF files. See below for how to save your slides as a PDF.",
+                },
+                { value: "AVATAR", title: "Avatar", detail: "Your avatar speaks the script. Slides are kept so you can switch later." },
+              ] as const
+            ).map((opt) => {
+              const unavailable = opt.value === "SLIDE" && !importIsPdf;
+              return (
+                <label
+                  key={opt.value}
+                  className={cn(
+                    "flex items-start gap-2.5 rounded-lg border p-2.5 text-sm transition-colors",
+                    importPresentationChoice === opt.value ? "border-primary ring-2 ring-primary" : "border-border",
+                    unavailable ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-primary/50",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="import-presentation"
+                    value={opt.value}
+                    className="mt-0.5 accent-primary"
+                    disabled={unavailable}
+                    checked={importPresentationChoice === opt.value}
+                    onChange={() => setImportPresentation(opt.value)}
+                  />
+                  <span>
+                    <span className="block font-medium">{opt.title}</span>
+                    <span className="block text-xs text-muted-foreground">{opt.detail}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </fieldset>
+          {pendingImportFile && !importIsPdf && (
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">Want your slides in the video?</p>
+              <p className="mt-1">
+                This PowerPoint will import as Avatar scenes using the text from each slide. To show the slides
+                themselves, save the presentation as a PDF and import that instead:
+              </p>
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
+                <li>PowerPoint on Windows: File, then Export, then Create PDF/XPS</li>
+                <li>PowerPoint on Mac: File, then Export, and pick PDF as the file format</li>
+                <li>Google Slides: File, then Download, then PDF document</li>
+                <li>Keynote: File, then Export To, then PDF</li>
+              </ul>
+            </div>
+          )}
+          {/* Three real choices with long labels don't fit on one row inside
+              this dialog's narrow width (confirmed live), so they stack. */}
+          <DialogFooter className="sm:flex-col-reverse sm:items-stretch sm:justify-start">
+            <Button type="button" variant="outline" onClick={() => setPendingImportFile(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => pendingImportFile && void runImportDocument(pendingImportFile, true, importPresentationChoice)}
+            >
+              Remove everything, start fresh
+            </Button>
+            <Button
+              type="button"
+              onClick={() => pendingImportFile && void runImportDocument(pendingImportFile, false, importPresentationChoice)}
+            >
+              Add to current scenes
             </Button>
           </DialogFooter>
         </DialogContent>

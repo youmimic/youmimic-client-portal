@@ -5,11 +5,13 @@ import { isPermutation, insertAfter, moveItem } from "@/lib/projects/ordering";
 import { projectContentHash } from "@/lib/projects/hash";
 import {
   MAX_SCENES,
+  SCENE_SCRIPT_MAX,
   type AvatarOption,
   type ProjectDefaults,
   type SceneData,
 } from "@/lib/projects/rules";
 import type { UpdateProjectInput, UpdateSceneInput } from "@/lib/projects/schemas";
+import type { ImportedScene } from "@/lib/projects/import-plan";
 import { avatarAccessWhere, ownAvatarWhere } from "@/lib/avatar-access";
 
 // Data access for multi-scene projects. Every function takes the signed-in
@@ -25,7 +27,10 @@ export class ProjectError extends Error {
       | "LIMIT"
       | "LAST_SCENE"
       | "BAD_REORDER"
-      | "BAD_AVATAR",
+      | "BAD_AVATAR"
+      | "BAD_FILE"
+      | "BAD_SLIDE"
+      | "NO_SLIDE",
     public readonly status: number,
     message: string,
   ) {
@@ -53,7 +58,7 @@ export type FinalVideoView = {
 
 export type SnapshotScene = {
   order: number;
-  kind: "AVATAR" | "IMAGE" | "VIDEO";
+  kind: "AVATAR" | "IMAGE" | "VIDEO" | "SLIDE";
   title: string;
   script: string;
   avatarName: string | null;
@@ -96,6 +101,9 @@ const sceneSelect = {
   mediaUrl: true,
   mediaDurationSeconds: true,
   motionPrompt: true,
+  slideImageId: true,
+  sourcePageNumber: true,
+  slideImage: { select: { id: true, url: true, width: true, height: true } },
 } as const;
 
 type Tx = Prisma.TransactionClient;
@@ -121,6 +129,12 @@ async function assertAvatarRefs(tx: Tx, userId: string, avatarId: string | null 
     const look = await tx.avatarLook.findFirst({ where: { id: lookId, avatarId }, select: { id: true } });
     if (!look) throw new ProjectError("BAD_AVATAR", 422, "That look doesn't belong to the chosen avatar.");
   }
+}
+
+// A slide image may only be shown by scenes of the user who uploaded it.
+async function assertSlideImage(tx: Tx, userId: string, slideImageId: string) {
+  const image = await tx.slideImage.findFirst({ where: { id: slideImageId, userId }, select: { id: true } });
+  if (!image) throw new ProjectError("BAD_SLIDE", 422, "That slide image isn't available on your account.");
 }
 
 // Bumps the project version only if it still matches what the caller saw and
@@ -370,7 +384,9 @@ export async function updateScene(userId: string, projectId: string, sceneId: st
       );
     }
 
-    const data: Prisma.VideoSceneUpdateInput = { ...patch };
+    if (patch.slideImageId) await assertSlideImage(tx, userId, patch.slideImageId);
+
+    const data: Prisma.VideoSceneUncheckedUpdateInput = { ...patch };
     // Clearing the scene's avatar (back to the project default) clears its
     // look and choosing a new avatar without a look resets the look, so a
     // scene never points at a look from a different avatar.
@@ -424,6 +440,108 @@ export async function addScene(userId: string, projectId: string, expectedVersio
   });
 }
 
+// How many scenes a project has now, for the import route's early limit
+// check before it does any expensive work. Scoped to the owner.
+export async function countProjectScenes(userId: string, projectId: string): Promise<number> {
+  const project = await prisma.videoProject.findFirst({
+    where: { id: projectId, userId },
+    select: { _count: { select: { scenes: true } } },
+  });
+  if (!project) throw new ProjectError("NOT_FOUND", 404, "We couldn't find that project.");
+  return project._count.scenes;
+}
+
+// Saves the scenes planned from an imported document (lib/projects/
+// import-plan.ts) in one short transaction, after all the slow work
+// (rendering, uploads, AI) has finished. Existing scenes are only touched
+// inside this transaction, so a failed or conflicting import never leaves a
+// project half replaced. Version, ownership and the generation lock are
+// checked here, at commit time, by lockAndBump.
+export async function importScenesFromDocument(
+  userId: string,
+  projectId: string,
+  expectedVersion: number,
+  scenes: ImportedScene[],
+  options: {
+    // Every existing scene is deleted first, in this same transaction. Asked
+    // up front in the UI (it can't be undone), never assumed.
+    replaceExisting?: boolean;
+    // Passed through to the result for the summary message.
+    pagesSkipped?: number;
+  } = {},
+): Promise<{ version: number; firstSceneId: string | null; scenesAdded: number; pagesSkipped: number }> {
+  const replaceExisting = options.replaceExisting ?? false;
+  return prisma.$transaction(async (tx) => {
+    await lockAndBump(tx, userId, projectId, expectedVersion);
+    const existing = await tx.videoScene.findMany({
+      where: { projectId },
+      orderBy: { orderIndex: "asc" },
+      select: { id: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true },
+    });
+
+    if (scenes.length === 0) {
+      throw new ProjectError("BAD_FILE", 422, "Couldn't find any readable text or pages in that file.");
+    }
+    // A Slide scene without its image would be unusable, and silently
+    // making it an Avatar scene instead is exactly what mustn't happen.
+    if (scenes.some((s) => s.kind === "SLIDE" && !s.slideImageId)) {
+      throw new ProjectError("NO_SLIDE", 422, "Some pages have no slide image, so they can't be imported as slides.");
+    }
+    const imageIds = [...new Set(scenes.map((s) => s.slideImageId).filter((id): id is string => !!id))];
+    if (imageIds.length > 0) {
+      const owned = await tx.slideImage.count({ where: { id: { in: imageIds }, userId } });
+      if (owned !== imageIds.length) throw new ProjectError("BAD_SLIDE", 422, "That slide image isn't available on your account.");
+    }
+
+    // Scenes about to be replaced don't count against the limit.
+    const kept = replaceExisting ? [] : existing;
+    if (kept.length + scenes.length > MAX_SCENES) {
+      throw new ProjectError(
+        "LIMIT",
+        422,
+        `This would add ${scenes.length} scenes, but a video can have up to ${MAX_SCENES} in total${
+          replaceExisting ? "" : ` (this project already has ${kept.length})`
+        }. Nothing was changed.`,
+      );
+    }
+
+    if (replaceExisting && existing.length > 0) {
+      await tx.videoScene.deleteMany({ where: { projectId } });
+    }
+
+    // Same inheritance as addScene: every imported scene starts on the
+    // project's current avatar/look/voice (whatever the last kept scene
+    // used) rather than nobody, so the user doesn't have to re-pick an
+    // avatar for every single imported page. Nothing to inherit when
+    // replacing everything — every imported scene starts with no avatar.
+    const anchor = kept[kept.length - 1];
+    let firstSceneId: string | null = null;
+    const newIds: string[] = [];
+    for (const [i, scene] of scenes.entries()) {
+      const created = await tx.videoScene.create({
+        data: {
+          projectId,
+          orderIndex: kept.length + i,
+          kind: scene.kind,
+          title: scene.title.slice(0, 80),
+          script: scene.script.slice(0, SCENE_SCRIPT_MAX * 2),
+          avatarId: anchor?.avatarId ?? null,
+          avatarLookId: anchor?.avatarLookId ?? null,
+          voiceId: anchor?.voiceId ?? null,
+          voiceName: anchor?.voiceName ?? null,
+          slideImageId: scene.slideImageId,
+          sourcePageNumber: scene.sourcePageNumber,
+        },
+        select: { id: true },
+      });
+      if (firstSceneId === null) firstSceneId = created.id;
+      newIds.push(created.id);
+    }
+    await renumber(tx, [...kept.map((s) => s.id), ...newIds]);
+    return { version: expectedVersion + 1, firstSceneId, scenesAdded: scenes.length, pagesSkipped: options.pagesSkipped ?? 0 };
+  });
+}
+
 export async function duplicateScene(userId: string, projectId: string, sceneId: string, expectedVersion: number): Promise<{ version: number; sceneId: string }> {
   return prisma.$transaction(async (tx) => {
     await lockAndBump(tx, userId, projectId, expectedVersion);
@@ -447,6 +565,9 @@ export async function duplicateScene(userId: string, projectId: string, sceneId:
         mediaUrl: source.mediaUrl,
         mediaDurationSeconds: source.mediaDurationSeconds,
         motionPrompt: source.motionPrompt,
+        // The copy shows the same slide: the image row is shared, not copied.
+        slideImageId: source.slideImageId,
+        sourcePageNumber: source.sourcePageNumber,
       },
       select: { id: true },
     });
@@ -467,6 +588,75 @@ export async function deleteScene(userId: string, projectId: string, sceneId: st
     await tx.videoScene.delete({ where: { id: sceneId } });
     await renumber(tx, scenes.filter((s) => s.id !== sceneId).map((s) => s.id));
     return { version: expectedVersion + 1 };
+  });
+}
+
+// Switches several scenes between Avatar and Slide + narration in one
+// transaction. Only the kind changes, so scripts, voices, avatars, looks and
+// slide images all survive. Switching to Slide is all or nothing: if any
+// selected scene has no slide image, nothing changes and the error names
+// them, so there's never a silent partial switch.
+export async function setScenesPresentation(
+  userId: string,
+  projectId: string,
+  sceneIds: string[],
+  kind: "AVATAR" | "SLIDE",
+  expectedVersion: number,
+): Promise<{ version: number; updated: number }> {
+  return prisma.$transaction(async (tx) => {
+    await lockAndBump(tx, userId, projectId, expectedVersion);
+    const scenes = await tx.videoScene.findMany({
+      where: { projectId },
+      orderBy: { orderIndex: "asc" },
+      select: { id: true, title: true, slideImageId: true },
+    });
+    const wanted = new Set(sceneIds);
+    const known = new Set(scenes.map((s) => s.id));
+    if ([...wanted].some((id) => !known.has(id))) {
+      throw new ProjectError("NOT_FOUND", 404, "We couldn't find one or more of those scenes. Reload and try again.");
+    }
+    if (kind === "SLIDE") {
+      const missing = scenes
+        .map((s, i) => ({ ...s, number: i + 1 }))
+        .filter((s) => wanted.has(s.id) && !s.slideImageId);
+      if (missing.length > 0) {
+        const names = missing.map((s) => (s.title.trim() ? `${s.number} (${s.title.trim()})` : `${s.number}`)).join(", ");
+        throw new ProjectError(
+          "NO_SLIDE",
+          422,
+          `${missing.length === 1 ? "Scene" : "Scenes"} ${names} ${missing.length === 1 ? "has" : "have"} no slide image, so nothing was changed. Add slide images or untick ${missing.length === 1 ? "it" : "them"}.`,
+        );
+      }
+    }
+    await tx.videoScene.updateMany({ where: { projectId, id: { in: [...wanted] } }, data: { kind } });
+    return { version: expectedVersion + 1, updated: wanted.size };
+  });
+}
+
+// Deletes several scenes in one transaction, so a selection is removed
+// entirely or not at all. Same rules as deleteScene: every id must belong to
+// this project and at least one scene must remain.
+export async function deleteScenes(
+  userId: string,
+  projectId: string,
+  sceneIds: string[],
+  expectedVersion: number,
+): Promise<{ version: number; deleted: number }> {
+  return prisma.$transaction(async (tx) => {
+    await lockAndBump(tx, userId, projectId, expectedVersion);
+    const scenes = await tx.videoScene.findMany({ where: { projectId }, orderBy: { orderIndex: "asc" }, select: { id: true } });
+    const toDelete = new Set(sceneIds);
+    const known = new Set(scenes.map((s) => s.id));
+    if ([...toDelete].some((id) => !known.has(id))) {
+      throw new ProjectError("NOT_FOUND", 404, "We couldn't find one or more of those scenes. Reload and try again.");
+    }
+    const remaining = scenes.filter((s) => !toDelete.has(s.id));
+    if (remaining.length === 0) {
+      throw new ProjectError("LAST_SCENE", 422, "A video needs at least one scene. Keep at least one scene when deleting.");
+    }
+    await tx.videoScene.deleteMany({ where: { projectId, id: { in: [...toDelete] } } });
+    await renumber(tx, remaining.map((s) => s.id));
+    return { version: expectedVersion + 1, deleted: toDelete.size };
   });
 }
 
@@ -603,6 +793,9 @@ export async function duplicateProject(userId: string, projectId: string): Promi
             mediaUrl: sc.mediaUrl,
             mediaDurationSeconds: sc.mediaDurationSeconds,
             motionPrompt: sc.motionPrompt,
+            // Same owner, so the copy can share the slide image rows.
+            slideImageId: sc.slideImageId,
+            sourcePageNumber: sc.sourcePageNumber,
           })),
         },
       },
