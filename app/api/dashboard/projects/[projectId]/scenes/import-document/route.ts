@@ -2,34 +2,52 @@ import { NextResponse } from "next/server";
 import { PDFParse } from "pdf-parse";
 import { getData as getPdfWorkerData } from "pdf-parse/worker";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { importScenesFromDocument, ProjectError } from "@/lib/projects/service";
+import { countProjectScenes, importScenesFromDocument, ProjectError } from "@/lib/projects/service";
 import { requireUserId } from "@/lib/projects/http";
-import { extractPptxSlideTexts } from "@/lib/pptx-extract";
+import { MAX_SCENES } from "@/lib/projects/rules";
+import { planImportedScenes, type ImportPresentation } from "@/lib/projects/import-plan";
+import { extractPptxSlideTexts, PptxLimitError } from "@/lib/pptx-extract";
 import { rewriteAsSpokenScript } from "@/lib/ai/generate-script";
+import { mapWithConcurrency } from "@/lib/concurrency";
+import { DocumentRenderError, pageImageRendererFor, RenderStopped } from "@/lib/slides/render-document";
+import {
+  discardUnusedSlideImages,
+  normaliseSlideImage,
+  pruneUnusedSlideImages,
+  SlideImageError,
+  storeSlideImage,
+} from "@/lib/slides/images";
+
+class ImportCancelled extends Error {}
 
 // Without this, PDFParse tries to set up its "fake worker" via a dynamic
-// import of pdf.worker.mjs resolved relative to its own bundled location —
-// that path doesn't survive Next's dev/prod bundling (confirmed live: fails
-// with "Setting up fake worker failed: Cannot find module
-// '.../.next/dev/server/chunks/pdf.worker.mjs'"). getData() returns the
-// worker bundled as a self-contained base64 data: URL instead, which pdfjs
-// can import directly with no filesystem/bundler path involved at all.
+// import of pdf.worker.mjs resolved relative to its own bundled location,
+// which doesn't survive Next's bundling (confirmed live). getData() returns
+// the worker as a self-contained data: URL instead.
 PDFParse.setWorker(getPdfWorkerData());
 
-// Not JSON, so this bypasses lib/projects/http.ts's readBody (which only
-// handles req.json()) and parses the multipart body itself, same reasoning
-// as app/api/dashboard/media/upload-watermark/route.ts.
+// Not JSON, so this bypasses lib/projects/http.ts's readBody and parses the
+// multipart body itself, same as the watermark upload route.
 const PPTX_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 const ALLOWED_TYPES = new Set(["application/pdf", PPTX_TYPE]);
-// Generous for a slide-deck-style document (mostly text, maybe a few
-// images) — keeps parsing fast and avoids tying up a function instance on
-// a huge file.
 const MAX_BYTES = 15 * 1024 * 1024; // 15MB
 
-// Slides are rewritten in parallel, so the AI step takes about as long as
-// the slowest single call (up to 45s, see REQUEST_TIMEOUT_MS) plus parsing.
-export const maxDuration = 60;
+// Fluid compute is enabled on this project (confirmed by the owner,
+// 2026-11-23), which allows up to 300s. Rendering, uploads and AI all run
+// in parallel and are bounded below, so a full 20-page deck normally takes
+// well under a minute; the headroom covers slow AI replies (up to 45s each).
+export const maxDuration = 300;
 
+// At most this many pages are uploaded, or rewritten by AI, at once.
+const IMAGE_CONCURRENCY = 4;
+const AI_CONCURRENCY = 4;
+
+// Flow: validate -> extract text -> check the scene limit -> (stream)
+// render + store page images and rewrite narration, in parallel -> plan the
+// scenes -> one short transaction that re-checks version, ownership and the
+// generation lock. Existing scenes are only touched in that transaction, so
+// any earlier failure or a cancel leaves the project exactly as it was, and
+// slide images created along the way are cleaned up.
 export async function POST(req: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const userId = await requireUserId();
   if (userId instanceof NextResponse) return userId;
@@ -50,6 +68,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
   let file: File | null;
   let expectedVersion: number | null;
   let replaceExisting: boolean;
+  let presentation: ImportPresentation;
   try {
     const formData = await req.formData();
     const value = formData.get("file");
@@ -57,6 +76,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
     const versionRaw = formData.get("expectedVersion");
     expectedVersion = typeof versionRaw === "string" && versionRaw !== "" ? Number(versionRaw) : null;
     replaceExisting = formData.get("replaceExisting") === "true";
+    // Absent means Avatar, which is what this route always did before.
+    const presentationRaw = formData.get("presentation") ?? "AVATAR";
+    if (presentationRaw !== "AVATAR" && presentationRaw !== "SLIDE") {
+      return NextResponse.json({ error: "Validation failed", fieldErrors: { presentation: ["Invalid"] } }, { status: 422 });
+    }
+    presentation = presentationRaw;
   } catch {
     return NextResponse.json({ error: "Couldn't read the upload." }, { status: 422 });
   }
@@ -74,137 +99,202 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
     return NextResponse.json({ error: "That file is too large (max 15MB)." }, { status: 422 });
   }
 
+  // Slide images can only be made from PDFs (see lib/slides/render-document.ts).
+  // Asking for slides from a PowerPoint is refused rather than silently
+  // imported as Avatar scenes.
+  const renderPages = pageImageRendererFor(file.type);
+  if (presentation === "SLIDE" && !renderPages) {
+    return NextResponse.json(
+      {
+        error:
+          "Slide images can only be made from PDF files for now. Save your presentation as a PDF and import that, or import it as Avatar scenes.",
+      },
+      { status: 422 },
+    );
+  }
+
   const label = file.type === PPTX_TYPE ? "Slide" : "Page";
+  const documentBuffer = Buffer.from(await file.arrayBuffer());
   let pageTexts: string[];
   if (file.type === PPTX_TYPE) {
     try {
-      pageTexts = await extractPptxSlideTexts(Buffer.from(await file.arrayBuffer()));
+      pageTexts = await extractPptxSlideTexts(documentBuffer);
     } catch (err) {
+      if (err instanceof PptxLimitError) return NextResponse.json({ error: err.message }, { status: 422 });
       console.error("PPTX import (parse) failed:", err);
-      return NextResponse.json({ error: "Couldn't read that PowerPoint file — it may be corrupted or in the older .ppt format (only .pptx is supported)." }, { status: 422 });
+      return NextResponse.json(
+        { error: "Couldn't read that PowerPoint file. It may be damaged or in the older .ppt format (only .pptx is supported)." },
+        { status: 422 },
+      );
     }
   } else {
-    const parser = new PDFParse({ data: Buffer.from(await file.arrayBuffer()) });
+    const parser = new PDFParse({ data: new Uint8Array(documentBuffer) });
     try {
+      // Count pages first, so a very long PDF is refused before any text
+      // extraction (and long before rendering or AI).
+      const { total } = await parser.getInfo();
+      if (total > MAX_SCENES) {
+        return NextResponse.json(
+          {
+            error: `That PDF has ${total} pages, but a video can have up to ${MAX_SCENES} scenes. Nothing was changed. Try a shorter file.`,
+          },
+          { status: 422 },
+        );
+      }
       const result = await parser.getText();
       pageTexts = result.pages.map((p) => p.text);
     } catch (err) {
       console.error("PDF import (parse) failed:", err);
-      return NextResponse.json({ error: "Couldn't read that PDF — it may be corrupted, password-protected, or scanned images without real text." }, { status: 422 });
+      return NextResponse.json({ error: "Couldn't read that PDF. It may be damaged or password-protected." }, { status: 422 });
     } finally {
       await parser.destroy();
     }
   }
 
-  // From here on the work is slow enough (one AI call per page/slide) that
-  // the client shouldn't just sit on a spinner with no idea what's
-  // happening — streamed as newline-delimited JSON events instead of one
-  // final response. The HTTP status is always 200 once this starts (status
-  // can't change mid-stream); real success/failure is the stream's own
-  // terminal "done"/"error" event, which the client reads instead of
-  // res.ok. Early failures above this point (auth, rate limit, bad file,
-  // parse errors) are unaffected — those still return a normal, immediate
-  // JSON error response.
-  const nonBlankCount = pageTexts.filter((t) => t.trim().length > 0).length;
+  // Checked before any rendering or AI work. With page images every page
+  // becomes a scene (a picture-only page is kept for the user to narrate);
+  // without them only pages with text do. Splitting dense pages can add
+  // more, which the final transaction checks again.
   const unitPlural = label === "Slide" ? "slides" : "pages";
+  const usablePages = renderPages ? pageTexts.length : pageTexts.filter((t) => t.trim()).length;
+  try {
+    const kept = replaceExisting ? 0 : await countProjectScenes(userId, projectId);
+    if (usablePages > MAX_SCENES - kept) {
+      return NextResponse.json(
+        {
+          error: `That file has ${usablePages} ${unitPlural}, but a video can have up to ${MAX_SCENES} scenes${
+            kept > 0 ? ` and this project already has ${kept}` : ""
+          }. Nothing was changed. Try a shorter file${kept > 0 ? ", or replace the current scenes" : ""}.`,
+        },
+        { status: 422 },
+      );
+    }
+  } catch (err) {
+    if (err instanceof ProjectError) return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });
+    throw err;
+  }
+  if (usablePages === 0) {
+    return NextResponse.json({ error: "Couldn't find any readable text in that file." }, { status: 422 });
+  }
 
-  // A short, bounded gist of every OTHER slide (not the one being
-  // rewritten) — gives each independent AI call enough awareness of the
-  // rest of the deck to avoid repeating a point and to keep a consistent
-  // flow, without combining the whole document into one call (see
-  // rewriteAsSpokenScript's own comment on why that's deliberately
-  // avoided). Bounded per-slide so this doesn't grow large even for a
-  // MAX_SCENES-sized deck.
+  // A short gist of every OTHER page, so each independent AI call can keep
+  // a consistent flow without the whole document going into one call.
   const GIST_CHARS = 120;
-  const slideGists = pageTexts.map((t) => t.trim().replace(/\s+/g, " ").slice(0, GIST_CHARS));
-
-  function contextForSlide(index: number): string | undefined {
-    const others = slideGists
-      .map((gist, i) => ({ i, gist }))
-      .filter(({ i, gist }) => i !== index && gist.length > 0);
-    if (others.length === 0) return undefined;
-    return others.map(({ i, gist }) => `${label} ${i + 1}: ${gist}`).join("\n");
-  }
-
-  // Rank among the slides that will actually become scenes, not the raw
-  // page index — a blank page in the middle of the deck shouldn't throw
-  // off which slide counts as "first" or "last" for greeting/sign-off
-  // purposes (see rewriteAsSpokenScript's position parameter).
-  const nonBlankIndices = pageTexts
-    .map((t, i) => (t.trim() ? i : null))
-    .filter((i): i is number => i !== null);
-
-  function positionForSlide(index: number): { index: number; total: number } | undefined {
-    const rank = nonBlankIndices.indexOf(index);
-    return rank === -1 ? undefined : { index: rank, total: nonBlankIndices.length };
-  }
+  const gists = pageTexts.map((t) => t.trim().replace(/\s+/g, " ").slice(0, GIST_CHARS));
+  const contextFor = (index: number) => {
+    const others = gists.map((gist, i) => ({ i, gist })).filter(({ i, gist }) => i !== index && gist.length > 0);
+    return others.length === 0 ? undefined : others.map(({ i, gist }) => `${label} ${i + 1}: ${gist}`).join("\n");
+  };
+  // Greeting/sign-off position counts only pages with text, so a picture
+  // page in the middle doesn't change which page counts as first or last.
+  const textIndices = pageTexts.map((t, i) => (t.trim() ? i : null)).filter((i): i is number => i !== null);
+  const positionFor = (index: number) => {
+    const rank = textIndices.indexOf(index);
+    return rank === -1 ? undefined : { index: rank, total: textIndices.length };
+  };
 
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
       const send = (event: Record<string, unknown>) => {
-        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        } catch {
+          // The browser stopped listening (cancelled); keep going quietly.
+        }
+      };
+      const createdImageIds: string[] = [];
+      let committed = false;
+      // Checked between every page render, upload and AI call, so a cancel
+      // stops the work early instead of only before saving.
+      const cancelled = () => req.signal.aborted;
+      const stopIfCancelled = () => {
+        if (cancelled()) throw new ImportCancelled();
       };
 
       try {
-        send({
-          type: "progress",
-          message: `Found ${nonBlankCount} ${nonBlankCount === 1 ? unitPlural.slice(0, -1) : unitPlural} with text. Writing scripts with AI...`,
-        });
+        send({ type: "progress", message: `Reading ${pageTexts.length} ${pageTexts.length === 1 ? unitPlural.slice(0, -1) : unitPlural}...` });
 
-        // Each page/slide's raw extracted text is usually dense or
-        // bullet-pointed (written for reading, not speaking), so it's
-        // rewritten into a natural spoken script before becoming a scene —
-        // in parallel (not sequentially), since a 20-scene deck calling an
-        // external model one at a time would risk the route's own
-        // execution time budget. Each call also gets a brief gist of every
-        // OTHER slide (contextForSlide, above) so the result reads as part
-        // of one coherent deck rather than N scripts written in isolation —
-        // deliberately NOT one combined call for the whole document: a
-        // free-tier model already confirmed unreliable at segmenting even a
-        // single slide correctly would be far more likely to mis-segment an
-        // entire deck, and a single failed call would then lose AI
-        // rewriting for the whole document instead of just one slide.
-        //
-        // Best-effort per page: a failed or
-        // unconfigured rewrite falls back to that page's original raw text
-        // rather than failing the whole import over one slide (or over the
-        // feature being unconfigured at all — rewriteAsSpokenScript returns
-        // a fast ok:false immediately when OPENROUTER_API_KEY is unset, so
-        // this degrades the same way with zero extra branching here).
-        //
-        // One page can legitimately become more than one scene — a dense
-        // page's rewrite is allowed to split into several short scripts
-        // instead of one overlong one (see rewriteAsSpokenScript), so each
-        // page maps to an array here, flattened afterward. importScenesFromDocument's
-        // own MAX_SCENES check still guards the total either way.
-        let rewrittenCount = 0;
-        const rewrittenGroups = await Promise.all(
-          pageTexts.map(async (text, index) => {
-            if (!text.trim()) return [text];
-            const result = await rewriteAsSpokenScript(text, contextForSlide(index), positionForSlide(index));
-            rewrittenCount += 1;
-            send({
-              type: "progress",
-              message: `Rewrote ${label.toLowerCase()} ${rewrittenCount} of ${nonBlankCount} with AI...`,
-            });
+        const prepareImages = async (): Promise<(string | null)[]> => {
+          if (!renderPages) return pageTexts.map(() => null);
+          send({ type: "progress", message: "Preparing slide images..." });
+          const rendered = await renderPages(documentBuffer, cancelled);
+          let done = 0;
+          return mapWithConcurrency(pageTexts, IMAGE_CONCURRENCY, async (_, i) => {
+            stopIfCancelled();
+            const png = rendered[i];
+            if (!png) return null;
+            const stored = await storeSlideImage(userId, await normaliseSlideImage(png));
+            createdImageIds.push(stored.id);
+            done += 1;
+            send({ type: "progress", message: `Prepared slide image ${done} of ${pageTexts.length}...` });
+            return stored.id;
+          });
+        };
+
+        // Best effort per page: a failed or unconfigured rewrite falls back to
+        // that page's own text. Results keep page order whatever order the
+        // calls finish in.
+        const prepareNarration = async (): Promise<string[][]> => {
+          let done = 0;
+          return mapWithConcurrency(pageTexts, AI_CONCURRENCY, async (text, i) => {
+            stopIfCancelled();
+            if (!text.trim()) return [];
+            const result = await rewriteAsSpokenScript(text, contextFor(i), positionFor(i));
+            done += 1;
+            send({ type: "progress", message: `Prepared narration ${done} of ${textIndices.length}...` });
             return result.ok ? result.scripts : [text];
-          }),
-        );
-        const rewritten = rewrittenGroups.flat();
+          });
+        };
 
-        send({ type: "progress", message: replaceExisting ? "Replacing existing scenes..." : "Creating scenes..." });
-        const result = await importScenesFromDocument(userId, projectId, expectedVersion, rewritten, label, replaceExisting);
-        send({ type: "done", ...result });
+        const [imageIds, narration] = await Promise.all([prepareImages(), prepareNarration()]);
+
+        // Last point at which stopping is guaranteed safe: nothing has been
+        // saved to the project yet. A cancel that arrives after this check
+        // can't stop the transaction below; the browser reconciles by
+        // reloading (see runImportDocument).
+        stopIfCancelled();
+
+        const plan = planImportedScenes(
+          pageTexts.map((_, i) => ({ scripts: narration[i], slideImageId: imageIds[i] })),
+          label,
+          presentation,
+        );
+
+        send({ type: "progress", message: replaceExisting ? "Replacing your scenes..." : "Creating scenes..." });
+        const result = await importScenesFromDocument(userId, projectId, expectedVersion, plan.scenes, {
+          replaceExisting,
+          pagesSkipped: plan.pagesSkipped,
+        });
+        committed = true;
+        send({ type: "done", ...result, scenesNeedingNarration: plan.scenesNeedingNarration });
+        // Replaced scenes may have left slide images nothing uses any more.
+        if (replaceExisting) {
+          await pruneUnusedSlideImages(userId).catch((e) => console.error("Slide image pruning failed:", e));
+        }
       } catch (err) {
-        if (err instanceof ProjectError) {
+        // Images made for this import aren't used by any scene yet, so they
+        // can go. discardUnusedSlideImages never removes one a scene uses,
+        // and a clean-up failure only leaves an unused image behind.
+        if (!committed) {
+          await discardUnusedSlideImages(userId, createdImageIds).catch((e) => console.error("Import clean-up failed:", e));
+        }
+        if (err instanceof ImportCancelled || err instanceof RenderStopped) {
+          send({ type: "error", code: "CANCELLED", message: "Import cancelled before anything was saved. Nothing was changed." });
+        } else if (err instanceof ProjectError) {
           send({ type: "error", code: err.code, message: err.message });
+        } else if (err instanceof DocumentRenderError || err instanceof SlideImageError) {
+          send({ type: "error", code: "CONVERSION_FAILED", message: `${err.message} Nothing was changed.` });
         } else {
           console.error("Document import (post-parse) failed:", err);
-          send({ type: "error", code: "SERVER_ERROR", message: "Something went wrong on our side. Please try again." });
+          send({ type: "error", code: "SERVER_ERROR", message: "Something went wrong on our side. Nothing was changed. Please try again." });
         }
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // Already closed by a cancelled client.
+        }
       }
     },
   });

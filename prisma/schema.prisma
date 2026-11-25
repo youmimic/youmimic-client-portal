@@ -130,6 +130,7 @@ model User {
   generatedVideos         GeneratedVideo[]
   videoProjects           VideoProject[]
   watermarks              Watermark[]
+  slideImages             SlideImage[]
   bookings                Booking[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -694,6 +695,39 @@ enum SceneKind {
   AVATAR
   IMAGE
   VIDEO
+  // A document page or slide (VideoScene.slideImage) shown full frame while
+  // the scene's script is narrated. Rendered as a narrated image scene.
+  SLIDE
+}
+
+// A rendered document page/slide (Vercel Blob), owned by one user and shared
+// by every scene that shows it (a dense slide split into several scenes
+// points them all at one row). Kept separate from VideoScene.mediaUrl, which
+// is an arbitrary external link, so ownership can be checked and switching a
+// scene's kind never loses or misreads the slide.
+//
+// renditions caches letterboxed copies keyed by output aspect ratio (for
+// example {"16:9": "https://..."}). The provider's docs contradict each
+// other on whether off-ratio images are cropped or padded, so generation
+// pads them itself to keep the whole slide visible.
+//
+// Rows are not deleted when scenes are, matching how scene crops and other
+// project media are retained; onDelete SetNull on the scene side keeps any
+// future clean-up safe.
+model SlideImage {
+  id         String   @id @default(cuid())
+  userId     String
+  url        String
+  width      Int
+  height     Int
+  renditions Json?
+  createdAt  DateTime @default(now())
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenes VideoScene[]
+
+  @@index([userId, createdAt])
+  @@map("slide_images")
 }
 
 model VideoScene {
@@ -731,12 +765,20 @@ model VideoScene {
   // against a real avatar, since only fake ids have been probed so far.
   motionPrompt String?
 
+  // SLIDE scenes show this image. Kept whatever the scene's kind, so
+  // switching to Avatar and back never loses the slide.
+  slideImageId     String?
+  // 1-based page/slide number in the imported document, for labels.
+  sourcePageNumber Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project    VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  slideImage SlideImage?  @relation(fields: [slideImageId], references: [id], onDelete: SetNull)
 
   @@index([projectId, orderIndex])
+  @@index([slideImageId])
   @@map("video_scenes")
 }
 
@@ -783,7 +825,10 @@ enum WatermarkPosition {
 model GeneratedVideo {
   id                String                @id @default(cuid())
   userId            String
-  avatarId          String
+  // Null only for a multi-scene project rendered entirely from Slide +
+  // narration scenes (no avatar appears in it). Single-avatar videos and
+  // any project with an Avatar scene still set it.
+  avatarId          String?
   script            String
   status            VideoGenerationStatus @default(PROCESSING)
   engine            VideoEngine           @default(AVATAR_IV)
@@ -848,7 +893,8 @@ model GeneratedVideo {
   project       VideoProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  avatar             Avatar             @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+  // Deleting an avatar still deletes the videos made with it.
+  avatar             Avatar?            @relation(fields: [avatarId], references: [id], onDelete: Cascade)
   avatarLook         AvatarLook?        @relation(fields: [avatarLookId], references: [id], onDelete: SetNull)
   usageLedgerEntries UsageLedgerEntry[]
 

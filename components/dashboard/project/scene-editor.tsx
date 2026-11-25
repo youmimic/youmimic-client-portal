@@ -4,8 +4,11 @@ import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "rea
 import {
   ChevronDown,
   Image as ImageIcon,
+  ImageUp,
   Layers,
   Lightbulb,
+  Loader2,
+  Presentation,
   RotateCcw,
   SlidersHorizontal,
   TriangleAlert,
@@ -37,6 +40,7 @@ import {
   type SceneData,
   type SceneIssue,
   type SceneKindValue,
+  type SlideImageData,
 } from "@/lib/projects/rules";
 import { avatarVoiceShortcuts, estimateGeneration, formatDuration, wordCount, type VideoEngineValue } from "@/lib/video-display";
 import { cn } from "@/lib/utils";
@@ -57,7 +61,13 @@ type Resolved = ReturnType<typeof resolveScene>;
 
 const KIND_OPTIONS: { value: SceneKindValue; label: string; icon: typeof UserCircle2; hint: string }[] = [
   { value: "AVATAR", label: "Avatar", icon: UserCircle2, hint: "Your avatar speaks the script." },
-  { value: "IMAGE", label: "Image", icon: ImageIcon, hint: "A title card or photo, silent or narrated." },
+  {
+    value: "SLIDE",
+    label: "Slide + narration",
+    icon: Presentation,
+    hint: "The slide fills the screen while the chosen voice reads the script. No avatar is shown.",
+  },
+  { value: "IMAGE", label: "Image", icon: ImageIcon, hint: "Any image from a link, silent or narrated." },
   { value: "VIDEO", label: "Video clip", icon: VideoIcon, hint: "A clip you already have, silent or narrated." },
 ];
 
@@ -116,7 +126,7 @@ function KindSwitch({
       role="radiogroup"
       aria-label="Scene type"
       onKeyDown={disabled ? undefined : handleKeyDown}
-      className="inline-flex rounded-lg border bg-muted/50 p-0.5"
+      className="inline-flex flex-wrap rounded-lg border bg-muted/50 p-0.5"
     >
       {KIND_OPTIONS.map((opt) => {
         const selected = opt.value === value;
@@ -146,14 +156,21 @@ function KindSwitch({
   );
 }
 
-function SelectionNote({ selection }: { selection: SceneSelection }) {
+function SelectionNote({
+  selection,
+  fields = "Avatar, look and voice",
+}: {
+  selection: SceneSelection;
+  // What this scene's panel can actually change for the whole selection.
+  fields?: string;
+}) {
   if (!selection) return null;
   if (selection.includesThisScene && selection.count > 1) {
     return (
       <p className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
         <Layers className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
         <span>
-          Avatar, look and voice changes here apply to all <strong>{selection.count} selected scenes</strong>.
+          {fields} changes here apply to all <strong>{selection.count} selected scenes</strong>.
         </span>
       </p>
     );
@@ -574,6 +591,7 @@ export function SceneEditor({
   selection,
   onChange,
   onSettingsChange,
+  onSlideImageChange,
 }: {
   scene: SceneData;
   number: number;
@@ -588,6 +606,7 @@ export function SceneEditor({
   selection: SceneSelection;
   onChange: (patch: SceneEdit) => void;
   onSettingsChange: (patch: SceneSettingsPatch) => void;
+  onSlideImageChange: (image: SlideImageData) => void;
 }) {
   const resolved = resolveScene(scene, defaults);
   const errors = issues.filter((i) => i.severity === "error");
@@ -669,6 +688,20 @@ export function SceneEditor({
                 onSettingsChange={onSettingsChange}
               />
             </>
+          ) : scene.kind === "SLIDE" ? (
+            <SlideSceneContent
+              scene={scene}
+              resolved={resolved}
+              defaults={defaults}
+              avatars={avatars}
+              engine={engine}
+              disabled={disabled}
+              aspectRatio={aspectRatio}
+              selection={selection}
+              onChange={onChange}
+              onSettingsChange={onSettingsChange}
+              onSlideImageChange={onSlideImageChange}
+            />
           ) : (
             <MediaSceneContent
               scene={scene}
@@ -688,6 +721,175 @@ export function SceneEditor({
         </CardContent>
       </Card>
     </section>
+  );
+}
+
+// "16:9" -> "16 / 9" for the CSS aspect-ratio property.
+function cssAspect(aspectRatio: string): string {
+  const [w, h] = aspectRatio.split(":").map(Number);
+  return w > 0 && h > 0 ? `${w} / ${h}` : "16 / 9";
+}
+
+// Slide + narration: the slide fills the frame (letterboxed in black exactly
+// as generation does it, see lib/slides/images.ts) while the voice reads the
+// script. The scene's avatar and look stay stored but hidden here.
+function SlideSceneContent({
+  scene,
+  resolved,
+  defaults,
+  avatars,
+  engine,
+  disabled,
+  aspectRatio,
+  selection,
+  onChange,
+  onSettingsChange,
+  onSlideImageChange,
+}: {
+  scene: SceneData;
+  resolved: Resolved;
+  defaults: ProjectDefaults;
+  avatars: AvatarOption[];
+  engine: VideoEngineValue;
+  disabled: boolean;
+  aspectRatio: string;
+  selection: SceneSelection;
+  onChange: (patch: SceneEdit) => void;
+  onSettingsChange: (patch: SceneSettingsPatch) => void;
+  onSlideImageChange: (image: SlideImageData) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const avatar = resolved.avatarId ? (avatars.find((a) => a.id === resolved.avatarId) ?? null) : null;
+  const image = scene.slideImage;
+
+  async function upload(file: File) {
+    setError(null);
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/dashboard/media/slide-image", { method: "POST", body: formData });
+      const json = (await res.json().catch(() => ({}))) as Partial<SlideImageData> & { error?: string };
+      if (!res.ok || !json.id || !json.url || !json.width || !json.height) {
+        setError(json.error ?? "Couldn't upload that image. Please try again.");
+        return;
+      }
+      onSlideImageChange({ id: json.id, url: json.url, width: json.width, height: json.height });
+    } catch {
+      setError("Couldn't upload that image. Check your connection and try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium">Slide</p>
+          {image && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled || uploading}
+              onClick={() => inputRef.current?.click()}
+            >
+              <ImageUp className="h-3.5 w-3.5" aria-hidden="true" />
+              Replace slide
+            </Button>
+          )}
+        </div>
+        <div
+          className={cn(
+            "relative flex w-full items-center justify-center overflow-hidden rounded-lg border",
+            image ? "bg-black" : "bg-muted/60",
+          )}
+          style={{ aspectRatio: cssAspect(aspectRatio) }}
+        >
+          {image ? (
+            // eslint-disable-next-line @next/next/no-img-element -- Vercel Blob URL, same as the watermark preview
+            <img
+              src={image.url}
+              alt={scene.sourcePageNumber ? `Slide from page ${scene.sourcePageNumber}` : "Slide"}
+              className="h-full w-full object-contain"
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-2 p-4 text-center">
+              <Presentation className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+              <p className="text-sm font-medium">
+                {scene.sourcePageNumber ? `No image for page ${scene.sourcePageNumber}` : "No slide image yet"}
+              </p>
+              <p className="max-w-xs text-xs text-muted-foreground">
+                {scene.sourcePageNumber
+                  ? "Slide images are deleted a day after your video is finished, to keep your documents private. Add the page again to make another video, or switch this scene to Avatar."
+                  : "This scene can't be generated until it has one. Add an image, or switch it back to Avatar."}
+              </p>
+              <Button type="button" size="sm" disabled={disabled || uploading} onClick={() => inputRef.current?.click()}>
+                <ImageUp className="h-3.5 w-3.5" aria-hidden="true" />
+                Add slide image
+              </Button>
+            </div>
+          )}
+          {uploading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/70">
+              <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              <span className="sr-only">Uploading slide image</span>
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {scene.sourcePageNumber ? `From page ${scene.sourcePageNumber} of your document. ` : ""}
+          Shown in full, with black bars if its shape differs from the video&apos;s. PNG, JPEG or WebP, up to 10MB.
+        </p>
+        {error && (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          aria-label="Upload a slide image"
+          className="sr-only"
+          tabIndex={-1}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void upload(file);
+          }}
+        />
+      </div>
+
+      <ScriptField
+        scene={scene}
+        engine={engine}
+        disabled={disabled}
+        label="What should be said over this slide?"
+        placeholder="Write the narration for this slide."
+        rows={8}
+        className="min-h-40"
+        showTips
+        onChange={onChange}
+      />
+
+      <div className="space-y-2">
+        <SelectionNote selection={selection} fields="Voice" />
+        <VoiceField
+          scene={scene}
+          resolved={resolved}
+          defaults={defaults}
+          avatars={avatars}
+          disabled={disabled}
+          // With no voice chosen, the scene's avatar's own voice narrates it.
+          isAvatarScene={!!avatar}
+          onSettingsChange={onSettingsChange}
+        />
+      </div>
+    </>
   );
 }
 
@@ -800,7 +1002,7 @@ function MediaSceneContent({
 
       {narrated && (
         <div className="space-y-2">
-          <SelectionNote selection={selection} />
+          <SelectionNote selection={selection} fields="Voice" />
           <VoiceField
             scene={scene}
             resolved={resolved}

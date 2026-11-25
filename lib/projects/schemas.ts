@@ -64,6 +64,8 @@ export const updateSceneSchema = z
     mediaUrl: z.string().trim().max(MEDIA_URL_MAX).nullable().optional(),
     mediaDurationSeconds: z.number().min(MIN_MEDIA_DURATION).max(MAX_MEDIA_DURATION).nullable().optional(),
     motionPrompt: z.string().trim().max(MOTION_PROMPT_MAX).nullable().optional(),
+    // Ownership is checked in updateScene; null clears the slide.
+    slideImageId: nullableId.optional(),
   })
   .strict();
 
@@ -83,6 +85,16 @@ export const deleteScenesSchema = z
   .object({
     expectedVersion,
     sceneIds: z.array(id).min(1).max(MAX_SCENES),
+  })
+  .strict();
+
+// Bulk "show as Avatar / Slide + narration". Only these two presentations
+// are offered in bulk; image and video links stay a per-scene choice.
+export const setScenesPresentationSchema = z
+  .object({
+    expectedVersion,
+    sceneIds: z.array(id).min(1).max(MAX_SCENES),
+    kind: z.enum(["AVATAR", "SLIDE"]),
   })
   .strict();
 

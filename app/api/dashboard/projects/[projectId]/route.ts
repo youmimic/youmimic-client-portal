@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { updateProjectSchema } from "@/lib/projects/schemas";
 import { deleteProject, getProjectView, updateProject } from "@/lib/projects/service";
 import { errorResponse, readBody, requireUserId } from "@/lib/projects/http";
+import { pruneUnusedSlideImagesQuietly } from "@/lib/slides/images";
 
 type Ctx = { params: Promise<{ projectId: string }> };
 
@@ -38,6 +39,8 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   const { projectId } = await params;
   try {
     await deleteProject(userId, projectId);
+    // Its slides go too, unless another project still shows them.
+    await pruneUnusedSlideImagesQuietly(userId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return errorResponse(err);

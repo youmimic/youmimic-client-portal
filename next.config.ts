@@ -81,6 +81,12 @@ const nextConfig: NextConfig = {
   // it as a plain Node require at runtime instead, which is the documented
   // fix for native-addon dependencies under Next.js.
   serverExternalPackages: ["pdf-parse", "@napi-rs/canvas"],
+  // pdf.js reads these font files from disk at runtime when rendering PDF
+  // pages to slide images (lib/slides/render-document.ts), so file tracing
+  // can't discover them on its own.
+  outputFileTracingIncludes: {
+    "/api/dashboard/projects/[projectId]/scenes/import-document": ["./node_modules/pdfjs-dist/standard_fonts/**/*"],
+  },
   images: {
     // Off by default in Next.js since an SVG can embed a <script>; the
     // client-logo wall includes a vector logo (Tasmanian Leaders), so this

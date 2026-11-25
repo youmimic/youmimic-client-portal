@@ -40,8 +40,9 @@ import {
 
 export type VideoDetailData = {
   id: string;
-  avatarId: string;
-  avatarName: string;
+  // Null for a video made only of Slide + narration scenes.
+  avatarId: string | null;
+  avatarName: string | null;
   title: string;
   script: string;
   status: VideoStatus;
@@ -161,7 +162,7 @@ export function VideoDetail({
   const elapsed = useElapsed(video.createdAt, inProgress);
 
   const estimate = estimateGeneration(video.script, video.engine, video.resolution);
-  const studioHref = `/dashboard/avatars/${video.avatarId}/studio?from=${video.id}`;
+  const studioHref = video.avatarId ? `/dashboard/avatars/${video.avatarId}/studio?from=${video.id}` : null;
 
   async function refreshUrl() {
     setBusy("refresh-url");
@@ -376,19 +377,19 @@ export function VideoDetail({
               for a project render, which must go through the project's own
               multi-scene generate flow instead. The banner above already
               links there. */}
-          {!video.project && video.status === "FAILED" && (
+          {!video.project && video.avatarId && video.status === "FAILED" && (
             <Button type="button" onClick={() => setRegenOpen(true)} disabled={busy !== null}>
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Try again
             </Button>
           )}
-          {!video.project && video.status === "COMPLETED" && (
+          {!video.project && video.avatarId && video.status === "COMPLETED" && (
             <Button type="button" variant="outline" onClick={() => setRegenOpen(true)} disabled={busy !== null}>
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Regenerate
             </Button>
           )}
-          {!video.project && (
+          {!video.project && studioHref && (
             <Button asChild variant="outline">
               <Link href={studioHref}>
                 <Copy className="h-4 w-4" aria-hidden="true" />
@@ -434,7 +435,7 @@ export function VideoDetail({
           </CardHeader>
           <CardContent>
             <dl className="space-y-2 text-sm">
-              <DetailRow label="Avatar" value={video.avatarName} />
+              <DetailRow label="Avatar" value={video.avatarName ?? "None (slides only)"} />
               <DetailRow label="Created" value={formatDateTime(video.createdAt)} />
               {video.completedAt && <DetailRow label="Finished" value={formatDateTime(video.completedAt)} />}
               <DetailRow label="Format" value={video.aspectRatio ? (ASPECT_RATIO_LABEL[video.aspectRatio] ?? video.aspectRatio) : "Standard"} />

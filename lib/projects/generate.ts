@@ -14,6 +14,8 @@ import { DEFAULT_MEDIA_DURATION, evaluateProject, resolveScene, sceneLabel, type
 import { listAvatarOptions, listPublicAvatarOptions, ProjectError, type SnapshotScene } from "@/lib/projects/service";
 import { releaseReservation, reserveCreditsForGeneration } from "@/lib/usage/ledger";
 import { avatarAccessWhere } from "@/lib/avatar-access";
+import { mapWithConcurrency } from "@/lib/concurrency";
+import { SlideImageError, slideRenditionUrl } from "@/lib/slides/images";
 
 export type GenerateProjectResult =
   | { ok: true; generatedVideoId: string }
@@ -41,6 +43,32 @@ const WATERMARK_POSITION_TO_API: Record<WatermarkPosition, HeyGenWatermarkPositi
   BOTTOM_RIGHT: "bottom_right",
 };
 
+type AvatarRow = {
+  id: string;
+  name: string;
+  heygenAvatarId: string | null;
+  looks: { id: string; heygenLookId: string | null; status: string }[];
+};
+
+// The provider look a scene's avatar resolves to (its chosen look, else the
+// first ready one, else the avatar itself when it has no looks). Used for a
+// SLIDE scene's "avatar's own voice"; avatar scenes keep their own lookup.
+function avatarLookFor(
+  rows: AvatarRow[],
+  resolved: { avatarId: string | null; avatarLookId: string | null },
+): { ok: true; heygenLookId: string; avatarName: string } | { ok: false } {
+  const avatar = rows.find((a) => a.id === resolved.avatarId);
+  if (!avatar) return { ok: false };
+  if (avatar.looks.length > 0) {
+    const look = resolved.avatarLookId
+      ? avatar.looks.find((l) => l.id === resolved.avatarLookId)
+      : avatar.looks.find((l) => l.status === "ready");
+    if (!look || look.status !== "ready" || !look.heygenLookId) return { ok: false };
+    return { ok: true, heygenLookId: look.heygenLookId, avatarName: avatar.name };
+  }
+  return avatar.heygenAvatarId ? { ok: true, heygenLookId: avatar.heygenAvatarId, avatarName: avatar.name } : { ok: false };
+}
+
 function callbackUrl(): string | undefined {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!appUrl || appUrl.includes("localhost")) return undefined; // the provider can't reach a local URL
@@ -58,7 +86,12 @@ function callbackUrl(): string | undefined {
 export async function generateProject(userId: string, projectId: string, expectedVersion: number): Promise<GenerateProjectResult> {
   const project = await prisma.videoProject.findFirst({
     where: { id: projectId, userId },
-    include: { scenes: { orderBy: { orderIndex: "asc" } } },
+    include: {
+      scenes: {
+        orderBy: { orderIndex: "asc" },
+        include: { slideImage: { select: { id: true, url: true, width: true, height: true } } },
+      },
+    },
   });
   if (!project) throw new ProjectError("NOT_FOUND", 404, "We couldn't find that project.");
 
@@ -95,14 +128,15 @@ export async function generateProject(userId: string, projectId: string, expecte
   const revert = () =>
     prisma.videoProject.updateMany({ where: { id: projectId, userId }, data: { status: previousStatus as VideoProjectStatus } });
 
-  // Resolve each AVATAR-kind scene to the provider's look. IMAGE/VIDEO scenes
-  // don't use an avatar at all, so they're left out of this lookup.
+  // Resolve each AVATAR-kind scene to the provider's look. A SLIDE scene with
+  // no voice of its own also needs its avatar, for the avatar's own voice.
+  // IMAGE/VIDEO scenes don't use an avatar at all.
   const avatarRows = await prisma.avatar.findMany({
     where: {
       ...avatarAccessWhere(userId),
       id: {
         in: scenes
-          .filter((s) => s.kind === "AVATAR")
+          .filter((s) => s.kind === "AVATAR" || (s.kind === "SLIDE" && !resolveScene(s, defaults).voiceId))
           .map((s) => resolveScene(s, defaults).avatarId)
           .filter((x): x is string => !!x),
       },
@@ -119,14 +153,75 @@ export async function generateProject(userId: string, projectId: string, expecte
   const providerScenes: HeyGenStudioScene[] = [];
   const snapshot: SnapshotScene[] = [];
   const defaultVoiceCache = new Map<string, string | null>();
-  // The first avatar scene's avatar is what this render is linked to
-  // (GeneratedVideo.avatarId is required) — readiness already guarantees
-  // there is at least one, via the "needs at least one avatar scene" check.
+  const defaultVoiceFor = async (heygenLookId: string): Promise<string | null> => {
+    if (!defaultVoiceCache.has(heygenLookId)) {
+      const look = await getHeyGenAvatarLook(heygenLookId);
+      defaultVoiceCache.set(heygenLookId, look.default_voice_id);
+    }
+    return defaultVoiceCache.get(heygenLookId) ?? null;
+  };
+  // The first avatar scene's avatar is what this render is linked to. Null
+  // when the video is made only of Slide + narration scenes.
   let firstAvatarId: string | null = null;
+
+  // Letterboxed copies of every slide shown, prepared before submitting so a
+  // missing or unreachable image is reported now rather than as a failed
+  // render later. A few at a time to bound memory and Blob traffic.
+  const slideUrls = new Map<string, string>();
+  const slideIds = [...new Set(scenes.filter((s) => s.kind === "SLIDE" && s.slideImageId).map((s) => s.slideImageId as string))];
+  try {
+    await mapWithConcurrency(slideIds, 4, async (id) => {
+      slideUrls.set(id, await slideRenditionUrl(userId, id, project.aspectRatio));
+    });
+  } catch (err) {
+    await revert();
+    if (!(err instanceof SlideImageError)) console.error("Preparing slide images failed:", err);
+    return {
+      ok: false,
+      code: "BAD_MEDIA",
+      error: err instanceof SlideImageError ? err.message : "Couldn't prepare the slide images. Please try again.",
+    };
+  }
 
   try {
     for (const [i, scene] of scenes.entries()) {
       const resolved = resolveScene(scene, defaults);
+
+      if (scene.kind === "SLIDE") {
+        const imageUrl = scene.slideImageId ? slideUrls.get(scene.slideImageId) : undefined;
+        if (!imageUrl) {
+          await revert();
+          return { ok: false, code: "BAD_MEDIA", error: `${sceneLabel(scene, i + 1)} has no slide image. Add one, or switch it to Avatar.` };
+        }
+        // Scene or project voice first; otherwise the scene's avatar's own
+        // voice, resolved exactly as for an avatar scene.
+        let voiceId = resolved.voiceId;
+        let voiceName = resolved.voiceName;
+        if (!voiceId) {
+          const look = avatarLookFor(avatarRows, resolved);
+          if (look.ok) {
+            voiceId = await defaultVoiceFor(look.heygenLookId);
+            voiceName = `${look.avatarName}'s voice`;
+          }
+        }
+        if (!voiceId) {
+          await revert();
+          return { ok: false, code: "NO_VOICE", error: `${sceneLabel(scene, i + 1)} needs a voice for its narration. Choose one or set a project voice.` };
+        }
+        const script = scene.script.trim();
+        providerScenes.push({ kind: "image", mediaUrl: imageUrl, script, voiceId });
+        snapshot.push({
+          order: i + 1,
+          kind: "SLIDE",
+          title: scene.title,
+          script,
+          avatarName: null,
+          voiceName,
+          backgroundColor: null,
+          mediaUrl: imageUrl,
+        });
+        continue;
+      }
 
       if (scene.kind === "AVATAR") {
         const avatar = avatarRows.find((a) => a.id === resolved.avatarId);
@@ -259,8 +354,7 @@ export async function generateProject(userId: string, projectId: string, expecte
 
   const baseData = {
     userId,
-    // Guaranteed non-null: readiness requires at least one avatar scene.
-    avatarId: firstAvatarId as string,
+    avatarId: firstAvatarId,
     projectId,
     script: combinedScript,
     engine: engineValue,

@@ -1,6 +1,42 @@
 # HANDOFF.md
 
-## Session: Project editor redesign — 2026-11-23 (latest)
+## Session: Slide images deleted a day after the video finishes — 2026-11-25 (latest)
+
+The owner chose to delete everything (original and letterboxed copies) 24 hours after the last render that showed a slide finished. `removeSlideImagesAfterRender` in `lib/slides/images.ts` runs as task 3 of the existing daily video cron (`/api/internal/videos/refresh-expired-urls`); a cron slot isn't the limit, since Vercel's docs list 100 cron jobs per project on Hobby, but this cron already does video maintenance. An image is kept while any render showing it is running, or was started or finished within 24 hours, and images never rendered are untouched. Scenes are detached by `onDelete: SetNull`; the editor says the page was deleted for privacy and asks for it to be added again; the finished-video view warns of the deletion in advance. Generating again is refused with `NO_SLIDE`. **Found and fixed for this route only: Vercel invokes crons with GET, but both cron routes exported only POST, so scheduled runs got 405 and likely never ran.** The video route now exports GET too. **Later the same day, with the owner's go-ahead,** `/api/internal/billing/retry-failed-provisioning` got the same GET fix. First, the 5 abandoned checkout drafts (all internal tests) were deleted from production, so the first scheduled run only acts on new work. The 5 matching live-mode Stripe customers remain; see the updates file. `app/api/internal/cron-routes.test.ts` checks that every `vercel.json` cron path exports GET and that the secret is enforced.
+
+Also this day:
+- **Neon dev branch:** migrated via the guarded `prisma.branch.config.ts`; steps in `docs/migrations.md`.
+- **Dashboard home:** new "PDF or PowerPoint to video" button.
+- **Import dialog:** a PDF how-to when a .pptx is picked.
+- **First live mixed Avatar/Slide render:** succeeded on the branch, slides fully visible.
+- **Owner decisions:** launch with public-but-unguessable slide links (deleted a day after the render); slide seconds billed at the avatar rate for now.
+- **Vercel Pro write-up:** a Claude Doc (Hobby's terms don't allow commercial use).
+
+Next: commit and push → Vercel Preview with a Preview-only `DATABASE_URL` pointing at the Neon branch, to check PDF rendering on Vercel → release order in `updates/2026-11-25-slide-retention-cron.md`. Checks: `npm test` 411 passed / 12 skipped, integration suite against the isolated DB 21/21, lint 0 errors, typecheck clean, masked build passes. Still nothing applied to production; crons only run on production deployments. Detail in `updates/2026-11-25-slide-retention-cron.md`.
+
+## Session: "Avatar or Slide + narration" scenes and PDF slide-image import — 2026-11-23
+
+New `SLIDE` scene kind. The scene shows a stored slide image while its script is narrated, and becomes the provider's narrated image scene in the existing single studio job. Slides are letterboxed to the project's canvas by us, because HeyGen's docs contradict themselves on crop versus pad. New owned `SlideImage` table; scenes keep `slideImageId` and `sourcePageNumber` whatever their kind, so switching never loses anything. Editor: a "Slide + narration" type, preview, upload and replace, empty state; bulk "Show as Avatar/Slide" that names any scenes lacking an image before changing anything. PDF import now renders every page to an image (pdf.js on `@napi-rs/canvas`), keeps picture-only pages for manual narration, splits dense pages into parts sharing one image, and commits in one short transaction; failures and cancels leave the project untouched and clean up new images. Decided with the owner: PPTX slide images are PDF only for now (PPTX refuses Slide mode with "save as PDF"); the import route uses 300 s since Fluid compute is on; the "at least one Avatar scene" rule stays. Also fixed: vitest wasn't broken, it was drive-letter case (`npm test` now uses `scripts/vitest.mjs`), and a canvas version mismatch that crashed PDF rendering (npm `overrides`). **Migration `20261123120000_add_slide_scenes` is written but NOT applied**: the local `.env` is the live database, and the new code needs it to open projects locally; deploy applies it via `npm run build`. Checks: `npm test` 384 passed / 1 skipped, typecheck clean, lint 0 errors, `npx next build` passes. Not done: a live provider smoke render (needs approval), PPTX rendering, durable jobs. Detail in `updates/2026-11-23-slide-narration-scenes.md`.
+
+**Hardening pass (same day):**
+- **Isolated DB:** local `npx prisma dev` plus `prisma.isolated.config.ts` (localhost only, never reads `.env`); all 46 migrations applied there and the schema matches.
+- **Live DB:** still untouched. Its pending migrations are `20261123120000_add_slide_scenes` and the new `20261123130000_generated_video_optional_avatar`.
+- **Build risk, FIXED in the release-safety pass:**
+  - `npm run build` is now `prisma generate && next build` (no migration).
+  - `.github/workflows/prisma-migrate-prod.yml` (previously **automatic on every push to main** touching migrations) is now manual-only: `workflow_dispatch`, from `main`, with the typed confirmation `apply production migrations`, printing `migrate status` first.
+  - `scripts/build-safety.test.ts` guards both, and was proven to fail when either regression is restored.
+  - `docs/migrations.md` rewritten (it told developers to run `migrate dev`, which reads `.env` = live DB).
+  - Masked-credential build via `node scripts/build-without-secrets.mjs` passes. It surfaced a likely pre-existing CI failure: the Sanity projectId was missing from `ci.yml`, now added.
+  - **Likely:** earlier local `next build` runs uploaded source maps to Sentry (the token is in `.env`).
+  - **Unverified:** the Vercel dashboard Build Command, Preview variables, and GitHub `production` environment reviewers.
+  - The isolated Preview plan, asset privacy proposal, smoke-test plans and migration release checklist are in the updates file.
+- **Slides-only videos:** now allowed (`GeneratedVideo.avatarId` nullable). Image/clip-only projects stay blocked as a billing safeguard.
+- **Asset retention:** slide images are pruned when unused, 24 h old and not shown by a project render. They're still public unguessable Blob URLs; private Blob with presigned URLs is an open decision.
+- **Cancel:** checked between every step; the browser double-checks before saying "nothing changed". A cancel that arrives during the save can't stop it.
+- **Rendering:** one page at a time, ≤1920 px, page count checked first.
+- **Checks:** tests 401 passed / 11 skipped; isolated-DB suite 10/10; typecheck clean; lint 0 errors; `npx next build` passes.
+
+## Session: Project editor redesign — 2026-11-23
 
 Layout and UX overhaul of `/dashboard/videos/projects/[id]`, planned first per the dashboard redesign brief and approved by the user. No API, schema, billing or generation changes. The new rule: left column is the scene list, middle is the scene being edited, right is the whole video. `SceneEditor` now owns per-scene settings: a compact type switch, a "Who's speaking" summary with an inline Change picker (avatar, look, voice, plus the bulk-selection note), the script with one meta line and collapsible writing tips, and "More options" for background and motion. `SettingsPanel` became `VideoSettingsPanel` (format, captions, project voice, watermark, advanced), keeping the jump-to-setting ids. The Review card has stat tiles and Captions/Watermark checklist rows. The header has a "⋯" menu (Duplicate, Delete), and notices are a bottom-right toast. Three columns now start at `xl`, not `lg`: between 1024 and 1279px the old grid left the editor about 112px wide. The scene list is pinned with its own scroll. The phone bottom bar no longer overflows sideways (its `-mx-6` didn't match the `p-4` mobile padding). Duplicate project now waits for pending autosaves. Checks: typecheck clean, lint 0 errors (4 pre-existing warnings), build passes. Visually checked with headless Edge screenshots of a temporary fake-data preview route (deleted) at 1600/1440/1280/1100/492px. Not done: a signed-in click-through on real data (QA checklist in the update file); vitest still broken locally. Detail in `updates/2026-11-23-project-editor-redesign.md`.
 

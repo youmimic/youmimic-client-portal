@@ -34,6 +34,27 @@ function collectText(node: unknown, out: string[]): void {
 // generated .pptx (slide with notes, slide without notes, and a blank
 // slide) — the caller (importScenesFromDocument) already skips
 // blank/whitespace-only entries, same as a blank PDF page.
+// Zip-bomb guards. Only slide and notes XML is ever inflated, and each one
+// is checked against the size the zip itself declares before inflating it.
+// Real slide XML is a few hundred KB at most.
+const MAX_XML_BYTES = 5 * 1024 * 1024;
+export const MAX_PPTX_SLIDES = 200;
+
+export class PptxLimitError extends Error {}
+
+function declaredSize(file: JSZip.JSZipObject): number {
+  // JSZip keeps the central directory's uncompressed size here; it isn't
+  // part of the public types.
+  return (file as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0;
+}
+
+async function readXml(file: JSZip.JSZipObject): Promise<string> {
+  if (declaredSize(file) > MAX_XML_BYTES) throw new PptxLimitError("A slide in that file is unusually large.");
+  const text = await file.async("string");
+  if (text.length > MAX_XML_BYTES) throw new PptxLimitError("A slide in that file is unusually large.");
+  return text;
+}
+
 export async function extractPptxSlideTexts(buffer: Buffer): Promise<string[]> {
   const zip = await JSZip.loadAsync(buffer);
   const parser = new XMLParser({ removeNSPrefix: true, ignoreAttributes: true });
@@ -43,18 +64,23 @@ export async function extractPptxSlideTexts(buffer: Buffer): Promise<string[]> {
     .filter((m): m is RegExpMatchArray => m !== null)
     .map((m) => Number(m[1]))
     .sort((a, b) => a - b);
+  if (slideNums.length > MAX_PPTX_SLIDES) {
+    throw new PptxLimitError(`That presentation has ${slideNums.length} slides, which is more than can be imported.`);
+  }
 
   const results: string[] = [];
   for (const num of slideNums) {
     const slideFile = zip.file(`ppt/slides/slide${num}.xml`);
     if (!slideFile) continue;
     const slideTexts: string[] = [];
-    collectText(parser.parse(await slideFile.async("string")), slideTexts);
+    collectText(parser.parse(await readXml(slideFile)), slideTexts);
 
+    // Speaker notes feed the narration only. They're never part of the
+    // slide image (only PDFs are rendered, and a PDF has no notes).
     const notesFile = zip.file(`ppt/notesSlides/notesSlide${num}.xml`);
     const notesTexts: string[] = [];
     if (notesFile) {
-      collectText(parser.parse(await notesFile.async("string")), notesTexts);
+      collectText(parser.parse(await readXml(notesFile)), notesTexts);
     }
 
     results.push([...slideTexts, ...notesTexts].join("\n"));

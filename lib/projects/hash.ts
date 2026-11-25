@@ -41,6 +41,10 @@ export function projectContentHash(
         mediaUrl: scene.mediaUrl,
         mediaDurationSeconds: scene.mediaDurationSeconds,
         motionPrompt: scene.motionPrompt,
+        // Only part of the picture when the scene actually shows the slide.
+        // Undefined (dropped from the JSON) otherwise, so existing projects
+        // keep the same hash and aren't marked outdated by this change.
+        slideImageId: scene.kind === "SLIDE" ? scene.slideImageId : undefined,
       };
     }),
   };

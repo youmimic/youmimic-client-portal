@@ -1,28 +1,38 @@
 name: Apply Prisma Migrations (Production)
 
-# Canonical production migration step. Runs automatically when any migration
-# file lands on main (i.e. after a PR with schema changes is merged).
+# THIS CHANGES THE PRODUCTION DATABASE. It is the ONLY path that applies
+# migrations to production, and it never runs by itself.
 #
-# The Vercel build script also runs `prisma migrate deploy` as a belt-and-
-# suspenders fallback (see docs/migrations.md for the rationale). Both are
-# idempotent — whichever runs second will see the migration already recorded
-# in _prisma_migrations and skip it safely.
+# It's a separate, explicit, approved release step (see docs/migrations.md):
+#   - started by hand (Actions → "Apply Prisma Migrations (Production)" →
+#     Run workflow), from the main branch only;
+#   - requires typing the confirmation phrase below exactly;
+#   - prints `prisma migrate status` (read-only) before applying anything.
+# Application builds (npm run build, Vercel, CI) do NOT migrate any database.
+# Before 2026-11-23 this ran automatically on every push to main that touched
+# prisma/migrations/, and the Vercel build also migrated; both were removed
+# so a merge or a Preview deployment can never change production by itself.
 #
-# Required secrets (GitHub → Settings → Environments → production → Secrets):
+# Required secret (GitHub → Settings → Environments → production → Secrets):
 #   DIRECT_URL — direct (non-pooled) Neon connection string used by the
-#                Prisma CLI. Must match the DIRECT_URL in Vercel env vars.
+#                Prisma CLI. Add required reviewers to the "production"
+#                environment for a second approval gate.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'prisma/migrations/**'
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type exactly: apply production migrations'
+        required: true
+        type: string
 
 jobs:
   migrate:
     name: prisma migrate deploy → production
     runs-on: ubuntu-latest
     environment: production
+    # Refuse anything but a deliberate run from main with the exact phrase.
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'apply production migrations'
 
     # Job-level so it's available to EVERY step, including the implicit
     # `prisma generate` that `npm ci` triggers via package.json's
@@ -77,8 +87,15 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      # Apply all pending migrations. Safe to re-run: already-applied
-      # migrations are skipped. Uses DIRECT_URL (non-pooled) as required
-      # by the Prisma CLI (prisma.config.ts datasource.url = env("DIRECT_URL")).
+      # Read-only: lists exactly which migrations are about to be applied,
+      # so the run log records what changed. Exits non-zero when migrations
+      # are pending, which is expected here, hence continue-on-error.
+      - name: Show pending migrations (read-only)
+        run: npx prisma migrate status
+        continue-on-error: true
+
+      # Apply all pending migrations. Already-applied migrations are skipped.
+      # Uses DIRECT_URL (non-pooled) as required by the Prisma CLI
+      # (prisma.config.ts datasource.url = env("DIRECT_URL")).
       - name: Apply migrations
         run: npx prisma migrate deploy

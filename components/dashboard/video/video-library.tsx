@@ -32,7 +32,8 @@ export type LibraryVideo = {
   estimatedCostCents: number | null;
   aspectRatio: string | null;
   errorMessage: string | null;
-  avatarName: string;
+  // Null for a video made only of Slide + narration scenes.
+  avatarName: string | null;
   // Set when this video was rendered from a multi-scene project.
   projectId: string | null;
 };
@@ -170,7 +171,7 @@ export function VideoCard({ v, canViewCost }: { v: LibraryVideo; canViewCost: bo
         </p>
         <p className="truncate text-xs text-muted-foreground">
           {v.projectId ? "Multi-scene · " : ""}
-          {v.avatarName} · {formatDateTime(v.createdAt)}
+          {v.avatarName ?? "Slides"} · {formatDateTime(v.createdAt)}
         </p>
         <p className="truncate text-xs text-muted-foreground">
           {ENGINE_LABEL[v.engine]}

@@ -10,11 +10,13 @@ const tx = {
     findMany: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
   },
   avatar: { findFirst: vi.fn() },
   avatarLook: { findFirst: vi.fn() },
+  slideImage: { findFirst: vi.fn(), count: vi.fn() },
 };
 
 vi.mock("@/lib/prisma", () => ({
@@ -34,9 +36,11 @@ import {
   importScenesFromDocument,
   ProjectError,
   reorderScenes,
+  setScenesPresentation,
   updateScene,
 } from "@/lib/projects/service";
 import { SCENE_SCRIPT_MAX } from "@/lib/projects/rules";
+import { planImportedScenes } from "@/lib/projects/import-plan";
 
 async function code(promise: Promise<unknown>): Promise<string | null> {
   try {
@@ -230,6 +234,14 @@ describe("scene rules", () => {
     expect(order).toEqual(["a", "new", "b", "c"]);
   });
 
+  // Same planning the import route uses, so these tests read like the real flow.
+  const plan = (texts: string[], presentation: "AVATAR" | "SLIDE" = "AVATAR", images: (string | null)[] = []) =>
+    planImportedScenes(
+      texts.map((t, i) => ({ scripts: [t], slideImageId: images[i] ?? null })),
+      "Page",
+      presentation,
+    );
+
   it("[importScenesFromDocument] creates one AVATAR scene per page, inheriting the last scene's avatar/look/voice", async () => {
     tx.videoScene.findMany.mockResolvedValue([
       { id: "a", avatarId: "av1", avatarLookId: "lk1", voiceId: "v1", voiceName: "Emma" },
@@ -238,7 +250,7 @@ describe("scene rules", () => {
       .mockResolvedValueOnce({ id: "p1-scene" })
       .mockResolvedValueOnce({ id: "p2-scene" });
 
-    const result = await importScenesFromDocument("user-1", "p1", 1, ["Page one text", "Page two text"]);
+    const result = await importScenesFromDocument("user-1", "p1", 1, plan(["Page one text", "Page two text"]).scenes);
 
     expect(result).toEqual({ version: 2, firstSceneId: "p1-scene", scenesAdded: 2, pagesSkipped: 0 });
     expect(tx.videoScene.create).toHaveBeenCalledTimes(2);
@@ -251,37 +263,46 @@ describe("scene rules", () => {
       voiceId: "v1",
       voiceName: "Emma",
       orderIndex: 1,
+      sourcePageNumber: 1,
     });
     expect(tx.videoScene.create.mock.calls[1][0].data).toMatchObject({ title: "Page 2", script: "Page two text", orderIndex: 2 });
   });
 
-  it("[importScenesFromDocument] skips blank pages and reports how many were skipped", async () => {
+  it("[importScenesFromDocument] reports skipped blank pages from the plan", async () => {
     tx.videoScene.findMany.mockResolvedValue([]);
     tx.videoScene.create.mockResolvedValueOnce({ id: "only-scene" });
 
-    const result = await importScenesFromDocument("user-1", "p1", 1, ["  ", "Real content", "\n\n"]);
+    const planned = plan(["  ", "Real content", "\n\n"]);
+    const result = await importScenesFromDocument("user-1", "p1", 1, planned.scenes, { pagesSkipped: planned.pagesSkipped });
 
     expect(result).toEqual({ version: 2, firstSceneId: "only-scene", scenesAdded: 1, pagesSkipped: 2 });
     expect(tx.videoScene.create).toHaveBeenCalledOnce();
   });
 
-  it("[importScenesFromDocument] fails with BAD_FILE when no page has readable text", async () => {
+  it("[importScenesFromDocument] fails with BAD_FILE when nothing could be imported", async () => {
     tx.videoScene.findMany.mockResolvedValue([]);
-    expect(await code(importScenesFromDocument("user-1", "p1", 1, ["", "   "]))).toBe("BAD_FILE");
+    expect(await code(importScenesFromDocument("user-1", "p1", 1, plan(["", "   "]).scenes))).toBe("BAD_FILE");
     expect(tx.videoScene.create).not.toHaveBeenCalled();
   });
 
   it("[importScenesFromDocument] stops at the scene limit, counting existing scenes against it", async () => {
     tx.videoScene.findMany.mockResolvedValue(Array.from({ length: 19 }, (_, i) => ({ id: `s${i}` })));
-    expect(await code(importScenesFromDocument("user-1", "p1", 1, ["one", "two"]))).toBe("LIMIT");
+    expect(await code(importScenesFromDocument("user-1", "p1", 1, plan(["one", "two"]).scenes))).toBe("LIMIT");
     expect(tx.videoScene.create).not.toHaveBeenCalled();
+    expect(tx.videoScene.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("[importScenesFromDocument] counts split parts against the limit, after splitting", async () => {
+    tx.videoScene.findMany.mockResolvedValue(Array.from({ length: 18 }, (_, i) => ({ id: `s${i}` })));
+    const dense = planImportedScenes([{ scripts: ["Part one.", "Part two.", "Part three."], slideImageId: null }], "Slide", "AVATAR");
+    expect(await code(importScenesFromDocument("user-1", "p1", 1, dense.scenes))).toBe("LIMIT");
   });
 
   it("[importScenesFromDocument] truncates an overly long page to the scene script cap", async () => {
     tx.videoScene.findMany.mockResolvedValue([]);
     tx.videoScene.create.mockResolvedValueOnce({ id: "s1" });
     const longText = "x".repeat(SCENE_SCRIPT_MAX * 3);
-    await importScenesFromDocument("user-1", "p1", 1, [longText]);
+    await importScenesFromDocument("user-1", "p1", 1, plan([longText]).scenes);
     expect(tx.videoScene.create.mock.calls[0][0].data.script).toHaveLength(SCENE_SCRIPT_MAX * 2);
   });
 
@@ -291,7 +312,7 @@ describe("scene rules", () => {
     ]);
     tx.videoScene.create.mockResolvedValueOnce({ id: "new-scene" });
 
-    const result = await importScenesFromDocument("user-1", "p1", 1, ["Fresh content"], "Page", true);
+    const result = await importScenesFromDocument("user-1", "p1", 1, plan(["Fresh content"]).scenes, { replaceExisting: true });
 
     expect(tx.videoScene.deleteMany).toHaveBeenCalledWith({ where: { projectId: "p1" } });
     expect(tx.videoScene.create.mock.calls[0][0].data).toMatchObject({
@@ -307,7 +328,7 @@ describe("scene rules", () => {
   it("[importScenesFromDocument] replaceExisting doesn't count the (about to be deleted) existing scenes against the limit", async () => {
     tx.videoScene.findMany.mockResolvedValue(Array.from({ length: 19 }, (_, i) => ({ id: `s${i}` })));
     tx.videoScene.create.mockResolvedValueOnce({ id: "s1" });
-    const result = await importScenesFromDocument("user-1", "p1", 1, ["one"], "Page", true);
+    const result = await importScenesFromDocument("user-1", "p1", 1, plan(["one"]).scenes, { replaceExisting: true });
     expect(result.scenesAdded).toBe(1);
     expect(tx.videoScene.deleteMany).toHaveBeenCalled();
   });
@@ -315,8 +336,53 @@ describe("scene rules", () => {
   it("[importScenesFromDocument] replaceExisting skips the delete call when there was nothing to delete", async () => {
     tx.videoScene.findMany.mockResolvedValue([]);
     tx.videoScene.create.mockResolvedValueOnce({ id: "s1" });
-    await importScenesFromDocument("user-1", "p1", 1, ["one"], "Page", true);
+    await importScenesFromDocument("user-1", "p1", 1, plan(["one"]).scenes, { replaceExisting: true });
     expect(tx.videoScene.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("[importScenesFromDocument] a replace that hits a version conflict deletes nothing", async () => {
+    tx.videoProject.updateMany.mockResolvedValue({ count: 0 });
+    tx.videoProject.findFirst.mockResolvedValue({ status: "DRAFT" });
+    expect(await code(importScenesFromDocument("user-1", "p1", 1, plan(["one"]).scenes, { replaceExisting: true }))).toBe("VERSION_CONFLICT");
+    expect(tx.videoScene.deleteMany).not.toHaveBeenCalled();
+    expect(tx.videoScene.create).not.toHaveBeenCalled();
+  });
+
+  it("[importScenesFromDocument] refuses to import while the video is generating", async () => {
+    tx.videoProject.updateMany.mockResolvedValue({ count: 0 });
+    tx.videoProject.findFirst.mockResolvedValue({ status: "GENERATING" });
+    expect(await code(importScenesFromDocument("user-1", "p1", 1, plan(["one"]).scenes))).toBe("GENERATING");
+  });
+
+  it("[importScenesFromDocument] creates Slide scenes showing their page images", async () => {
+    tx.videoScene.findMany.mockResolvedValue([]);
+    tx.slideImage.count.mockResolvedValue(2);
+    tx.videoScene.create.mockResolvedValueOnce({ id: "a" }).mockResolvedValueOnce({ id: "b" });
+    await importScenesFromDocument("user-1", "p1", 1, plan(["One", "Two"], "SLIDE", ["img1", "img2"]).scenes);
+    expect(tx.slideImage.count).toHaveBeenCalledWith({ where: { id: { in: ["img1", "img2"] }, userId: "user-1" } });
+    expect(tx.videoScene.create.mock.calls[0][0].data).toMatchObject({ kind: "SLIDE", slideImageId: "img1", sourcePageNumber: 1 });
+    expect(tx.videoScene.create.mock.calls[1][0].data).toMatchObject({ kind: "SLIDE", slideImageId: "img2", sourcePageNumber: 2 });
+  });
+
+  it("[importScenesFromDocument] keeps slide images on Avatar imports so scenes can switch later", async () => {
+    tx.videoScene.findMany.mockResolvedValue([]);
+    tx.slideImage.count.mockResolvedValue(1);
+    tx.videoScene.create.mockResolvedValueOnce({ id: "a" });
+    await importScenesFromDocument("user-1", "p1", 1, plan(["One"], "AVATAR", ["img1"]).scenes);
+    expect(tx.videoScene.create.mock.calls[0][0].data).toMatchObject({ kind: "AVATAR", slideImageId: "img1" });
+  });
+
+  it("[importScenesFromDocument] refuses slide images from another account", async () => {
+    tx.videoScene.findMany.mockResolvedValue([]);
+    tx.slideImage.count.mockResolvedValue(1);
+    expect(await code(importScenesFromDocument("user-1", "p1", 1, plan(["One", "Two"], "SLIDE", ["img1", "not-mine"]).scenes))).toBe("BAD_SLIDE");
+    expect(tx.videoScene.create).not.toHaveBeenCalled();
+  });
+
+  it("[importScenesFromDocument] never turns a Slide scene without an image into an Avatar scene", async () => {
+    tx.videoScene.findMany.mockResolvedValue([]);
+    expect(await code(importScenesFromDocument("user-1", "p1", 1, plan(["One"], "SLIDE", [null]).scenes))).toBe("NO_SLIDE");
+    expect(tx.videoScene.create).not.toHaveBeenCalled();
   });
 
   it("copies every setting when duplicating and places the copy next to the original", async () => {
@@ -367,5 +433,65 @@ describe("scene rules", () => {
     await reorderScenes("user-1", "p1", ["c", "a", "b"], 1);
     const updates = tx.videoScene.update.mock.calls.map((c) => [c[0].where.id, c[0].data.orderIndex]);
     expect(updates).toEqual([["c", 0], ["a", 1], ["b", 2]]);
+  });
+});
+
+describe("slide scenes", () => {
+  it("only lets a scene show a slide image the user owns", async () => {
+    tx.videoScene.findFirst.mockResolvedValue({ id: "s1", avatarId: null });
+    tx.slideImage.findFirst.mockResolvedValue(null);
+    expect(await code(updateScene("user-1", "p1", "s1", { expectedVersion: 1, slideImageId: "someone-elses" }))).toBe("BAD_SLIDE");
+    expect(tx.slideImage.findFirst.mock.calls[0][0].where).toEqual({ id: "someone-elses", userId: "user-1" });
+    expect(tx.videoScene.update).not.toHaveBeenCalled();
+  });
+
+  it("switching a scene to Slide only changes its kind, keeping avatar, look, voice and slide", async () => {
+    tx.videoScene.findFirst.mockResolvedValue({ id: "s1", avatarId: "a1" });
+    await updateScene("user-1", "p1", "s1", { expectedVersion: 1, kind: "SLIDE" });
+    expect(tx.videoScene.update.mock.calls[0][0].data).toEqual({ kind: "SLIDE" });
+  });
+
+  it("duplicating a slide scene shares the same slide image", async () => {
+    tx.videoScene.findMany.mockResolvedValue([
+      { id: "a", title: "", script: "Hi", kind: "SLIDE", avatarId: null, avatarLookId: null, voiceId: null, voiceName: null, backgroundColor: null, mediaUrl: null, mediaDurationSeconds: null, motionPrompt: null, slideImageId: "img1", sourcePageNumber: 4 },
+    ]);
+    tx.videoScene.create.mockResolvedValue({ id: "copy" });
+    await duplicateScene("user-1", "p1", "a", 1);
+    expect(tx.videoScene.create.mock.calls[0][0].data).toMatchObject({ kind: "SLIDE", slideImageId: "img1", sourcePageNumber: 4 });
+  });
+
+  it("[setScenesPresentation] switches the selection to Slide when every scene has a slide image", async () => {
+    tx.videoScene.findMany.mockResolvedValue([
+      { id: "a", title: "", slideImageId: "img1" },
+      { id: "b", title: "", slideImageId: "img2" },
+      { id: "c", title: "", slideImageId: null },
+    ]);
+    const result = await setScenesPresentation("user-1", "p1", ["a", "b"], "SLIDE", 2);
+    expect(result).toEqual({ version: 3, updated: 2 });
+    expect(tx.videoScene.updateMany).toHaveBeenCalledWith({ where: { projectId: "p1", id: { in: ["a", "b"] } }, data: { kind: "SLIDE" } });
+  });
+
+  it("[setScenesPresentation] changes nothing and names the scenes when any lacks a slide image", async () => {
+    tx.videoScene.findMany.mockResolvedValue([
+      { id: "a", title: "", slideImageId: "img1" },
+      { id: "b", title: "Pricing", slideImageId: null },
+    ]);
+    const err = await setScenesPresentation("user-1", "p1", ["a", "b"], "SLIDE", 1).catch((e) => e);
+    expect(err).toBeInstanceOf(ProjectError);
+    expect(err.code).toBe("NO_SLIDE");
+    expect(err.message).toContain("2 (Pricing)");
+    expect(tx.videoScene.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("[setScenesPresentation] switching to Avatar never needs a slide image", async () => {
+    tx.videoScene.findMany.mockResolvedValue([{ id: "a", title: "", slideImageId: null }]);
+    await setScenesPresentation("user-1", "p1", ["a"], "AVATAR", 1);
+    expect(tx.videoScene.updateMany.mock.calls[0][0].data).toEqual({ kind: "AVATAR" });
+  });
+
+  it("[setScenesPresentation] refuses scenes from another project", async () => {
+    tx.videoScene.findMany.mockResolvedValue([{ id: "a", title: "", slideImageId: "img1" }]);
+    expect(await code(setScenesPresentation("user-1", "p1", ["a", "x"], "AVATAR", 1))).toBe("NOT_FOUND");
+    expect(tx.videoScene.updateMany).not.toHaveBeenCalled();
   });
 });

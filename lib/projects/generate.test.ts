@@ -202,7 +202,7 @@ describe("generateProject", () => {
     );
     const result = await generateProject("u1", "p1", 3);
     expect(result).toMatchObject({ ok: false, code: "NOT_READY" });
-    expect(result.ok === false && "error" in result && result.error).toContain("avatar scene");
+    expect(result.ok === false && "error" in result && result.error).toMatch(/at least one Avatar or Slide \+ narration scene/i);
     expect(heygen.createHeyGenStudioVideo).not.toHaveBeenCalled();
   });
 

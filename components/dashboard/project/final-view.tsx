@@ -215,9 +215,22 @@ export function FinalView({
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {snapshot.some((s) => s.kind === "SLIDE") && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                To keep your documents private, slide images are deleted a day after the video is finished. Your
+                video keeps them. To make another version later, add the slides again.
+              </p>
+            )}
             <ol className="divide-y">
               {snapshot.map((scene) => {
-                const kindLabel = scene.kind === "AVATAR" ? scene.avatarName : scene.kind === "IMAGE" ? "Image" : "Video clip";
+                const kindLabel =
+                  scene.kind === "AVATAR"
+                    ? scene.avatarName
+                    : scene.kind === "SLIDE"
+                      ? "Slide + narration"
+                      : scene.kind === "IMAGE"
+                        ? "Image"
+                        : "Video clip";
                 return (
                   <li key={scene.order} className="flex items-start justify-between gap-3 py-3">
                     <div className="flex min-w-0 items-start gap-3">

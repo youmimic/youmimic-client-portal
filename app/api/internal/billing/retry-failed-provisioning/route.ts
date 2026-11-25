@@ -29,7 +29,23 @@ import { processBookingReminders } from "@/lib/bookings/process-reminders";
 // Task 3 — lib/bookings/process-reminders.ts: single day-before reminder
 // email for confirmed bookings happening in the next 48h. See that file for
 // the actual logic.
+//
+// Vercel invokes crons with GET ("Vercel makes an HTTP GET request to your
+// project's production deployment URL", vercel.com/docs/cron-jobs), sending
+// "Authorization: Bearer <CRON_SECRET>". Until 2026-11-25 this route only
+// exported POST, so the scheduled call got 405 and never ran (no reminder
+// had ever been recorded). The old checkout-draft backlog was cleared
+// first, so the first scheduled run only acts on new work. POST is kept for
+// manual authenticated calls.
+export async function GET(req: Request) {
+  return runBillingMaintenance(req);
+}
+
 export async function POST(req: Request) {
+  return runBillingMaintenance(req);
+}
+
+async function runBillingMaintenance(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("authorization");
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {

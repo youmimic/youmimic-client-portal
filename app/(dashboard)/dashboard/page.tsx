@@ -20,6 +20,7 @@ import { PageHeader, SectionHeading } from "@/components/dashboard/page-header";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Thumb } from "@/components/dashboard/project/avatar-look-picker";
 import { NewProjectButton } from "@/components/dashboard/project/new-project-button";
+import { ImportDocumentButton } from "@/components/dashboard/project/import-document-button";
 import { ProjectCard } from "@/components/dashboard/project/project-card";
 import { VideoCard, type LibraryVideo } from "@/components/dashboard/video/video-library";
 import { listAvatarOptions, listProjects } from "@/lib/projects/service";
@@ -127,7 +128,7 @@ export default async function DashboardPage({
     estimatedCostCents: v.estimatedCostCents,
     aspectRatio: v.aspectRatio,
     errorMessage: v.errorMessage,
-    avatarName: v.avatar.name,
+    avatarName: v.avatar?.name ?? null,
     projectId: v.projectId,
   }));
 
@@ -167,6 +168,7 @@ export default async function DashboardPage({
               </Link>
             </Button>
             <NewProjectButton />
+            <ImportDocumentButton />
           </>
         }
       />

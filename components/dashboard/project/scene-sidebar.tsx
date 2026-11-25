@@ -12,7 +12,9 @@ import {
   Image as ImageIcon,
   Loader2,
   Plus,
+  Presentation,
   Trash2,
+  UserCircle2,
   Video as VideoIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,26 +42,30 @@ const READINESS_LABEL: Record<SceneReadiness, string> = {
 // next/image (which only serves pre-configured hostnames) — a plain tag with
 // an icon fallback if it fails to load. A video scene shows an icon only:
 // grabbing a frame from an arbitrary clip isn't worth the cost in a list.
-function SceneMediaThumb({ kind, mediaUrl }: { kind: "IMAGE" | "VIDEO"; mediaUrl: string | null }) {
+// A slide is shown whole (letterboxed on black, as in the video) rather than
+// cropped like a photo, so it stays recognisable at thumbnail size.
+function SceneMediaThumb({ kind, mediaUrl }: { kind: "IMAGE" | "VIDEO" | "SLIDE"; mediaUrl: string | null }) {
+  const Icon = kind === "VIDEO" ? VideoIcon : kind === "SLIDE" ? Presentation : ImageIcon;
   if (kind === "VIDEO" || !mediaUrl) {
     return (
       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-muted ring-1 ring-foreground/10">
-        {kind === "VIDEO" ? (
-          <VideoIcon className="h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
-        ) : (
-          <ImageIcon className="h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
-        )}
+        <Icon className="h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
       </span>
     );
   }
   return (
-    <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted ring-1 ring-foreground/10">
-      <ImageIcon className="absolute h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
+    <span
+      className={cn(
+        "relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md ring-1 ring-foreground/10",
+        kind === "SLIDE" ? "bg-black" : "bg-muted",
+      )}
+    >
+      <Icon className="absolute h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={mediaUrl}
         alt=""
-        className="relative h-full w-full object-cover"
+        className={cn("relative h-full w-full", kind === "SLIDE" ? "object-contain" : "object-cover")}
         onError={(e) => {
           e.currentTarget.style.display = "none";
         }}
@@ -94,6 +100,7 @@ export function SceneSidebar({
   onToggleSelectAll,
   onClearSelection,
   onDeleteSelected,
+  onSetPresentation,
 }: {
   scenes: SceneData[];
   activeSceneId: string;
@@ -127,6 +134,9 @@ export function SceneSidebar({
   onClearSelection: () => void;
   // Asks for confirmation first (the dialog lives in ProjectWorkspace).
   onDeleteSelected: () => void;
+  // Shows every ticked scene as Avatar or as Slide + narration. The
+  // workspace explains first if some ticked scenes have no slide image.
+  onSetPresentation: (kind: "AVATAR" | "SLIDE") => void;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -167,24 +177,39 @@ export function SceneSidebar({
 
       {selectedSceneIds.size > 0 && (
         <div className="space-y-1">
-          <div className="flex items-center justify-between gap-2 rounded-md bg-primary/10 py-1 pl-2.5 pr-1">
-            <span className="text-xs font-medium">{selectedSceneIds.size} selected</span>
-            <div className="flex items-center gap-0.5">
-              <Button type="button" variant="ghost" size="xs" onClick={onClearSelection}>
-                Clear
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="text-destructive hover:text-destructive"
-                disabled={disabled || busy || allSelected}
-                onClick={onDeleteSelected}
-                aria-label={`Delete ${selectedSceneIds.size} selected ${selectedSceneIds.size === 1 ? "scene" : "scenes"}`}
-              >
-                <Trash2 aria-hidden="true" />
-                Delete
-              </Button>
+          <div className="rounded-md bg-primary/10 py-1 pl-2.5 pr-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium">{selectedSceneIds.size} selected</span>
+              <div className="flex items-center gap-0.5">
+                <Button type="button" variant="ghost" size="xs" onClick={onClearSelection}>
+                  Clear
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="text-destructive hover:text-destructive"
+                  disabled={disabled || busy || allSelected}
+                  onClick={onDeleteSelected}
+                  aria-label={`Delete ${selectedSceneIds.size} selected ${selectedSceneIds.size === 1 ? "scene" : "scenes"}`}
+                >
+                  <Trash2 aria-hidden="true" />
+                  Delete
+                </Button>
+              </div>
+            </div>
+            <div role="group" aria-label="Show the selected scenes as" className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">Show as</span>
+              <div className="flex items-center gap-0.5">
+                <Button type="button" variant="ghost" size="xs" disabled={disabled || busy} onClick={() => onSetPresentation("AVATAR")}>
+                  <UserCircle2 aria-hidden="true" />
+                  Avatar
+                </Button>
+                <Button type="button" variant="ghost" size="xs" disabled={disabled || busy} onClick={() => onSetPresentation("SLIDE")}>
+                  <Presentation aria-hidden="true" />
+                  Slide
+                </Button>
+              </div>
             </div>
           </div>
           {allSelected && (
@@ -217,6 +242,10 @@ export function SceneSidebar({
                   ? `${avatar.name} · ${look.name}`
                   : avatar.name
                 : "No avatar"
+              : scene.kind === "SLIDE"
+                ? scene.slideImage
+                  ? `Slide${scene.sourcePageNumber ? ` (page ${scene.sourcePageNumber})` : ""} + narration`
+                  : "Slide, no image yet"
               : scene.kind === "IMAGE"
                 ? scene.script.trim()
                   ? "Image, narrated"
@@ -293,6 +322,8 @@ export function SceneSidebar({
                       className="h-12 w-12 rounded-md ring-1 ring-foreground/10"
                       iconClass="h-6 w-6"
                     />
+                  ) : scene.kind === "SLIDE" ? (
+                    <SceneMediaThumb kind="SLIDE" mediaUrl={scene.slideImage?.url ?? null} />
                   ) : (
                     <SceneMediaThumb kind={scene.kind} mediaUrl={scene.mediaUrl} />
                   )}
@@ -307,7 +338,7 @@ export function SceneSidebar({
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                       {preview ||
-                        (scene.kind === "AVATAR"
+                        (scene.kind === "AVATAR" || scene.kind === "SLIDE"
                           ? "No script yet"
                           : scene.kind === "IMAGE"
                             ? "Silent title card"

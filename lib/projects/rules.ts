@@ -38,8 +38,10 @@ export function supportsBackgroundOverride(avatarType: string | null | undefined
   return !!avatarType && SUPPORTED_BACKGROUND_AVATAR_TYPES.has(avatarType);
 }
 
-export type SceneKindValue = "AVATAR" | "IMAGE" | "VIDEO";
-export const SCENE_KINDS: SceneKindValue[] = ["AVATAR", "IMAGE", "VIDEO"];
+export type SceneKindValue = "AVATAR" | "IMAGE" | "VIDEO" | "SLIDE";
+export const SCENE_KINDS: SceneKindValue[] = ["AVATAR", "IMAGE", "VIDEO", "SLIDE"];
+
+export type SlideImageData = { id: string; url: string; width: number; height: number };
 
 export type SceneData = {
   id: string;
@@ -58,6 +60,10 @@ export type SceneData = {
   mediaDurationSeconds: number | null;
   // AVATAR scenes only. See lib/heygen.ts for engine restrictions.
   motionPrompt: string | null;
+  // Shown by SLIDE scenes; kept whatever the kind so switching never loses it.
+  slideImageId: string | null;
+  slideImage: SlideImageData | null;
+  sourcePageNumber: number | null;
 };
 
 export type ProjectDefaults = {
@@ -150,7 +156,8 @@ export type SceneIssue = {
     | "NO_MEDIA"
     | "BAD_MEDIA_URL"
     | "NO_DURATION"
-    | "NO_VOICE";
+    | "NO_VOICE"
+    | "NO_SLIDE";
   message: string;
 };
 
@@ -246,6 +253,24 @@ export function validateScene(
     return issues.map((i) => ({ ...i, sceneNumber: number }));
   }
 
+  if (scene.kind === "SLIDE") {
+    if (!scene.slideImage) {
+      push("error", "NO_SLIDE", `${label} is set to show a slide but has no slide image. Add one, or switch it to Avatar.`);
+    }
+    if (!script) {
+      push("error", "EMPTY_SCRIPT", `${label} needs narration before it can be generated. Write what should be said over the slide.`);
+    } else {
+      pushScriptIssues(issues, scene, label, script, engine);
+      // With no voice chosen, the scene's avatar's own voice narrates it
+      // (lib/projects/generate.ts resolves it the same way as an avatar scene).
+      const avatar = resolved.avatarId ? avatars.find((a) => a.id === resolved.avatarId) : undefined;
+      if (!resolved.voiceId && !avatar?.usable) {
+        push("error", "NO_VOICE", `${label} needs a voice for its narration. Choose one for the scene or set a project voice.`);
+      }
+    }
+    return issues.map((i) => ({ ...i, sceneNumber: number }));
+  }
+
   // IMAGE / VIDEO
   const mediaUrl = scene.mediaUrl?.trim() ?? "";
   const mediaWord = scene.kind === "IMAGE" ? "an image" : "a video";
@@ -321,7 +346,7 @@ export function evaluateProject(
     const sceneIssues = validateScene(scene, i + 1, defaults, avatars, engine);
     issues.push(...sceneIssues);
     const hasError = sceneIssues.some((x) => x.severity === "error");
-    const hasContent = scene.script.trim() || scene.title.trim() || (scene.mediaUrl ?? "").trim();
+    const hasContent = scene.script.trim() || scene.title.trim() || (scene.mediaUrl ?? "").trim() || scene.slideImage;
     sceneStatus[scene.id] = hasError ? (hasContent ? "needs_attention" : "draft") : "ready";
 
     if (scene.kind !== "AVATAR") {
@@ -343,12 +368,15 @@ export function evaluateProject(
   const readyCount = ordered.filter((s) => sceneStatus[s.id] === "ready").length;
   const attentionCount = ordered.length - readyCount;
 
-  // Every render still links to one of the user's avatars (GeneratedVideo
-  // requires one), so a project made entirely of image/video scenes can't
-  // be generated on its own — it needs at least one avatar scene somewhere.
+  // The provider accepts any mix of avatar, image and video scenes (its
+  // docs: 1 to 50 scenes, each avatar_video, image or video), so this is a
+  // business rule, not a provider one: a video needs at least one Avatar or
+  // Slide + narration scene. Both always carry narration, and credits are
+  // estimated from narration, so a video of only silent images or clips
+  // (whose provider cost isn't confirmed) would reserve almost nothing.
   const projectIssue =
-    ordered.length > 0 && !ordered.some((s) => s.kind === "AVATAR")
-      ? "Add at least one avatar scene. Every video needs to include one of your avatars."
+    ordered.length > 0 && !ordered.some((s) => s.kind === "AVATAR" || s.kind === "SLIDE")
+      ? "Every video needs at least one Avatar or Slide + narration scene. Images and video clips on their own can't be generated yet."
       : null;
 
   const canGenerate = ordered.length > 0 && attentionCount === 0 && !projectIssue;

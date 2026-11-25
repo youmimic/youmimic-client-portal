@@ -177,7 +177,7 @@ export default async function VideosPage({
             estimatedCostCents: v.estimatedCostCents,
             aspectRatio: v.aspectRatio,
             errorMessage: v.errorMessage,
-            avatarName: v.avatar.name,
+            avatarName: v.avatar?.name ?? null,
             projectId: v.projectId,
           }))}
         />

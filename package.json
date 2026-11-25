@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "node scripts/vitest.mjs run",
+    "test:watch": "node scripts/vitest.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -61,6 +61,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -68,6 +69,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
+    "pg": "^8.23.1",
     "pptxgenjs": "^4.0.1",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
@@ -91,6 +93,7 @@
     "fast-uri": "^3.1.5",
     "body-parser": "^2.3.0",
     "valibot": "^1.4.2",
-    "deepmerge-ts": "^8.0.2"
+    "deepmerge-ts": "^8.0.2",
+    "@napi-rs/canvas": "0.1.100"
   }
 }
