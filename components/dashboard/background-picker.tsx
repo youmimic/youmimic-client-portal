@@ -5,6 +5,7 @@ import { upload } from "@vercel/blob/client";
 import { ImageUp, Loader2, TriangleAlert, Video as VideoIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BackgroundMediaRef } from "@/lib/projects/rules";
+import { DEFAULT_ADJUST, isDefaultAdjust, svgColourMatrixValues, type BackgroundAdjust } from "@/lib/backgrounds/adjust";
 import { cn } from "@/lib/utils";
 
 // Same limits the server enforces (lib/backgrounds/media.ts), checked here
@@ -40,6 +41,8 @@ export function BackgroundPicker({
   disabled,
   appliesToCount,
   onChange,
+  adjust,
+  onAdjustChange,
 }: {
   userId: string;
   value: BackgroundMediaRef | null;
@@ -50,6 +53,10 @@ export function BackgroundPicker({
   // When several scenes are ticked, the change goes to all of them.
   appliesToCount?: number;
   onChange: (media: BackgroundMediaRef | null) => void;
+  // Photo adjustments (darken, warmth, colour, blur). Without onAdjustChange
+  // no adjustment controls are shown.
+  adjust?: BackgroundAdjust | null;
+  onAdjustChange?: (adjust: BackgroundAdjust | null) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -58,7 +65,22 @@ export function BackgroundPicker({
   const [error, setError] = useState<string | null>(null);
   const reduceMotion = usePrefersReducedMotion();
   const headingId = useId();
+  const filterId = useId().replace(/:/g, "");
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [previewWidth, setPreviewWidth] = useState(0);
   const uploading = progress !== null;
+  const current = adjust ?? DEFAULT_ADJUST;
+  const showAdjust = !!onAdjustChange && value?.kind === "IMAGE";
+
+  // The preview blur is scaled to the preview width, the same rule the
+  // server uses at full size (lib/backgrounds/adjust.ts blurSigma).
+  useEffect(() => {
+    const el = previewRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setPreviewWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [value]);
 
   if (!supported && !value) return null;
 
@@ -138,7 +160,7 @@ export function BackgroundPicker({
         {/* The preview only appears once a photo or video is chosen; with the
             original background the picker stays a compact row. */}
         {value && (
-          <div className="relative aspect-video w-full bg-muted/60">
+          <div ref={previewRef} className="relative aspect-video w-full overflow-hidden bg-muted/60">
             {value.kind === "VIDEO" ? (
               <video
                 key={value.url}
@@ -153,7 +175,16 @@ export function BackgroundPicker({
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element -- Vercel Blob URL, same as slide previews
-              <img src={value.url} alt="Background photo preview" className="h-full w-full object-cover" />
+              <img
+                src={value.url}
+                alt="Background photo preview"
+                className="h-full w-full object-cover"
+                style={
+                  showAdjust && !isDefaultAdjust(current)
+                    ? { filter: `url(#${filterId}) blur(${((current.blur / 1000) * previewWidth).toFixed(2)}px)` }
+                    : undefined
+                }
+              />
             )}
             {uploading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/80" role="status">
@@ -225,6 +256,15 @@ export function BackgroundPicker({
             </p>
           )}
 
+          {showAdjust && supported && (
+            <AdjustControls value={current} disabled={disabled || uploading} onChange={(next) => onAdjustChange?.(isDefaultAdjust(next) ? null : next)} />
+          )}
+          {onAdjustChange && value?.kind === "VIDEO" && (
+            <p className="text-xs text-muted-foreground">
+              Darken, warmth and blur work on photos. For a video, adjust the clip before uploading it.
+            </p>
+          )}
+
           {supported && value && (
             <p className={cn("text-xs text-muted-foreground")}>
               Photos: {LIMITS.IMAGE.hint}. Videos: {LIMITS.VIDEO.hint}; they play silently on a loop. Anything that was in
@@ -233,6 +273,13 @@ export function BackgroundPicker({
           )}
         </div>
       </div>
+
+      {/* Same colour matrix the server applies (sRGB, like sharp's recomb). */}
+      <svg width="0" height="0" className="absolute" aria-hidden="true" focusable="false">
+        <filter id={filterId} colorInterpolationFilters="sRGB">
+          <feColorMatrix type="matrix" values={svgColourMatrixValues(current)} />
+        </filter>
+      </svg>
 
       <input
         ref={inputRef}
@@ -245,5 +292,58 @@ export function BackgroundPicker({
         }}
       />
     </div>
+  );
+}
+
+const SLIDERS: { key: keyof BackgroundAdjust; label: string; min: number; max: number; step: number; format: (v: number) => string }[] = [
+  { key: "darken", label: "Darken", min: 0, max: 70, step: 1, format: (v) => `${v}%` },
+  { key: "warmth", label: "Warmth", min: -100, max: 100, step: 1, format: (v) => (v === 0 ? "Neutral" : v > 0 ? `Warmer ${v}` : `Cooler ${-v}`) },
+  { key: "saturation", label: "Colour", min: 0, max: 150, step: 1, format: (v) => `${v}%` },
+  { key: "blur", label: "Blur", min: 0, max: 10, step: 0.5, format: (v) => (v === 0 ? "Off" : String(v)) },
+];
+
+// Sliders for the photo adjustments. Changes show live in the preview; the
+// adjusted copy is made when the video is generated, and the original photo
+// is never changed.
+function AdjustControls({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: BackgroundAdjust;
+  disabled?: boolean;
+  onChange: (next: BackgroundAdjust) => void;
+}) {
+  const baseId = useId();
+  return (
+    <fieldset className="space-y-2.5 rounded-md border p-3">
+      <legend className="px-1 text-xs font-medium">Adjust the photo</legend>
+      {SLIDERS.map((s) => (
+        <div key={s.key} className="grid grid-cols-[4.5rem_minmax(0,1fr)_5.5rem] items-center gap-2">
+          <label htmlFor={`${baseId}-${s.key}`} className="text-xs">
+            {s.label}
+          </label>
+          <input
+            id={`${baseId}-${s.key}`}
+            type="range"
+            min={s.min}
+            max={s.max}
+            step={s.step}
+            value={value[s.key]}
+            disabled={disabled}
+            aria-valuetext={s.format(value[s.key])}
+            onChange={(e) => onChange({ ...value, [s.key]: Number(e.target.value) })}
+            className="w-full accent-primary"
+          />
+          <span className="text-right text-xs tabular-nums text-muted-foreground">{s.format(value[s.key])}</span>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <p className="text-xs text-muted-foreground">A little darken and blur often helps the avatar stand out.</p>
+        <Button type="button" variant="ghost" size="sm" disabled={disabled || isDefaultAdjust(value)} onClick={() => onChange(DEFAULT_ADJUST)}>
+          Reset
+        </Button>
+      </div>
+    </fieldset>
   );
 }

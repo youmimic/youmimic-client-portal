@@ -638,6 +638,9 @@ model BackgroundMedia {
   url         String
   contentType String
   sizeBytes   Int
+  // Adjusted copies of a photo (darken/warmth/saturation/blur), keyed by
+  // lib/backgrounds/adjust.ts adjustKey -> URL. The original is never changed.
+  renditions  Json?
   createdAt   DateTime            @default(now())
 
   user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -815,6 +818,9 @@ model VideoScene {
   // cut out of its own backdrop). Null keeps the look's original backdrop.
   // Kept whatever the kind, like slideImageId.
   backgroundMediaId String?
+  // Photo adjustments for that background ({darken, warmth, saturation,
+  // blur}, lib/backgrounds/adjust.ts). Null means unadjusted.
+  backgroundAdjust  Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

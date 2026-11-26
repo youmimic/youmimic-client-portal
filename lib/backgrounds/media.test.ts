@@ -91,7 +91,18 @@ describe("removing unused backgrounds", () => {
     expect(where).toEqual({ scenes: { none: {} }, createdAt: { lt: new Date(now.getTime() - UNUSED_BACKGROUND_GRACE_MS) } });
     expect(db.backgroundMedia.deleteMany).toHaveBeenCalledTimes(1);
     expect(db.backgroundMedia.deleteMany).toHaveBeenCalledWith({ where: { id: "a", scenes: { none: {} } } });
-    expect(blob.del).toHaveBeenCalledWith(mine("a.jpg"));
+    expect(blob.del).toHaveBeenCalledWith([mine("a.jpg")]);
+  });
+
+  it("deletes adjusted copies with the original, and spares one a recent render was sent", async () => {
+    db.backgroundMedia.findMany.mockResolvedValue([
+      { id: "a", userId: "u1", url: mine("a.jpg"), renditions: { "d30-w0-s100-b0": mine("adjusted-1.jpg") } },
+      { id: "b", userId: "u1", url: mine("b.jpg"), renditions: { "d10-w0-s100-b0": mine("adjusted-2.jpg") } },
+    ]);
+    db.generatedVideo.findMany.mockResolvedValue([{ backgroundUrl: mine("adjusted-2.jpg"), sceneSnapshot: null }]);
+    db.backgroundMedia.deleteMany.mockResolvedValue({ count: 1 });
+    expect(await removeUnusedBackgroundMedia(now)).toEqual({ deleted: 1 });
+    expect(blob.del).toHaveBeenCalledWith([mine("a.jpg"), mine("adjusted-1.jpg")]);
   });
 
   it("keeps the file when a scene picked the background up in the meantime", async () => {

@@ -122,11 +122,16 @@ function snapshotBackgroundUrls(snapshot: unknown): string[] {
   );
 }
 
+function renditionUrls(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.values(value).filter((v): v is string => typeof v === "string");
+}
+
 export async function removeUnusedBackgroundMedia(now: Date = new Date()): Promise<{ deleted: number }> {
   const cutoff = new Date(now.getTime() - UNUSED_BACKGROUND_GRACE_MS);
   const candidates = await prisma.backgroundMedia.findMany({
     where: { scenes: { none: {} }, createdAt: { lt: cutoff } },
-    select: { id: true, userId: true, url: true },
+    select: { id: true, userId: true, url: true, renditions: true },
     take: MAX_REMOVED_PER_RUN,
   });
   if (candidates.length === 0) return { deleted: 0 };
@@ -148,11 +153,14 @@ export async function removeUnusedBackgroundMedia(now: Date = new Date()): Promi
 
   let deleted = 0;
   for (const media of candidates) {
-    if (stillNeeded.has(media.url)) continue;
+    // The original plus every adjusted copy (renditions); a render may have
+    // been sent any of them.
+    const urls = [media.url, ...renditionUrls(media.renditions)];
+    if (urls.some((u) => stillNeeded.has(u))) continue;
     // Row first, re-checking "unused" in the same statement, files after.
     const { count } = await prisma.backgroundMedia.deleteMany({ where: { id: media.id, scenes: { none: {} } } });
     if (count !== 1) continue;
-    await del(media.url).catch((err) => console.error("Background clean-up (Blob) failed:", err));
+    await del(urls).catch((err) => console.error("Background clean-up (Blob) failed:", err));
     deleted += 1;
   }
   return { deleted };

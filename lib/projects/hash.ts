@@ -48,6 +48,7 @@ export function projectContentHash(
         // Same rule for a custom avatar background: undefined unless set on
         // an avatar scene, so existing projects keep their hash.
         backgroundMediaId: scene.kind === "AVATAR" && scene.backgroundMediaId ? scene.backgroundMediaId : undefined,
+        backgroundAdjust: scene.kind === "AVATAR" && scene.backgroundMediaId && scene.backgroundAdjust ? scene.backgroundAdjust : undefined,
       };
     }),
   };

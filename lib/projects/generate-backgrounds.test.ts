@@ -18,6 +18,13 @@ const support = vi.hoisted(() => ({ value: "SUPPORTED" as "SUPPORTED" | "UNKNOWN
 vi.mock("@/lib/prisma", () => ({ default: db }));
 vi.mock("@/lib/heygen", async (orig) => ({ ...(await orig<typeof import("@/lib/heygen")>()), ...heygen }));
 vi.mock("@/lib/usage/ledger", () => ledger);
+// The adjusted-copy step (sharp + Blob) is tested on its own; here it returns
+// a recognisable URL when a scene has adjustments.
+vi.mock("@/lib/backgrounds/renditions", () => ({
+  adjustedBackgroundUrl: vi.fn(async (_u: string, id: string, adjust: unknown) =>
+    adjust ? `https://x.public.blob.vercel-storage.com/backgrounds/u1/adjusted-${id}.jpg` : id === "bg1" ? "https://x.public.blob.vercel-storage.com/backgrounds/u1/office.jpg" : "https://x.public.blob.vercel-storage.com/backgrounds/u1/sea.mp4",
+  ),
+}));
 vi.mock("@/lib/projects/service", async (orig) => ({
   ...(await orig<typeof import("@/lib/projects/service")>()),
   listAvatarOptions: vi.fn(async () => [
@@ -63,6 +70,7 @@ function scene(i: number, over: Record<string, unknown> = {}) {
     sourcePageNumber: null,
     backgroundMediaId: null,
     backgroundMedia: null,
+    backgroundAdjust: null,
     ...over,
   };
 }
@@ -105,6 +113,15 @@ describe("generateProject with custom avatar backgrounds", () => {
     expect(snapshot[0]).toMatchObject({ backgroundUrl: photo.url, backgroundKind: "IMAGE" });
     expect(snapshot[1]).toMatchObject({ backgroundUrl: clip.url, backgroundKind: "VIDEO" });
     expect("backgroundUrl" in snapshot[2]).toBe(false);
+  });
+
+  it("sends the adjusted copy of a photo when the scene has adjustments", async () => {
+    const adjust = { darken: 30, warmth: 20, saturation: 90, blur: 2 };
+    db.videoProject.findFirst.mockResolvedValue(project([scene(0, { backgroundMediaId: "bg1", backgroundMedia: photo, backgroundAdjust: adjust })]));
+    expect(await generateProject("u1", "p1", 1)).toMatchObject({ ok: true });
+    const sent = heygen.createHeyGenStudioVideo.mock.calls[0][0].scenes[0];
+    expect(sent.background).toEqual({ kind: "image", url: "https://x.public.blob.vercel-storage.com/backgrounds/u1/adjusted-bg1.jpg" });
+    expect(db.generatedVideo.create.mock.calls[0][0].data.sceneSnapshot[0].backgroundUrl).toBe(sent.background.url);
   });
 
   it("refuses before rendering when the look isn't marked as supporting backgrounds", async () => {

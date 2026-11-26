@@ -1,4 +1,5 @@
 import { estimateGeneration, formatDuration, type VideoEngineValue } from "@/lib/video-display";
+import type { BackgroundAdjust } from "@/lib/backgrounds/adjust";
 
 // Pure business rules for multi-scene projects. Nothing here touches the
 // database or browser APIs, so the same code validates on the server (the
@@ -74,6 +75,8 @@ export type SceneData = {
   // the look's own backdrop. Only looks marked SUPPORTED can use one.
   backgroundMediaId: string | null;
   backgroundMedia: BackgroundMediaRef | null;
+  // Photo adjustments for that background (null = unadjusted).
+  backgroundAdjust: BackgroundAdjust | null;
 };
 
 export type BackgroundMediaRef = { id: string; kind: "IMAGE" | "VIDEO"; url: string };

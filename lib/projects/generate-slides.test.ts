@@ -59,6 +59,8 @@ function scene(i: number, over: Record<string, unknown> = {}) {
     sourcePageNumber: null,
     backgroundMediaId: null,
     backgroundMedia: null,
+
+    backgroundAdjust: null,
     ...over,
   };
 }

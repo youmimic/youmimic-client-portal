@@ -11,12 +11,13 @@ import {
 } from "@/lib/heygen";
 import { projectContentHash } from "@/lib/projects/hash";
 import { DEFAULT_MEDIA_DURATION, evaluateProject, resolveScene, sceneLabel, type SceneData, type SceneIssue } from "@/lib/projects/rules";
-import { listAvatarOptions, listPublicAvatarOptions, ProjectError, type SnapshotScene } from "@/lib/projects/service";
+import { listAvatarOptions, listPublicAvatarOptions, ProjectError, toSceneData, type SnapshotScene } from "@/lib/projects/service";
 import { releaseReservation, reserveCreditsForGeneration } from "@/lib/usage/ledger";
 import { avatarAccessWhere } from "@/lib/avatar-access";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { SlideImageError, slideRenditionUrl } from "@/lib/slides/images";
-import { isBackgroundRemovalRejection, markLookBackgroundUnsupported } from "@/lib/backgrounds/media";
+import { BackgroundMediaError, isBackgroundRemovalRejection, markLookBackgroundUnsupported } from "@/lib/backgrounds/media";
+import { adjustedBackgroundUrl } from "@/lib/backgrounds/renditions";
 
 export type GenerateProjectResult =
   | { ok: true; generatedVideoId: string }
@@ -101,7 +102,7 @@ export async function generateProject(userId: string, projectId: string, expecte
 
   const [ownedAvatars, publicAvatars] = await Promise.all([listAvatarOptions(userId), listPublicAvatarOptions()]);
   const avatars = [...ownedAvatars, ...publicAvatars];
-  const scenes: SceneData[] = project.scenes;
+  const scenes: SceneData[] = toSceneData(project.scenes);
   const defaults = {
     defaultAvatarId: project.defaultAvatarId,
     defaultAvatarLookId: project.defaultAvatarLookId,
@@ -274,9 +275,25 @@ export async function generateProject(userId: string, projectId: string, expecte
 
         // Readiness (lookSupportsBackground) already refused looks not marked
         // as supporting it; legacy looks-less avatars can't reach here with one.
-        const background = scene.backgroundMedia && lookRowId
-          ? { kind: scene.backgroundMedia.kind === "VIDEO" ? ("video" as const) : ("image" as const), url: scene.backgroundMedia.url }
-          : null;
+        // A photo with adjustments goes out as its adjusted copy (made once
+        // and cached); videos and unadjusted photos as uploaded.
+        let background: { kind: "image" | "video"; url: string } | null = null;
+        if (scene.backgroundMedia && lookRowId) {
+          try {
+            background = {
+              kind: scene.backgroundMedia.kind === "VIDEO" ? "video" : "image",
+              url: await adjustedBackgroundUrl(userId, scene.backgroundMedia.id, scene.backgroundAdjust),
+            };
+          } catch (err) {
+            await revert();
+            if (!(err instanceof BackgroundMediaError)) console.error("Preparing a background failed:", err);
+            return {
+              ok: false,
+              code: "BAD_MEDIA",
+              error: err instanceof BackgroundMediaError ? err.message : "Couldn't prepare a background. Please try again.",
+            };
+          }
+        }
         if (background && lookRowId) backgroundLookIds.add(lookRowId);
 
         providerScenes.push({

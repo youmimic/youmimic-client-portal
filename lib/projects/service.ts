@@ -1,4 +1,5 @@
-import type { Prisma } from "@/app/generated/prisma/client";
+import { Prisma } from "@/app/generated/prisma/client";
+import { readAdjust } from "@/lib/backgrounds/adjust";
 import type { VideoEngine, VideoGenerationStatus, VideoProjectStatus, WatermarkPosition } from "@/app/generated/prisma/enums";
 import prisma from "@/lib/prisma";
 import { isPermutation, insertAfter, moveItem } from "@/lib/projects/ordering";
@@ -111,6 +112,7 @@ const sceneSelect = {
   slideImage: { select: { id: true, url: true, width: true, height: true } },
   backgroundMediaId: true,
   backgroundMedia: { select: { id: true, kind: true, url: true } },
+  backgroundAdjust: true,
 } as const;
 
 type Tx = Prisma.TransactionClient;
@@ -172,8 +174,12 @@ async function lockAndBump(tx: Tx, userId: string, projectId: string, expectedVe
   );
 }
 
-function toSceneData(rows: SceneData[]): SceneData[] {
-  return [...rows].sort((a, b) => a.orderIndex - b.orderIndex);
+// Database rows to SceneData: ordered, with the stored JSON adjustments read
+// defensively (anything invalid counts as none).
+export function toSceneData(rows: (Omit<SceneData, "backgroundAdjust"> & { backgroundAdjust: Prisma.JsonValue | null })[]): SceneData[] {
+  return [...rows]
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .map((row) => ({ ...row, backgroundAdjust: readAdjust(row.backgroundAdjust) }));
 }
 
 function readSnapshot(value: Prisma.JsonValue | null): SnapshotScene[] | null {
@@ -402,7 +408,10 @@ export async function updateScene(userId: string, projectId: string, sceneId: st
     if (patch.slideImageId) await assertSlideImage(tx, userId, patch.slideImageId);
     if (patch.backgroundMediaId) await assertBackgroundMedia(tx, userId, patch.backgroundMediaId);
 
-    const data: Prisma.VideoSceneUncheckedUpdateInput = { ...patch };
+    const { backgroundAdjust, ...rest } = patch;
+    const data: Prisma.VideoSceneUncheckedUpdateInput = { ...rest };
+    // Json columns need Prisma.DbNull to store SQL NULL.
+    if (backgroundAdjust !== undefined) data.backgroundAdjust = backgroundAdjust ?? Prisma.DbNull;
     // Clearing the scene's avatar (back to the project default) clears its
     // look and choosing a new avatar without a look resets the look, so a
     // scene never points at a look from a different avatar.
@@ -426,7 +435,7 @@ export async function addScene(userId: string, projectId: string, expectedVersio
     const existing = await tx.videoScene.findMany({
       where: { projectId },
       orderBy: { orderIndex: "asc" },
-      select: { id: true, kind: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true, backgroundMediaId: true },
+      select: { id: true, kind: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true, backgroundMediaId: true, backgroundAdjust: true },
     });
     if (existing.length >= MAX_SCENES) {
       throw new ProjectError("LIMIT", 422, `A video can have up to ${MAX_SCENES} scenes.`);
@@ -447,6 +456,7 @@ export async function addScene(userId: string, projectId: string, expectedVersio
         voiceId: anchor?.voiceId ?? null,
         voiceName: anchor?.voiceName ?? null,
         backgroundMediaId: anchor?.backgroundMediaId ?? null,
+        backgroundAdjust: anchor?.backgroundAdjust ?? Prisma.DbNull,
       },
       select: { id: true },
     });
@@ -493,7 +503,7 @@ export async function importScenesFromDocument(
     const existing = await tx.videoScene.findMany({
       where: { projectId },
       orderBy: { orderIndex: "asc" },
-      select: { id: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true, backgroundMediaId: true },
+      select: { id: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true, backgroundMediaId: true, backgroundAdjust: true },
     });
 
     if (scenes.length === 0) {
@@ -547,6 +557,7 @@ export async function importScenesFromDocument(
           voiceId: anchor?.voiceId ?? null,
           voiceName: anchor?.voiceName ?? null,
           backgroundMediaId: anchor?.backgroundMediaId ?? null,
+          backgroundAdjust: anchor?.backgroundAdjust ?? Prisma.DbNull,
           slideImageId: scene.slideImageId,
           sourcePageNumber: scene.sourcePageNumber,
         },
@@ -587,6 +598,7 @@ export async function duplicateScene(userId: string, projectId: string, sceneId:
         slideImageId: source.slideImageId,
         sourcePageNumber: source.sourcePageNumber,
         backgroundMediaId: source.backgroundMediaId,
+        backgroundAdjust: source.backgroundAdjust ?? Prisma.DbNull,
       },
       select: { id: true },
     });
@@ -816,6 +828,7 @@ export async function duplicateProject(userId: string, projectId: string): Promi
             slideImageId: sc.slideImageId,
             sourcePageNumber: sc.sourcePageNumber,
             backgroundMediaId: sc.backgroundMediaId,
+            backgroundAdjust: sc.backgroundAdjust ?? Prisma.DbNull,
           })),
         },
       },

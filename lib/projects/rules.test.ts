@@ -54,6 +54,8 @@ function scene(over: Partial<SceneData> & { id: string; orderIndex: number }): S
     sourcePageNumber: null,
     backgroundMediaId: null,
     backgroundMedia: null,
+
+    backgroundAdjust: null,
     ...over,
   };
 }

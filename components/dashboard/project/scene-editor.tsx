@@ -24,6 +24,7 @@ import { InsertPauseButton } from "@/components/dashboard/video/insert-pause-but
 import { VoicePicker, type SelectedVoice } from "@/components/dashboard/video/voice-picker";
 import { AvatarLookPicker, Thumb } from "@/components/dashboard/project/avatar-look-picker";
 import { BackgroundPicker } from "@/components/dashboard/background-picker";
+import type { BackgroundAdjust } from "@/lib/backgrounds/adjust";
 import { GenerateScriptButton } from "@/components/dashboard/project/generate-script-button";
 import { ImageCropPicker } from "@/components/dashboard/project/image-crop-picker";
 import {
@@ -597,6 +598,7 @@ export function SceneEditor({
   onSlideImageChange,
   userId,
   onBackgroundChange,
+  onBackgroundAdjustChange,
 }: {
   scene: SceneData;
   number: number;
@@ -614,6 +616,7 @@ export function SceneEditor({
   onSlideImageChange: (image: SlideImageData) => void;
   userId: string;
   onBackgroundChange: (media: BackgroundMediaRef | null) => void;
+  onBackgroundAdjustChange: (adjust: BackgroundAdjust | null) => void;
 }) {
   const resolved = resolveScene(scene, defaults);
   const errors = issues.filter((i) => i.severity === "error");
@@ -671,6 +674,8 @@ export function SceneEditor({
                 disabled={disabled}
                 appliesToCount={selection?.includesThisScene ? selection.count : undefined}
                 onChange={onBackgroundChange}
+                adjust={scene.backgroundAdjust}
+                onAdjustChange={onBackgroundAdjustChange}
               />
 
               {firstBlank && (

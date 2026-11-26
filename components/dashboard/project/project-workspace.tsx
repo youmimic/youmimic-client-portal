@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { clearPendingDocumentImport, peekPendingDocumentImport } from "@/lib/projects/pending-import";
+import type { BackgroundAdjust } from "@/lib/backgrounds/adjust";
 import {
   Dialog,
   DialogContent,
@@ -306,6 +307,19 @@ export function ProjectWorkspace({
       ),
     }));
     for (const id of targets) queuePatch(`s:${id}`, { backgroundMediaId: media?.id ?? null });
+  }
+
+  // Photo adjustments follow the same rule: every ticked Avatar scene.
+  function setSceneBackgroundAdjust(sceneId: string, adjust: BackgroundAdjust | null) {
+    const bulk = selectedSceneIds.size > 1 && selectedSceneIds.has(sceneId);
+    const targets = bulk
+      ? project.scenes.filter((s) => selectedSceneIds.has(s.id) && s.kind === "AVATAR").map((s) => s.id)
+      : [sceneId];
+    setProject((p) => ({
+      ...p,
+      scenes: p.scenes.map((s) => (targets.includes(s.id) ? { ...s, backgroundAdjust: adjust } : s)),
+    }));
+    for (const id of targets) queuePatch(`s:${id}`, { backgroundAdjust: adjust });
   }
 
   // The preview needs the image's URL locally, but only its id is saved: the
@@ -1100,6 +1114,7 @@ export function ProjectWorkspace({
                   onSettingsChange={(patch) => editSceneSettings(activeScene.id, patch)}
                   userId={userId}
                   onBackgroundChange={(media) => setSceneBackground(activeScene.id, media)}
+                  onBackgroundAdjustChange={(adjust) => setSceneBackgroundAdjust(activeScene.id, adjust)}
                   onSlideImageChange={(image) => setSceneSlide(activeScene.id, image)}
                 />
               ) : (

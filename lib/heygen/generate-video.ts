@@ -12,7 +12,9 @@ import type { VideoEngine, VideoGenerationStatus } from "@/app/generated/prisma/
 import { estimatedCostCents } from "@/lib/heygen/pricing";
 import { reserveCreditsForGeneration, releaseReservation, reconcileCredits, releaseReservationForVideo } from "@/lib/usage/ledger";
 import { avatarAccessWhere } from "@/lib/avatar-access";
-import { BACKGROUND_REJECTED_MESSAGE, isBackgroundRemovalRejection, markLookBackgroundUnsupported } from "@/lib/backgrounds/media";
+import { BACKGROUND_REJECTED_MESSAGE, BackgroundMediaError, isBackgroundRemovalRejection, markLookBackgroundUnsupported } from "@/lib/backgrounds/media";
+import { adjustedBackgroundUrl } from "@/lib/backgrounds/renditions";
+import type { BackgroundAdjust } from "@/lib/backgrounds/adjust";
 
 // Maps the lowercase HeyGen API value (also what lib/validations/video.ts's
 // generateVideoSchema accepts from the client) to the Prisma enum value
@@ -35,6 +37,8 @@ export type GenerateVideoOptions = {
   // A photo/video (BackgroundMedia id, owned by the user) shown behind the
   // avatar. Only for looks marked SUPPORTED for background removal.
   backgroundMediaId?: string;
+  // Photo adjustments for that background (ignored for videos).
+  backgroundAdjust?: BackgroundAdjust;
 };
 
 export type GenerateVideoResult =
@@ -145,7 +149,19 @@ export async function generateAvatarVideo(
     if (lookBackgroundRemoval !== "SUPPORTED") {
       return { ok: false, code: "BACKGROUND_NOT_SUPPORTED", error: BACKGROUND_REJECTED_MESSAGE };
     }
-    background = { kind: media.kind === "VIDEO" ? "video" : "image", url: media.url };
+    try {
+      background = {
+        kind: media.kind === "VIDEO" ? "video" : "image",
+        url: await adjustedBackgroundUrl(userId, options.backgroundMediaId, options.backgroundAdjust ?? null),
+      };
+    } catch (err) {
+      if (!(err instanceof BackgroundMediaError)) console.error("Preparing a background failed:", err);
+      return {
+        ok: false,
+        code: "BACKGROUND_NOT_SUPPORTED",
+        error: err instanceof BackgroundMediaError ? err.message : "Couldn't prepare the background. Please try again.",
+      };
+    }
   }
 
   const prismaEngine = ENGINE_TO_PRISMA[engine];

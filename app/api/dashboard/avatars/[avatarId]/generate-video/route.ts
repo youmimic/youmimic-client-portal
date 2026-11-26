@@ -51,6 +51,7 @@ export async function POST(
       voiceId: parsed.data.voiceId,
       voiceName: parsed.data.voiceName,
       backgroundMediaId: parsed.data.backgroundMediaId,
+      backgroundAdjust: parsed.data.backgroundAdjust,
     },
   );
   if (!result.ok) {

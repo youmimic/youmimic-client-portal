@@ -23,6 +23,7 @@ import { EnginePicker } from "@/components/dashboard/engine-picker";
 import { VoicePicker, type SelectedVoice } from "@/components/dashboard/video/voice-picker";
 import { BackgroundPicker } from "@/components/dashboard/background-picker";
 import type { BackgroundMediaRef } from "@/lib/projects/rules";
+import type { BackgroundAdjust } from "@/lib/backgrounds/adjust";
 import type { HeyGenEngine } from "@/lib/heygen";
 import { VIDEO_ASPECT_RATIOS, VIDEO_RESOLUTIONS } from "@/lib/validations/video";
 import {
@@ -238,6 +239,7 @@ export function VideoWorkspace({
   const scriptRef = useRef<HTMLTextAreaElement | null>(null);
   const [lookPreviewOpen, setLookPreviewOpen] = useState(false);
   const [background, setBackground] = useState<BackgroundMediaRef | null>(null);
+  const [backgroundAdjust, setBackgroundAdjust] = useState<BackgroundAdjust | null>(null);
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
   const [draftHandled, setDraftHandled] = useState(false);
   // Which draft the discard confirmation is about: the saved one waiting in
@@ -346,6 +348,7 @@ export function VideoWorkspace({
           ...(resolution ? { resolution } : {}),
           ...(voice ? { voiceId: voice.id, voiceName: voice.name } : {}),
           ...(background ? { backgroundMediaId: background.id } : {}),
+          ...(background?.kind === "IMAGE" && backgroundAdjust ? { backgroundAdjust } : {}),
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {
@@ -543,7 +546,17 @@ export function VideoWorkspace({
             )}
 
             {userId && (
-              <BackgroundPicker userId={userId} value={background} supported={backgroundSupported} onChange={setBackground} />
+              <BackgroundPicker
+                userId={userId}
+                value={background}
+                supported={backgroundSupported}
+                onChange={(media) => {
+                  setBackground(media);
+                  if (!media) setBackgroundAdjust(null);
+                }}
+                adjust={backgroundAdjust}
+                onAdjustChange={setBackgroundAdjust}
+              />
             )}
 
             <VoicePicker value={voice} onChange={setVoice} shortcuts={voiceShortcuts} />
@@ -618,7 +631,15 @@ export function VideoWorkspace({
               <ReviewRow label="Voice" value={voice ? voice.name : "Avatar's own voice"} />
               <ReviewRow
                 label="Background"
-                value={background ? (background.kind === "VIDEO" ? "Your video" : "Your photo") : "Original"}
+                value={
+                  background
+                    ? background.kind === "VIDEO"
+                      ? "Your video"
+                      : backgroundAdjust
+                        ? "Your photo, adjusted"
+                        : "Your photo"
+                    : "Original"
+                }
               />
               <ReviewRow label="Format" value={ASPECT_RATIO_LABEL[aspectRatio] ?? aspectRatio} />
               <ReviewRow label="Resolution" value={resolution ?? "Standard"} />
