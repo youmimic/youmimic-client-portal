@@ -83,12 +83,18 @@ const nextConfig: NextConfig = {
   // [projectId]/scenes/import-document/route.ts). Marking it external keeps
   // it as a plain Node require at runtime instead, which is the documented
   // fix for native-addon dependencies under Next.js.
-  serverExternalPackages: ["pdf-parse", "@napi-rs/canvas"],
+  // ffmpeg-static locates its binary relative to its own folder, so it must be
+  // required from node_modules at runtime rather than bundled.
+  serverExternalPackages: ["pdf-parse", "@napi-rs/canvas", "ffmpeg-static"],
   // pdf.js reads these font files from disk at runtime when rendering PDF
   // pages to slide images (lib/slides/render-document.ts), so file tracing
   // can't discover them on its own.
   outputFileTracingIncludes: {
     "/api/dashboard/projects/[projectId]/scenes/import-document": ["./node_modules/pdfjs-dist/standard_fonts/**/*"],
+    // The ffmpeg binary for adjusted video backgrounds (lib/backgrounds/
+    // renditions.ts), run as a separate program by both generate routes.
+    "/api/dashboard/projects/[projectId]/generate": ["./node_modules/ffmpeg-static/ffmpeg", "./node_modules/ffmpeg-static/package.json"],
+    "/api/dashboard/avatars/[avatarId]/generate-video": ["./node_modules/ffmpeg-static/ffmpeg", "./node_modules/ffmpeg-static/package.json"],
   },
   images: {
     // Off by default in Next.js since an SVG can embed a <script>; the

@@ -348,7 +348,7 @@ export function VideoWorkspace({
           ...(resolution ? { resolution } : {}),
           ...(voice ? { voiceId: voice.id, voiceName: voice.name } : {}),
           ...(background ? { backgroundMediaId: background.id } : {}),
-          ...(background?.kind === "IMAGE" && backgroundAdjust ? { backgroundAdjust } : {}),
+          ...(background && backgroundAdjust ? { backgroundAdjust } : {}),
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {
@@ -634,7 +634,9 @@ export function VideoWorkspace({
                 value={
                   background
                     ? background.kind === "VIDEO"
-                      ? "Your video"
+                      ? backgroundAdjust
+                        ? "Your video, adjusted"
+                        : "Your video"
                       : backgroundAdjust
                         ? "Your photo, adjusted"
                         : "Your photo"

@@ -70,7 +70,12 @@ export function BackgroundPicker({
   const [previewWidth, setPreviewWidth] = useState(0);
   const uploading = progress !== null;
   const current = adjust ?? DEFAULT_ADJUST;
-  const showAdjust = !!onAdjustChange && value?.kind === "IMAGE";
+  const showAdjust = !!onAdjustChange && !!value;
+  // The same filter the server bakes in, on the photo or the playing video.
+  const previewFilter =
+    showAdjust && !isDefaultAdjust(current)
+      ? { filter: `url(#${filterId}) blur(${((current.blur / 1000) * previewWidth).toFixed(2)}px)` }
+      : undefined;
 
   // The preview blur is scaled to the preview width, the same rule the
   // server uses at full size (lib/backgrounds/adjust.ts blurSigma).
@@ -172,6 +177,7 @@ export function BackgroundPicker({
                 autoPlay={!reduceMotion}
                 controls={reduceMotion}
                 aria-label="Background video preview"
+                style={previewFilter}
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element -- Vercel Blob URL, same as slide previews
@@ -179,11 +185,7 @@ export function BackgroundPicker({
                 src={value.url}
                 alt="Background photo preview"
                 className="h-full w-full object-cover"
-                style={
-                  showAdjust && !isDefaultAdjust(current)
-                    ? { filter: `url(#${filterId}) blur(${((current.blur / 1000) * previewWidth).toFixed(2)}px)` }
-                    : undefined
-                }
+                style={previewFilter}
               />
             )}
             {uploading && (
@@ -259,9 +261,9 @@ export function BackgroundPicker({
           {showAdjust && supported && (
             <AdjustControls value={current} disabled={disabled || uploading} onChange={(next) => onAdjustChange?.(isDefaultAdjust(next) ? null : next)} />
           )}
-          {onAdjustChange && value?.kind === "VIDEO" && (
+          {showAdjust && supported && value?.kind === "VIDEO" && !isDefaultAdjust(current) && (
             <p className="text-xs text-muted-foreground">
-              Darken, warmth and blur work on photos. For a video, adjust the clip before uploading it.
+              An adjusted video takes a little longer to prepare when you generate (usually under a minute).
             </p>
           )}
 
@@ -317,7 +319,7 @@ function AdjustControls({
   const baseId = useId();
   return (
     <fieldset className="space-y-2.5 rounded-md border p-3">
-      <legend className="px-1 text-xs font-medium">Adjust the photo</legend>
+      <legend className="px-1 text-xs font-medium">Adjust the background</legend>
       {SLIDERS.map((s) => (
         <div key={s.key} className="grid grid-cols-[4.5rem_minmax(0,1fr)_5.5rem] items-center gap-2">
           <label htmlFor={`${baseId}-${s.key}`} className="text-xs">

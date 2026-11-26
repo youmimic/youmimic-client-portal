@@ -81,3 +81,24 @@ export function svgColourMatrixValues(a: BackgroundAdjust): string {
 export function blurSigma(a: BackgroundAdjust, imageWidth: number): number {
   return (a.blur / 1000) * imageWidth;
 }
+
+// The same adjustment as an ffmpeg -vf chain for video backgrounds: bound the
+// long edge to 1920, blur (width-relative, like photos), then the same colour
+// matrix via colorchannelmixer (rr = row R / column R, and so on), in RGB.
+export function ffmpegVideoFilter(a: BackgroundAdjust, width: number, height: number): string {
+  const scale = Math.min(1, 1920 / Math.max(width, height));
+  // Even dimensions, as yuv420p output requires.
+  const w = Math.max(2, Math.round((width * scale) / 2) * 2);
+  const h = Math.max(2, Math.round((height * scale) / 2) * 2);
+  const steps = [`scale=${w}:${h}:flags=bicubic`];
+  const sigma = blurSigma(a, w);
+  if (sigma >= 0.3) steps.push(`gblur=sigma=${sigma.toFixed(2)}`);
+  const m = colourMatrix(a);
+  const f = (n: number) => n.toFixed(5);
+  steps.push(
+    "format=gbrp",
+    `colorchannelmixer=rr=${f(m[0][0])}:rg=${f(m[0][1])}:rb=${f(m[0][2])}:gr=${f(m[1][0])}:gg=${f(m[1][1])}:gb=${f(m[1][2])}:br=${f(m[2][0])}:bg=${f(m[2][1])}:bb=${f(m[2][2])}`,
+    "format=yuv420p",
+  );
+  return steps.join(",");
+}
