@@ -266,7 +266,8 @@ function toAvatarOption(a: AvatarOptionRow, isPublic: boolean): AvatarOption {
       name: l.name,
       ready: l.status === "ready",
       previewUrl: l.previewUrl,
-      videoUrl: l.videoUrl,
+      // Shared avatars never offer an intro clip (owner's call, 2026-11-26).
+      videoUrl: isPublic ? null : l.videoUrl,
       defaultVoiceId: l.defaultVoiceId,
       avatarType: l.avatarType,
     })),

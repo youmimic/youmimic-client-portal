@@ -83,7 +83,7 @@ function StatusPill({ view }: { view: StatusView }) {
   );
 }
 
-function AvatarCard({ avatar }: { avatar: GalleryAvatar }) {
+function AvatarCard({ avatar, introVideos }: { avatar: GalleryAvatar; introVideos: boolean }) {
   // Which clip is playing in the media area: the avatar's main intro or one
   // look's own clip. null shows the still preview.
   const [playing, setPlaying] = useState<{ url: string; label: string } | null>(null);
@@ -133,7 +133,7 @@ function AvatarCard({ avatar }: { avatar: GalleryAvatar }) {
             <div className="absolute left-2 top-2">
               <StatusPill view={view} />
             </div>
-            {avatar.introVideoUrl && (
+            {introVideos && avatar.introVideoUrl && (
               <button
                 type="button"
                 onClick={() => setPlaying({ url: avatar.introVideoUrl as string, label: `${avatar.name} intro clip` })}
@@ -159,7 +159,31 @@ function AvatarCard({ avatar }: { avatar: GalleryAvatar }) {
           </p>
         </div>
 
-        {avatar.looks.length > 1 && (
+        {avatar.looks.length > 1 && !introVideos && (
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Looks</p>
+            <ul className="flex flex-wrap gap-1.5" aria-label={`Looks for ${avatar.name}`}>
+              {avatar.looks.map((look) => (
+                <li
+                  key={look.id}
+                  title={look.status === "ready" ? look.name : `${look.name} (not ready)`}
+                  className={cn(
+                    "relative block h-10 w-10 overflow-hidden rounded-md bg-muted ring-1 ring-foreground/10",
+                    look.status !== "ready" && "opacity-40",
+                  )}
+                >
+                  {look.previewUrl ? (
+                    <Image src={look.previewUrl} alt={look.name} fill unoptimized className="object-cover" sizes="40px" />
+                  ) : (
+                    <UserCircle2 className="m-auto h-full w-5 text-muted-foreground/40" aria-hidden="true" />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {avatar.looks.length > 1 && introVideos && (
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">Tap a look to watch its intro</p>
             <ul className="flex flex-wrap gap-1.5" aria-label={`Looks for ${avatar.name}`}>
@@ -234,7 +258,9 @@ function AvatarCard({ avatar }: { avatar: GalleryAvatar }) {
   );
 }
 
-export function AvatarGallery({ avatars }: { avatars: GalleryAvatar[] }) {
+// introVideos false (the shared avatars section): no "Watch intro" button,
+// and looks show as plain thumbnails instead of play buttons.
+export function AvatarGallery({ avatars, introVideos = true }: { avatars: GalleryAvatar[]; introVideos?: boolean }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
 
@@ -316,7 +342,7 @@ export function AvatarGallery({ avatars }: { avatars: GalleryAvatar[] }) {
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((avatar) => (
             <li key={avatar.id}>
-              <AvatarCard avatar={avatar} />
+              <AvatarCard avatar={avatar} introVideos={introVideos} />
             </li>
           ))}
         </ul>
