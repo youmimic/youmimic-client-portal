@@ -17,9 +17,13 @@ import {
 export function ImportDocumentButton({
   variant = "outline",
   label = "PDF or PowerPoint to video",
+  id,
 }: {
   variant?: "default" | "outline" | "ghost";
   label?: string;
+  // Lets a same-page link (the home page's "More tools") scroll here and
+  // highlight it via data-highlight; see ScrollHighlightLink.
+  id?: string;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,7 +59,10 @@ export function ImportDocumentButton({
   }
 
   return (
-    <div className="space-y-1">
+    <div
+      id={id}
+      className="scroll-mt-24 space-y-1 rounded-lg transition-shadow duration-300 data-[highlight=true]:ring-2 data-[highlight=true]:ring-primary data-[highlight=true]:ring-offset-2 data-[highlight=true]:ring-offset-background"
+    >
       <Button type="button" variant={variant} disabled={loading} onClick={() => inputRef.current?.click()}>
         {loading ? (
           <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />

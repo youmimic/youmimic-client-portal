@@ -4,9 +4,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
-  ExternalLink,
   Film,
-  Languages,
   Presentation,
   Sparkles,
   UserCircle2,
@@ -21,6 +19,7 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { Thumb } from "@/components/dashboard/project/avatar-look-picker";
 import { NewProjectButton } from "@/components/dashboard/project/new-project-button";
 import { ImportDocumentButton } from "@/components/dashboard/project/import-document-button";
+import { ScrollHighlightLink } from "@/components/dashboard/scroll-highlight-link";
 import { ProjectCard } from "@/components/dashboard/project/project-card";
 import { VideoCard, type LibraryVideo } from "@/components/dashboard/video/video-library";
 import { listAvatarOptions, listProjects } from "@/lib/projects/service";
@@ -168,7 +167,7 @@ export default async function DashboardPage({
               </Link>
             </Button>
             <NewProjectButton />
-            <ImportDocumentButton />
+            <ImportDocumentButton id="pdf-to-video" />
           </>
         }
       />
@@ -449,44 +448,40 @@ function GettingStarted({
   );
 }
 
-const TOOLS = [
-  { icon: Video, title: "Video Studio", text: "Open the full video studio in a new tab.", href: "https://app.heygen.com" },
-  { icon: Bot, title: "Interactive Avatar", text: "Launch the interactive avatar experience.", href: "https://app.liveavatar.com/home" },
-  { icon: Presentation, title: "PPT to Video", text: "Turn presentations into video.", href: "https://app.heygen.com/ppt-to-video" },
-  { icon: Languages, title: "Translate", text: "Open the video translation tool.", href: "https://app.heygen.com/video-translate" },
-];
+const TOOL_CARD =
+  "flex h-full items-start gap-3 rounded-xl bg-card p-3 ring-1 ring-foreground/10 transition-shadow hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
 function MoreTools() {
   return (
     <section aria-labelledby="tools-heading" className="space-y-3">
       <SectionHeading id="tools-heading" title="More tools" />
-      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {TOOLS.map(({ icon: Icon, title, text, href }) => (
-          <li key={title}>
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-full items-start gap-3 rounded-xl bg-card p-3 ring-1 ring-foreground/10 transition-shadow hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-              <span className="min-w-0">
-                <span className="flex items-center gap-1 text-sm font-medium">
-                  {title}
-                  <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <span className="sr-only">(opens in a new tab)</span>
-                </span>
-                <span className="block text-xs text-muted-foreground">{text}</span>
-              </span>
-            </a>
-          </li>
-        ))}
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <li>
+          {/* Placeholder until the interactive avatar has a home (owner's call, 2026-11-26). */}
+          <a href="#" className={TOOL_CARD}>
+            <Bot className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">Interactive Avatar</span>
+              <span className="block text-xs text-muted-foreground">Launch the interactive avatar experience.</span>
+            </span>
+          </a>
+        </li>
+        <li>
+          {/* Scrolls to and highlights the "PDF or PowerPoint to video" button in the page header. */}
+          <ScrollHighlightLink targetId="pdf-to-video" className={TOOL_CARD}>
+            <Presentation className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">PPT to Video</span>
+              <span className="block text-xs text-muted-foreground">Turn a PDF or PowerPoint into a video.</span>
+            </span>
+          </ScrollHighlightLink>
+        </li>
         <li>
           <a
             href="https://vimeo.com/1202651661/1f14b9b8a7?fl=ip&fe=ec"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex h-full items-start gap-3 rounded-xl bg-card p-3 ring-1 ring-foreground/10 transition-shadow hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className={TOOL_CARD}
           >
             <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
             <span className="min-w-0">
