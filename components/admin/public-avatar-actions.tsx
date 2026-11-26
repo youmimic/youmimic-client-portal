@@ -1,5 +1,6 @@
 "use client";
 
+import { LookBackgroundSelect } from "@/components/admin/look-background-select";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -83,6 +84,7 @@ type Look = {
   heygenLookId: string;
   status: string;
   previewUrl: string | null;
+  backgroundRemoval: string;
 };
 
 export type PublicAvatar = {
@@ -150,6 +152,11 @@ function SortableLookRow({
             {" · "}
             <span className="font-mono truncate">{look.heygenLookId}</span>
           </div>
+          {canManage && (
+            <div className="mt-1">
+              <LookBackgroundSelect lookId={look.id} lookName={look.name} initial={look.backgroundRemoval} />
+            </div>
+          )}
         </div>
       </div>
       {canManage && (

@@ -52,7 +52,10 @@ const CONTENT_SECURITY_POLICY = [
   // sanity-cdn.com is a separate domain Studio pings in the background to
   // check for package updates (harmless if blocked, but noisy in the
   // console — allowed here to keep that quiet).
-  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com https://*.sanity.io wss://*.sanity.io https://sanity-cdn.com",
+  // https://vercel.com/api/blob/ — browser-to-Blob uploads of avatar
+  // background photos/videos (@vercel/blob/client upload(); its API base,
+  // checked in the package 2026-11-26). Path-limited to the Blob API only.
+  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com https://*.sanity.io wss://*.sanity.io https://sanity-cdn.com https://vercel.com/api/blob/",
   // 'self' — Sanity's Presentation tool (the live-preview split view in
   // Studio) loads the actual site in an iframe on the same origin (e.g. to
   // hit /api/draft-mode/enable) to power click-to-edit; without 'self'

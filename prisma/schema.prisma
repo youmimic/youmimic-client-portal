@@ -131,6 +131,7 @@ model User {
   videoProjects           VideoProject[]
   watermarks              Watermark[]
   slideImages             SlideImage[]
+  backgroundMedia         BackgroundMedia[]
   bookings                Booking[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -600,11 +601,50 @@ model AvatarLook {
   // deliberate alphabetical ordering and is untouched by this.
   sortOrder Int @default(0)
 
+  // Whether the provider can cut this look out of its filmed backdrop
+  // (remove_background), which a custom photo/video background needs. The
+  // provider's API has no field for it ("trained with matting"), so it is
+  // set by an admin after a test, and set to UNSUPPORTED automatically if
+  // the provider rejects a render for it. Backgrounds are only offered for
+  // SUPPORTED looks.
+  backgroundRemoval BackgroundRemovalSupport @default(UNKNOWN)
+
   avatar          Avatar           @relation(fields: [avatarId], references: [id], onDelete: Cascade)
   generatedVideos GeneratedVideo[]
 
   @@index([avatarId, sortOrder])
   @@map("avatar_looks")
+}
+
+enum BackgroundRemovalSupport {
+  UNKNOWN
+  SUPPORTED
+  UNSUPPORTED
+}
+
+enum BackgroundMediaKind {
+  IMAGE
+  VIDEO
+}
+
+// A photo or video a user uploaded to show behind an avatar (Vercel Blob,
+// public but unguessable URL, like slide images: the provider must download
+// it without signing in). Shared by every scene that uses it; a single
+// avatar video records the URL it was rendered with instead.
+model BackgroundMedia {
+  id          String              @id @default(cuid())
+  userId      String
+  kind        BackgroundMediaKind
+  url         String
+  contentType String
+  sizeBytes   Int
+  createdAt   DateTime            @default(now())
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenes VideoScene[]
+
+  @@index([userId, createdAt])
+  @@map("background_media")
 }
 
 // A multi-scene video the user is building. Only a whole project can be
@@ -771,14 +811,21 @@ model VideoScene {
   // 1-based page/slide number in the imported document, for labels.
   sourcePageNumber Int?
 
+  // AVATAR scenes only: a photo/video shown behind the avatar (the avatar is
+  // cut out of its own backdrop). Null keeps the look's original backdrop.
+  // Kept whatever the kind, like slideImageId.
+  backgroundMediaId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   project    VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   slideImage SlideImage?  @relation(fields: [slideImageId], references: [id], onDelete: SetNull)
+  backgroundMedia BackgroundMedia? @relation(fields: [backgroundMediaId], references: [id], onDelete: SetNull)
 
   @@index([projectId, orderIndex])
   @@index([slideImageId])
+  @@index([backgroundMediaId])
   @@map("video_scenes")
 }
 
@@ -883,6 +930,10 @@ model GeneratedVideo {
   voiceName         String?
   watermarkUrl      String?
   watermarkPosition WatermarkPosition?
+  // Single avatar videos only: the background photo/video this render was
+  // made with (project renders record theirs per scene in sceneSnapshot).
+  // Kept as a URL so retention can tell the file is still shown.
+  backgroundUrl     String?
 
   // Set only when this render was produced from a multi-scene project.
   // sceneSnapshot is the ordered scene list exactly as it was sent to the

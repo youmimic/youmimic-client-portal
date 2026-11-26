@@ -30,6 +30,7 @@ export class ProjectError extends Error {
       | "BAD_AVATAR"
       | "BAD_FILE"
       | "BAD_SLIDE"
+      | "BAD_BACKGROUND"
       | "NO_SLIDE",
     public readonly status: number,
     message: string,
@@ -65,6 +66,10 @@ export type SnapshotScene = {
   voiceName: string | null;
   backgroundColor: string | null;
   mediaUrl: string | null;
+  // AVATAR scenes with a custom photo/video background (added 2026-11-26;
+  // older snapshots have neither field).
+  backgroundUrl?: string | null;
+  backgroundKind?: "IMAGE" | "VIDEO" | null;
 };
 
 export type ProjectView = {
@@ -104,6 +109,8 @@ const sceneSelect = {
   slideImageId: true,
   sourcePageNumber: true,
   slideImage: { select: { id: true, url: true, width: true, height: true } },
+  backgroundMediaId: true,
+  backgroundMedia: { select: { id: true, kind: true, url: true } },
 } as const;
 
 type Tx = Prisma.TransactionClient;
@@ -129,6 +136,12 @@ async function assertAvatarRefs(tx: Tx, userId: string, avatarId: string | null 
     const look = await tx.avatarLook.findFirst({ where: { id: lookId, avatarId }, select: { id: true } });
     if (!look) throw new ProjectError("BAD_AVATAR", 422, "That look doesn't belong to the chosen avatar.");
   }
+}
+
+// A background photo/video may only be used by scenes of the user who uploaded it.
+async function assertBackgroundMedia(tx: Tx, userId: string, backgroundMediaId: string) {
+  const media = await tx.backgroundMedia.findFirst({ where: { id: backgroundMediaId, userId }, select: { id: true } });
+  if (!media) throw new ProjectError("BAD_BACKGROUND", 422, "That background isn't available on your account.");
 }
 
 // A slide image may only be shown by scenes of the user who uploaded it.
@@ -245,7 +258,7 @@ const AVATAR_OPTION_SELECT = {
   avatarType: true,
   looks: {
     orderBy: { name: "asc" as const },
-    select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, defaultVoiceId: true, avatarType: true },
+    select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, defaultVoiceId: true, avatarType: true, backgroundRemoval: true },
   },
 } satisfies Prisma.AvatarSelect;
 
@@ -270,6 +283,7 @@ function toAvatarOption(a: AvatarOptionRow, isPublic: boolean): AvatarOption {
       videoUrl: isPublic ? null : l.videoUrl,
       defaultVoiceId: l.defaultVoiceId,
       avatarType: l.avatarType,
+      backgroundRemoval: l.backgroundRemoval,
     })),
   };
 }
@@ -386,6 +400,7 @@ export async function updateScene(userId: string, projectId: string, sceneId: st
     }
 
     if (patch.slideImageId) await assertSlideImage(tx, userId, patch.slideImageId);
+    if (patch.backgroundMediaId) await assertBackgroundMedia(tx, userId, patch.backgroundMediaId);
 
     const data: Prisma.VideoSceneUncheckedUpdateInput = { ...patch };
     // Clearing the scene's avatar (back to the project default) clears its
@@ -411,7 +426,7 @@ export async function addScene(userId: string, projectId: string, expectedVersio
     const existing = await tx.videoScene.findMany({
       where: { projectId },
       orderBy: { orderIndex: "asc" },
-      select: { id: true, kind: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true },
+      select: { id: true, kind: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true, backgroundMediaId: true },
     });
     if (existing.length >= MAX_SCENES) {
       throw new ProjectError("LIMIT", 422, `A video can have up to ${MAX_SCENES} scenes.`);
@@ -431,6 +446,7 @@ export async function addScene(userId: string, projectId: string, expectedVersio
         avatarLookId: anchor?.avatarLookId ?? null,
         voiceId: anchor?.voiceId ?? null,
         voiceName: anchor?.voiceName ?? null,
+        backgroundMediaId: anchor?.backgroundMediaId ?? null,
       },
       select: { id: true },
     });
@@ -477,7 +493,7 @@ export async function importScenesFromDocument(
     const existing = await tx.videoScene.findMany({
       where: { projectId },
       orderBy: { orderIndex: "asc" },
-      select: { id: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true },
+      select: { id: true, avatarId: true, avatarLookId: true, voiceId: true, voiceName: true, backgroundMediaId: true },
     });
 
     if (scenes.length === 0) {
@@ -530,6 +546,7 @@ export async function importScenesFromDocument(
           avatarLookId: anchor?.avatarLookId ?? null,
           voiceId: anchor?.voiceId ?? null,
           voiceName: anchor?.voiceName ?? null,
+          backgroundMediaId: anchor?.backgroundMediaId ?? null,
           slideImageId: scene.slideImageId,
           sourcePageNumber: scene.sourcePageNumber,
         },
@@ -569,6 +586,7 @@ export async function duplicateScene(userId: string, projectId: string, sceneId:
         // The copy shows the same slide: the image row is shared, not copied.
         slideImageId: source.slideImageId,
         sourcePageNumber: source.sourcePageNumber,
+        backgroundMediaId: source.backgroundMediaId,
       },
       select: { id: true },
     });
@@ -797,6 +815,7 @@ export async function duplicateProject(userId: string, projectId: string): Promi
             // Same owner, so the copy can share the slide image rows.
             slideImageId: sc.slideImageId,
             sourcePageNumber: sc.sourcePageNumber,
+            backgroundMediaId: sc.backgroundMediaId,
           })),
         },
       },

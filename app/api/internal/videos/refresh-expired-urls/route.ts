@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { refreshExpiringVideoUrls, sweepStuckGenerations } from "@/lib/heygen/generate-video";
 import { removeSlideImagesAfterRender } from "@/lib/slides/images";
+import { removeUnusedBackgroundMedia } from "@/lib/backgrounds/media";
 
 // Cron-triggered (see vercel.json). Video-maintenance tasks bundled in one
 // handler, same cron-budget reasoning as the billing cron
@@ -45,5 +46,11 @@ async function runVideoMaintenance(req: Request) {
     console.error("Slide image removal after render failed:", err);
     return { error: "failed" as const };
   });
-  return NextResponse.json({ urlRefresh, stuckSweep, slideCleanup });
+  // Task 4: avatar background photos/videos no scene uses any more (after a
+  // day's grace, and never while a recent render may still need them).
+  const backgroundCleanup = await removeUnusedBackgroundMedia().catch((err) => {
+    console.error("Unused background clean-up failed:", err);
+    return { error: "failed" as const };
+  });
+  return NextResponse.json({ urlRefresh, stuckSweep, slideCleanup, backgroundCleanup });
 }

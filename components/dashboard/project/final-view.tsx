@@ -253,7 +253,13 @@ export function FinalView({
                           {scene.script || (scene.kind === "AVATAR" ? "" : "No narration")}
                         </p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          {[kindLabel, scene.voiceName].filter(Boolean).join(" · ")}
+                          {[
+                            kindLabel,
+                            scene.voiceName,
+                            scene.backgroundKind === "VIDEO" ? "Video background" : scene.backgroundKind === "IMAGE" ? "Photo background" : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       </div>
                     </div>

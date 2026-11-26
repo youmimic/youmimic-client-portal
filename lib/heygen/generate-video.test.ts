@@ -9,6 +9,9 @@ const updateUsageLedgerEntry = vi.fn();
 const getHeyGenVideoStatus = vi.fn();
 const getHeyGenAvatarLook = vi.fn();
 const createHeyGenVideo = vi.fn();
+const createHeyGenStudioVideo = vi.fn();
+const findFirstBackgroundMedia = vi.fn();
+const updateAvatarLook = vi.fn();
 const reconcileCredits = vi.fn();
 const releaseReservationForVideo = vi.fn();
 const reserveCreditsForGeneration = vi.fn();
@@ -24,6 +27,12 @@ vi.mock("@/lib/prisma", () => ({
     avatar: {
       findFirst: (...args: unknown[]) => findFirstAvatar(...args),
     },
+    backgroundMedia: {
+      findFirst: (...args: unknown[]) => findFirstBackgroundMedia(...args),
+    },
+    avatarLook: {
+      update: (...args: unknown[]) => updateAvatarLook(...args),
+    },
     usageLedgerEntry: {
       update: (...args: unknown[]) => updateUsageLedgerEntry(...args),
     },
@@ -34,6 +43,7 @@ vi.mock("@/lib/heygen", () => ({
   getHeyGenVideoStatus: (...args: unknown[]) => getHeyGenVideoStatus(...args),
   getHeyGenAvatarLook: (...args: unknown[]) => getHeyGenAvatarLook(...args),
   createHeyGenVideo: (...args: unknown[]) => createHeyGenVideo(...args),
+  createHeyGenStudioVideo: (...args: unknown[]) => createHeyGenStudioVideo(...args),
   HeyGenApiError: class HeyGenApiError extends Error {},
   PUBLIC_AVATAR_VOICE_LOCALE: "en-AU",
 }));
@@ -65,6 +75,9 @@ beforeEach(() => {
   getHeyGenVideoStatus.mockReset();
   getHeyGenAvatarLook.mockReset();
   createHeyGenVideo.mockReset();
+  createHeyGenStudioVideo.mockReset();
+  findFirstBackgroundMedia.mockReset();
+  updateAvatarLook.mockReset();
   reconcileCredits.mockReset();
   releaseReservationForVideo.mockReset();
   reserveCreditsForGeneration.mockReset();
@@ -273,5 +286,69 @@ describe("generateAvatarVideo", () => {
       error: "This avatar isn't ready to generate videos from yet.",
     });
     expect(reserveCreditsForGeneration).not.toHaveBeenCalled();
+  });
+});
+
+describe("generateAvatarVideo with a custom background", () => {
+  const OWNED = {
+    id: "av-neil",
+    heygenAvatarId: "hg-neil",
+    status: "ready",
+    isPublic: false,
+    looks: [{ id: "look-l03", heygenLookId: "hg-look-l03", status: "ready", backgroundRemoval: "SUPPORTED" }],
+  };
+  const CLIP = { kind: "VIDEO", url: "https://x.public.blob.vercel-storage.com/backgrounds/u1/sea.mp4" };
+
+  beforeEach(() => {
+    findFirstAvatar.mockResolvedValue(OWNED);
+    getHeyGenAvatarLook.mockResolvedValue({ default_voice_id: "voice-1" });
+    reserveCreditsForGeneration.mockResolvedValue({ ok: true, ledgerEntryId: "ledger-1" });
+    createGeneratedVideo.mockResolvedValue({ id: "gv-1" });
+    createHeyGenStudioVideo.mockResolvedValue({ video_id: "provider-1" });
+    updateGeneratedVideo.mockResolvedValue({ id: "gv-1" });
+    findFirstBackgroundMedia.mockResolvedValue(CLIP);
+    updateAvatarLook.mockResolvedValue({});
+  });
+
+  it("sends a one-scene studio job with the background and records its URL", async () => {
+    const result = await generateAvatarVideo("u1", "av-neil", "Hello", "look-l03", "avatar_iii", { backgroundMediaId: "bg-1", aspectRatio: "16:9" });
+
+    expect(result).toEqual({ ok: true, generatedVideoId: "gv-1" });
+    expect(findFirstBackgroundMedia).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "bg-1", userId: "u1" } }));
+    expect(createHeyGenVideo).not.toHaveBeenCalled();
+    const call = createHeyGenStudioVideo.mock.calls[0][0];
+    expect(call).toMatchObject({ engine: "avatar_iii", aspectRatio: "16:9" });
+    expect(call.scenes).toEqual([
+      { kind: "avatar", avatarId: "hg-look-l03", script: "Hello", voiceId: "voice-1", voiceLocale: undefined, background: { kind: "video", url: CLIP.url } },
+    ]);
+    expect(createGeneratedVideo).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ backgroundUrl: CLIP.url }) }));
+  });
+
+  it("keeps the original single-avatar request when no background is chosen", async () => {
+    createHeyGenVideo.mockResolvedValue({ video_id: "provider-1" });
+    await generateAvatarVideo("u1", "av-neil", "Hello", "look-l03");
+    expect(createHeyGenStudioVideo).not.toHaveBeenCalled();
+    expect(createHeyGenVideo).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses, before reserving credits, a look not marked as supporting backgrounds or a background that isn't yours", async () => {
+    findFirstAvatar.mockResolvedValue({ ...OWNED, looks: [{ ...OWNED.looks[0], backgroundRemoval: "UNKNOWN" }] });
+    expect(await generateAvatarVideo("u1", "av-neil", "Hello", "look-l03", "avatar_iii", { backgroundMediaId: "bg-1" })).toMatchObject({ ok: false, code: "BACKGROUND_NOT_SUPPORTED" });
+
+    findFirstAvatar.mockResolvedValue(OWNED);
+    findFirstBackgroundMedia.mockResolvedValue(null);
+    expect(await generateAvatarVideo("u1", "av-neil", "Hello", "look-l03", "avatar_iii", { backgroundMediaId: "not-mine" })).toMatchObject({ ok: false, code: "BACKGROUND_NOT_SUPPORTED" });
+
+    expect(reserveCreditsForGeneration).not.toHaveBeenCalled();
+    expect(createHeyGenStudioVideo).not.toHaveBeenCalled();
+  });
+
+  it("when the provider rejects background removal: credits back and the look is marked unsupported", async () => {
+    const { HeyGenApiError } = await import("@/lib/heygen");
+    createHeyGenStudioVideo.mockRejectedValue(new HeyGenApiError("This video avatar does not support background removal."));
+    const result = await generateAvatarVideo("u1", "av-neil", "Hello", "look-l03", "avatar_iii", { backgroundMediaId: "bg-1" });
+    expect(result).toMatchObject({ ok: false, code: "BACKGROUND_NOT_SUPPORTED" });
+    expect(releaseReservation).toHaveBeenCalledWith("ledger-1");
+    expect(updateAvatarLook).toHaveBeenCalledWith({ where: { id: "look-l03" }, data: { backgroundRemoval: "UNSUPPORTED" } });
   });
 });

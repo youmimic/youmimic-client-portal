@@ -50,6 +50,7 @@ export async function POST(
       resolution: parsed.data.resolution,
       voiceId: parsed.data.voiceId,
       voiceName: parsed.data.voiceName,
+      backgroundMediaId: parsed.data.backgroundMediaId,
     },
   );
   if (!result.ok) {

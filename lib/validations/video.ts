@@ -35,6 +35,9 @@ export const generateVideoSchema = z
     resolution: z.enum(VIDEO_RESOLUTIONS).optional(),
     voiceId: z.string().trim().min(1).max(200).optional(),
     voiceName: z.string().trim().min(1).max(200).optional(),
+    // A registered background photo/video (owned by the user; checked in
+    // generateAvatarVideo, along with the look's support for it).
+    backgroundMediaId: z.string().trim().min(1).max(64).optional(),
   })
   .refine((data) => data.resolution !== "4k" || data.engine === "avatar_iii", {
     message: "4K is only available on Avatar III",

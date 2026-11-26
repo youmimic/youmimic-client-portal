@@ -48,6 +48,7 @@ export default async function VideoProjectPage({ params }: { params: Promise<{ p
       initial={project}
       avatars={avatars}
       canViewCost={!!session.user.adminRole && !session.user.clientModeEnabled}
+      userId={session.user.id}
     />
   );
 }

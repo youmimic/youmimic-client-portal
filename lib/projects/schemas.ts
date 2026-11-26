@@ -66,6 +66,8 @@ export const updateSceneSchema = z
     motionPrompt: z.string().trim().max(MOTION_PROMPT_MAX).nullable().optional(),
     // Ownership is checked in updateScene; null clears the slide.
     slideImageId: nullableId.optional(),
+    // Ownership is checked in updateScene; null returns to the look's own backdrop.
+    backgroundMediaId: nullableId.optional(),
   })
   .strict();
 

@@ -243,6 +243,14 @@ export type HeyGenStudioScene =
       // behaviour, same field, just on a studio scene instead of a single
       // video.
       voiceLocale?: string | null;
+      // A photo/video shown behind the avatar. Sent with remove_background:
+      // true, which cuts the avatar out of its own filmed backdrop (without
+      // it the backdrop hides any background). Verified with real renders
+      // on 2026-11-26 (Neil L04 + photo, Neil L03 + video): the clip is
+      // scaled to cover, muted and looped. Needs a look trained with
+      // matting; otherwise the provider rejects the job with a 400 ("does
+      // not support background removal").
+      background?: { kind: "image" | "video"; url: string } | null;
     }
   | {
       kind: "image";
@@ -268,7 +276,11 @@ function toStudioScene(scene: HeyGenStudioScene, engine: HeyGenEngine) {
         script: scene.script,
         voice_id: scene.voiceId,
         engine: { type: engine },
-        ...(scene.backgroundColor ? { background: { type: "color", color: scene.backgroundColor } } : {}),
+        ...(scene.background
+          ? { remove_background: true, background: { type: scene.background.kind, source: { type: "url", url: scene.background.url } } }
+          : scene.backgroundColor
+            ? { background: { type: "color", color: scene.backgroundColor } }
+            : {}),
         ...(scene.motionPrompt ? { motion_prompt: scene.motionPrompt } : {}),
         ...(scene.voiceLocale ? { voice_settings: { locale: scene.voiceLocale } } : {}),
       },

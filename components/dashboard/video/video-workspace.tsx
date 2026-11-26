@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/dialog";
 import { EnginePicker } from "@/components/dashboard/engine-picker";
 import { VoicePicker, type SelectedVoice } from "@/components/dashboard/video/voice-picker";
+import { BackgroundPicker } from "@/components/dashboard/background-picker";
+import type { BackgroundMediaRef } from "@/lib/projects/rules";
 import type { HeyGenEngine } from "@/lib/heygen";
 import { VIDEO_ASPECT_RATIOS, VIDEO_RESOLUTIONS } from "@/lib/validations/video";
 import {
@@ -45,6 +47,9 @@ export type AvatarLookOption = {
   status: string;
   previewUrl: string | null;
   videoUrl: string | null;
+  // AvatarLook.backgroundRemoval; a custom background is only offered for
+  // SUPPORTED looks. Optional so callers without it simply offer none.
+  backgroundRemoval?: string;
 };
 
 // Every avatar on the account (not just this one) — lets narration borrow
@@ -189,6 +194,7 @@ export function VideoWorkspace({
   initial,
   resetFrom,
   canViewCost,
+  userId,
 }: {
   avatarId: string;
   avatarName: string;
@@ -205,6 +211,9 @@ export function VideoWorkspace({
   // Shown when the form was prefilled from an earlier video.
   resetFrom?: string;
   canViewCost: boolean;
+  // The signed-in user, naming their upload folder for background photos and
+  // videos. Without it (the admin "Test avatar" action) no background option.
+  userId?: string;
 }) {
   const router = useRouter();
   const firstReadyLookId = looks.find((l) => l.status === "ready")?.id ?? null;
@@ -228,6 +237,7 @@ export function VideoWorkspace({
   const [touched, setTouched] = useState(false);
   const scriptRef = useRef<HTMLTextAreaElement | null>(null);
   const [lookPreviewOpen, setLookPreviewOpen] = useState(false);
+  const [background, setBackground] = useState<BackgroundMediaRef | null>(null);
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
   const [draftHandled, setDraftHandled] = useState(false);
   // Which draft the discard confirmation is about: the saved one waiting in
@@ -311,7 +321,12 @@ export function VideoWorkspace({
 
   const scriptError = touched && !script.trim() ? "Write a script so your avatar has something to say." : null;
   const lookError = looks.length > 0 && !lookId ? "Pick a ready look to continue." : null;
-  const canSubmit = !submitting && script.trim().length > 0 && script.length <= SCRIPT_MAX && !lookError;
+  const backgroundSupported = looks.find((l) => l.id === lookId)?.backgroundRemoval === "SUPPORTED";
+  // A background chosen for one look stays set if the look changes; the
+  // picker then explains, and generating waits until it is cleared.
+  const backgroundBlocked = !!background && !backgroundSupported;
+  const canSubmit =
+    !submitting && script.trim().length > 0 && script.length <= SCRIPT_MAX && !lookError && !backgroundBlocked;
 
   async function submit() {
     setTouched(true);
@@ -330,6 +345,7 @@ export function VideoWorkspace({
           ...(lookId ? { avatarLookId: lookId } : {}),
           ...(resolution ? { resolution } : {}),
           ...(voice ? { voiceId: voice.id, voiceName: voice.name } : {}),
+          ...(background ? { backgroundMediaId: background.id } : {}),
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {
@@ -526,6 +542,10 @@ export function VideoWorkspace({
               </div>
             )}
 
+            {userId && (
+              <BackgroundPicker userId={userId} value={background} supported={backgroundSupported} onChange={setBackground} />
+            )}
+
             <VoicePicker value={voice} onChange={setVoice} shortcuts={voiceShortcuts} />
 
             <Segmented
@@ -596,6 +616,10 @@ export function VideoWorkspace({
               <ReviewRow label="Avatar" value={selectedLook ? `${avatarName} · ${selectedLook.name}` : avatarName} />
               <ReviewRow label="Title" value={title.trim() || "Untitled"} />
               <ReviewRow label="Voice" value={voice ? voice.name : "Avatar's own voice"} />
+              <ReviewRow
+                label="Background"
+                value={background ? (background.kind === "VIDEO" ? "Your video" : "Your photo") : "Original"}
+              />
               <ReviewRow label="Format" value={ASPECT_RATIO_LABEL[aspectRatio] ?? aspectRatio} />
               <ReviewRow label="Resolution" value={resolution ?? "Standard"} />
               <ReviewRow label="Engine" value={ENGINE_LABEL[engine.toUpperCase() as VideoEngineValue]} />
