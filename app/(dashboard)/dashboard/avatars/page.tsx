@@ -126,7 +126,14 @@ export default async function AvatarsPage() {
     fetchPublicAvatars(),
   ]);
   const avatars = (await withLiveHeyGenStatus(dbAvatars)).map(toGalleryAvatar);
-  const publicAvatars = (await withLiveHeyGenStatus(dbPublicAvatars)).map(toGalleryAvatar);
+  // Shared avatars show their photo and looks only, no intro clips (owner's
+  // call, 2026-11-26). The clip links are dropped here so they never reach
+  // the page at all, rather than only being hidden.
+  const publicAvatars = (await withLiveHeyGenStatus(dbPublicAvatars)).map(toGalleryAvatar).map((a) => ({
+    ...a,
+    introVideoUrl: null,
+    looks: a.looks.map((l) => ({ ...l, videoUrl: null })),
+  }));
   const ready = avatars.filter((a) => a.usable);
 
   return (
@@ -181,7 +188,7 @@ export default async function AvatarsPage() {
               Available to every user — a good way to make a video while your own avatar isn&apos;t ready yet.
             </p>
           </div>
-          <AvatarGallery avatars={publicAvatars} />
+          <AvatarGallery avatars={publicAvatars} introVideos={false} />
         </div>
       )}
     </div>

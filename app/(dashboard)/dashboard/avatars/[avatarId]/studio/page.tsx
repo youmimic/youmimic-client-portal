@@ -157,7 +157,8 @@ export default async function AvatarStudioPage({
         <VideoWorkspace
           avatarId={avatar.id}
           avatarName={avatar.name}
-          looks={avatar.looks}
+          // Shared avatars never offer an intro clip (owner's call, 2026-11-26).
+          looks={avatar.isPublic ? avatar.looks.map((l) => ({ ...l, videoUrl: null })) : avatar.looks}
           otherAvatars={otherAvatars}
           initial={initial}
           resetFrom={initial ? from : undefined}
