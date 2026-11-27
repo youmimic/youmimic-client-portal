@@ -4,6 +4,12 @@ import { userHasActiveSubscription } from "@/lib/subscription";
 import { generateVideoSchema } from "@/lib/validations/video";
 import { generateAvatarVideo } from "@/lib/heygen/generate-video";
 
+// Generating can include making an adjusted copy of a background video with
+// ffmpeg (lib/backgrounds/renditions.ts), roughly 20-40 s for a short clip on
+// a Vercel function, once per setting (cached after). Fluid compute on the
+// Pro plan allows up to 800 s; 300 s leaves headroom for the provider call.
+export const maxDuration = 300;
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ avatarId: string }> },
@@ -50,6 +56,8 @@ export async function POST(
       resolution: parsed.data.resolution,
       voiceId: parsed.data.voiceId,
       voiceName: parsed.data.voiceName,
+      backgroundMediaId: parsed.data.backgroundMediaId,
+      backgroundAdjust: parsed.data.backgroundAdjust,
     },
   );
   if (!result.ok) {

@@ -63,6 +63,7 @@ import {
   updateScene,
 } from "@/lib/projects/service";
 import { generateProject } from "@/lib/projects/generate";
+import { removeUnusedBackgroundMedia } from "@/lib/backgrounds/media";
 import { planImportedScenes } from "@/lib/projects/import-plan";
 import {
   pruneUnusedSlideImages,
@@ -346,6 +347,56 @@ describe.skipIf(!isLocal)("isolated database: slide scenes end to end", () => {
     const regenerate = await generateProject(userId, id, after.version);
     expect(regenerate).toMatchObject({ ok: false, code: "NOT_READY" });
     expect(regenerate.ok === false && "issues" in regenerate && regenerate.issues.map((i) => i.code)).toContain("NO_SLIDE");
+  });
+
+  it("custom backgrounds: ownership, duplication, readiness by look, generation and clean-up", async () => {
+    const mineBg = await prisma.backgroundMedia.create({
+      data: { userId, kind: "VIDEO", url: `https://x.public.blob.vercel-storage.com/backgrounds/${userId}/sea-${run}.mp4`, contentType: "video/mp4", sizeBytes: 1000 },
+    });
+    const theirsBg = await prisma.backgroundMedia.create({
+      data: { userId: otherUserId, kind: "IMAGE", url: `https://x.public.blob.vercel-storage.com/backgrounds/${otherUserId}/o-${run}.jpg`, contentType: "image/jpeg", sizeBytes: 1000 },
+    });
+    const { id } = await createProject(userId, { title: "Backgrounds" });
+    let view = await getProjectView(userId, id);
+    await updateProject(userId, id, { expectedVersion: view.version, defaultVoiceId: "v1", defaultVoiceName: "Emma" });
+    const first = view.scenes[0].id;
+
+    // Someone else's background is refused; your own is saved and shown.
+    expect(await code(updateScene(userId, id, first, { expectedVersion: await version(id), backgroundMediaId: theirsBg.id }))).toBe("BAD_BACKGROUND");
+    await updateScene(userId, id, first, {
+      expectedVersion: await version(id), avatarId, avatarLookId: lookId, script: "In front of the sea.", backgroundMediaId: mineBg.id,
+    });
+    view = await getProjectView(userId, id);
+    expect(view.scenes[0].backgroundMedia).toEqual({ id: mineBg.id, kind: "VIDEO", url: mineBg.url });
+
+    // A duplicate shares it; a new scene after it inherits it.
+    await duplicateScene(userId, id, first, await version(id));
+    await addScene(userId, id, await version(id), first);
+    view = await getProjectView(userId, id);
+    expect(view.scenes.map((s) => s.backgroundMediaId)).toEqual([mineBg.id, mineBg.id, mineBg.id]);
+    for (const s of view.scenes.slice(1)) await updateScene(userId, id, s.id, { expectedVersion: await version(id), script: "More sea." });
+
+    // The look isn't marked as supporting backgrounds yet: refused before anything is sent.
+    heygen.createHeyGenStudioVideo.mockClear();
+    const refused = await generateProject(userId, id, await version(id));
+    expect(refused).toMatchObject({ ok: false, code: "NOT_READY" });
+    expect(heygen.createHeyGenStudioVideo).not.toHaveBeenCalled();
+
+    // Marked as supported: the background goes out with every scene.
+    await prisma.avatarLook.update({ where: { id: lookId }, data: { backgroundRemoval: "SUPPORTED" } });
+    expect(await generateProject(userId, id, await version(id))).toMatchObject({ ok: true });
+    const sent = heygen.createHeyGenStudioVideo.mock.calls.at(-1)![0].scenes as { background?: unknown }[];
+    expect(sent.every((s) => JSON.stringify(s.background) === JSON.stringify({ kind: "video", url: mineBg.url }))).toBe(true);
+    await prisma.avatarLook.update({ where: { id: lookId }, data: { backgroundRemoval: "UNKNOWN" } });
+
+    // Clean-up never removes a background a scene still uses, even when old.
+    await prisma.backgroundMedia.updateMany({ where: { id: { in: [mineBg.id, theirsBg.id] } }, data: { createdAt: new Date(Date.now() - 3 * 86_400_000) } });
+    blob.del.mockClear();
+    await removeUnusedBackgroundMedia();
+    const left = new Set((await prisma.backgroundMedia.findMany({ where: { id: { in: [mineBg.id, theirsBg.id] } }, select: { id: true } })).map((r) => r.id));
+    expect(left.has(mineBg.id)).toBe(true);
+    expect(left.has(theirsBg.id)).toBe(false);
+    expect(blob.del.mock.calls.flat(2)).toContain(theirsBg.url);
   });
 
   it("bulk delete keeps at least one scene and leaves shared slides alone", async () => {

@@ -11,11 +11,13 @@ import {
 } from "@/lib/heygen";
 import { projectContentHash } from "@/lib/projects/hash";
 import { DEFAULT_MEDIA_DURATION, evaluateProject, resolveScene, sceneLabel, type SceneData, type SceneIssue } from "@/lib/projects/rules";
-import { listAvatarOptions, listPublicAvatarOptions, ProjectError, type SnapshotScene } from "@/lib/projects/service";
+import { listAvatarOptions, listPublicAvatarOptions, ProjectError, toSceneData, type SnapshotScene } from "@/lib/projects/service";
 import { releaseReservation, reserveCreditsForGeneration } from "@/lib/usage/ledger";
 import { avatarAccessWhere } from "@/lib/avatar-access";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { SlideImageError, slideRenditionUrl } from "@/lib/slides/images";
+import { BackgroundMediaError, isBackgroundRemovalRejection, markLookBackgroundUnsupported } from "@/lib/backgrounds/media";
+import { adjustedBackgroundUrl } from "@/lib/backgrounds/renditions";
 
 export type GenerateProjectResult =
   | { ok: true; generatedVideoId: string }
@@ -89,7 +91,10 @@ export async function generateProject(userId: string, projectId: string, expecte
     include: {
       scenes: {
         orderBy: { orderIndex: "asc" },
-        include: { slideImage: { select: { id: true, url: true, width: true, height: true } } },
+        include: {
+          slideImage: { select: { id: true, url: true, width: true, height: true } },
+          backgroundMedia: { select: { id: true, kind: true, url: true } },
+        },
       },
     },
   });
@@ -97,7 +102,7 @@ export async function generateProject(userId: string, projectId: string, expecte
 
   const [ownedAvatars, publicAvatars] = await Promise.all([listAvatarOptions(userId), listPublicAvatarOptions()]);
   const avatars = [...ownedAvatars, ...publicAvatars];
-  const scenes: SceneData[] = project.scenes;
+  const scenes: SceneData[] = toSceneData(project.scenes);
   const defaults = {
     defaultAvatarId: project.defaultAvatarId,
     defaultAvatarLookId: project.defaultAvatarLookId,
@@ -163,6 +168,9 @@ export async function generateProject(userId: string, projectId: string, expecte
   // The first avatar scene's avatar is what this render is linked to. Null
   // when the video is made only of Slide + narration scenes.
   let firstAvatarId: string | null = null;
+  // Looks (our AvatarLook ids) sent with a custom background, so a provider
+  // "doesn't support background removal" rejection can be pinned on one.
+  const backgroundLookIds = new Set<string>();
 
   // Letterboxed copies of every slide shown, prepared before submitting so a
   // missing or unreachable image is reported now rather than as a failed
@@ -231,6 +239,7 @@ export async function generateProject(userId: string, projectId: string, expecte
         }
 
         let heygenLookId: string | null = null;
+        let lookRowId: string | null = null;
         if (avatar.looks.length > 0) {
           const look = resolved.avatarLookId
             ? avatar.looks.find((l) => l.id === resolved.avatarLookId)
@@ -240,6 +249,7 @@ export async function generateProject(userId: string, projectId: string, expecte
             return { ok: false, code: "AVATAR_NOT_READY", error: `${sceneLabel(scene, i + 1)} needs a ready look. Pick one and try again.` };
           }
           heygenLookId = look.heygenLookId;
+          lookRowId = look.id;
         } else {
           heygenLookId = avatar.heygenAvatarId;
         }
@@ -263,11 +273,37 @@ export async function generateProject(userId: string, projectId: string, expecte
 
         if (firstAvatarId === null) firstAvatarId = resolved.avatarId;
 
+        // Readiness (lookSupportsBackground) already refused looks not marked
+        // as supporting it; legacy looks-less avatars can't reach here with one.
+        // A photo with adjustments goes out as its adjusted copy (made once
+        // and cached); videos and unadjusted photos as uploaded.
+        let background: { kind: "image" | "video"; url: string } | null = null;
+        if (scene.backgroundMedia && lookRowId) {
+          try {
+            background = {
+              kind: scene.backgroundMedia.kind === "VIDEO" ? "video" : "image",
+              url: await adjustedBackgroundUrl(userId, scene.backgroundMedia.id, scene.backgroundAdjust),
+            };
+          } catch (err) {
+            await revert();
+            if (!(err instanceof BackgroundMediaError)) console.error("Preparing a background failed:", err);
+            return {
+              ok: false,
+              code: "BAD_MEDIA",
+              error: err instanceof BackgroundMediaError ? err.message : "Couldn't prepare a background. Please try again.",
+            };
+          }
+        }
+        if (background && lookRowId) backgroundLookIds.add(lookRowId);
+
         providerScenes.push({
           kind: "avatar",
           avatarId: heygenLookId,
           script: scene.script.trim(),
           voiceId,
+          // Left out entirely when unset, so scenes without a background
+          // send exactly what they did before this feature.
+          ...(background ? { background } : {}),
           backgroundColor: scene.backgroundColor,
           // Schema-valid only on Avatar V per the provider's docs — sending
           // it on another engine would be rejected, so it's left out.
@@ -283,6 +319,7 @@ export async function generateProject(userId: string, projectId: string, expecte
           voiceName: resolved.voiceName,
           backgroundColor: scene.backgroundColor,
           mediaUrl: null,
+          ...(background ? { backgroundUrl: background.url, backgroundKind: scene.backgroundMedia!.kind } : {}),
         });
         continue;
       }
@@ -412,6 +449,16 @@ export async function generateProject(userId: string, projectId: string, expecte
       data: { status: "FAILED" as VideoGenerationStatus, errorMessage: message },
     });
     await prisma.videoProject.updateMany({ where: { id: projectId, userId }, data: { status: "FAILED" } });
+    if (isBackgroundRemovalRejection(message) && backgroundLookIds.size > 0) {
+      // Only pinned on a look when exactly one look used a background;
+      // otherwise there's no telling which one the provider meant.
+      if (backgroundLookIds.size === 1) await markLookBackgroundUnsupported([...backgroundLookIds][0]);
+      return {
+        ok: false,
+        code: "HEYGEN_ERROR",
+        error: "One of the avatar looks in this video can't be shown on a custom background. Set that scene's background back to Original, or choose another look.",
+      };
+    }
     return { ok: false, code: "HEYGEN_ERROR", error: message };
   }
 }

@@ -52,7 +52,10 @@ const CONTENT_SECURITY_POLICY = [
   // sanity-cdn.com is a separate domain Studio pings in the background to
   // check for package updates (harmless if blocked, but noisy in the
   // console — allowed here to keep that quiet).
-  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com https://*.sanity.io wss://*.sanity.io https://sanity-cdn.com",
+  // https://vercel.com/api/blob/ — browser-to-Blob uploads of avatar
+  // background photos/videos (@vercel/blob/client upload(); its API base,
+  // checked in the package 2026-11-26). Path-limited to the Blob API only.
+  "connect-src 'self' https://calendly.com https://*.calendly.com https://conversations-widget.brevo.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com https://*.sanity.io wss://*.sanity.io https://sanity-cdn.com https://vercel.com/api/blob/",
   // 'self' — Sanity's Presentation tool (the live-preview split view in
   // Studio) loads the actual site in an iframe on the same origin (e.g. to
   // hit /api/draft-mode/enable) to power click-to-edit; without 'self'
@@ -80,12 +83,18 @@ const nextConfig: NextConfig = {
   // [projectId]/scenes/import-document/route.ts). Marking it external keeps
   // it as a plain Node require at runtime instead, which is the documented
   // fix for native-addon dependencies under Next.js.
-  serverExternalPackages: ["pdf-parse", "@napi-rs/canvas"],
+  // ffmpeg-static locates its binary relative to its own folder, so it must be
+  // required from node_modules at runtime rather than bundled.
+  serverExternalPackages: ["pdf-parse", "@napi-rs/canvas", "ffmpeg-static"],
   // pdf.js reads these font files from disk at runtime when rendering PDF
   // pages to slide images (lib/slides/render-document.ts), so file tracing
   // can't discover them on its own.
   outputFileTracingIncludes: {
     "/api/dashboard/projects/[projectId]/scenes/import-document": ["./node_modules/pdfjs-dist/standard_fonts/**/*"],
+    // The ffmpeg binary for adjusted video backgrounds (lib/backgrounds/
+    // renditions.ts), run as a separate program by both generate routes.
+    "/api/dashboard/projects/[projectId]/generate": ["./node_modules/ffmpeg-static/ffmpeg", "./node_modules/ffmpeg-static/package.json"],
+    "/api/dashboard/avatars/[avatarId]/generate-video": ["./node_modules/ffmpeg-static/ffmpeg", "./node_modules/ffmpeg-static/package.json"],
   },
   images: {
     // Off by default in Next.js since an SVG can embed a <script>; the

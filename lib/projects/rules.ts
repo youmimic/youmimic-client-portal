@@ -1,4 +1,5 @@
 import { estimateGeneration, formatDuration, type VideoEngineValue } from "@/lib/video-display";
+import type { BackgroundAdjust } from "@/lib/backgrounds/adjust";
 
 // Pure business rules for multi-scene projects. Nothing here touches the
 // database or browser APIs, so the same code validates on the server (the
@@ -32,6 +33,12 @@ export const MOTION_PROMPT_MAX = 500;
 // Empty until a type is found that actually honors it. Treat anything not
 // in this set (including null/unknown) as unsupported: the UI control
 // should stay hidden rather than show something that quietly does nothing.
+//
+// Those tests sent the colour WITHOUT remove_background. With it, the
+// avatar is cut out and a background shows: photo and video backgrounds
+// were verified with real renders on 2026-11-26 and are offered per look
+// via AvatarLook.backgroundRemoval (see lookSupportsBackground below). This
+// colour-only switch is left as it was.
 export const SUPPORTED_BACKGROUND_AVATAR_TYPES = new Set<string>([]);
 
 export function supportsBackgroundOverride(avatarType: string | null | undefined): boolean {
@@ -64,7 +71,16 @@ export type SceneData = {
   slideImageId: string | null;
   slideImage: SlideImageData | null;
   sourcePageNumber: number | null;
+  // AVATAR scenes: a photo/video shown behind the cut-out avatar. Null keeps
+  // the look's own backdrop. Only looks marked SUPPORTED can use one.
+  backgroundMediaId: string | null;
+  backgroundMedia: BackgroundMediaRef | null;
+  // Photo adjustments for that background (null = unadjusted).
+  backgroundAdjust: BackgroundAdjust | null;
 };
+
+export type BackgroundMediaRef = { id: string; kind: "IMAGE" | "VIDEO"; url: string };
+export type BackgroundRemovalValue = "UNKNOWN" | "SUPPORTED" | "UNSUPPORTED";
 
 export type ProjectDefaults = {
   defaultAvatarId: string | null;
@@ -101,8 +117,25 @@ export type AvatarOption = {
     defaultVoiceId: string | null;
     // See SUPPORTED_BACKGROUND_AVATAR_TYPES above.
     avatarType: string | null;
+    // Whether the provider can cut this look out for a photo/video
+    // background (AvatarLook.backgroundRemoval).
+    backgroundRemoval: BackgroundRemovalValue;
   }[];
 };
+
+// The look a scene actually renders with: its chosen look, or the avatar's
+// first ready look (the same choice lib/projects/generate.ts makes).
+export function effectiveLook(avatars: AvatarOption[], avatarId: string | null, lookId: string | null) {
+  const avatar = avatarId ? avatars.find((a) => a.id === avatarId) : undefined;
+  if (!avatar) return null;
+  return lookId ? (avatar.looks.find((l) => l.id === lookId) ?? null) : (avatar.looks.find((l) => l.ready) ?? null);
+}
+
+// Custom photo/video backgrounds need a look verified to support background
+// removal. Avatars without looks (the legacy single-id kind) never offer it.
+export function lookSupportsBackground(avatars: AvatarOption[], avatarId: string | null, lookId: string | null): boolean {
+  return effectiveLook(avatars, avatarId, lookId)?.backgroundRemoval === "SUPPORTED";
+}
 
 export type ResolvedScene = {
   avatarId: string | null;
@@ -157,7 +190,8 @@ export type SceneIssue = {
     | "BAD_MEDIA_URL"
     | "NO_DURATION"
     | "NO_VOICE"
-    | "NO_SLIDE";
+    | "NO_SLIDE"
+    | "BACKGROUND_NOT_SUPPORTED";
   message: string;
 };
 
@@ -248,6 +282,14 @@ export function validateScene(
 
     if (scene.backgroundColor !== null && !HEX_COLOR.test(scene.backgroundColor)) {
       push("error", "BAD_COLOR", `${label} has an invalid background colour. Use a hex value like #1f2937.`);
+    }
+
+    if (scene.backgroundMedia && resolved.avatarId && !lookSupportsBackground(avatars, resolved.avatarId, resolved.avatarLookId)) {
+      push(
+        "error",
+        "BACKGROUND_NOT_SUPPORTED",
+        `${label} has a custom background, but its avatar look can't show one. Choose a look that supports backgrounds, or set the background back to Original.`,
+      );
     }
 
     return issues.map((i) => ({ ...i, sceneNumber: number }));

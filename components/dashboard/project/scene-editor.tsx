@@ -23,6 +23,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { InsertPauseButton } from "@/components/dashboard/video/insert-pause-button";
 import { VoicePicker, type SelectedVoice } from "@/components/dashboard/video/voice-picker";
 import { AvatarLookPicker, Thumb } from "@/components/dashboard/project/avatar-look-picker";
+import { BackgroundPicker } from "@/components/dashboard/background-picker";
+import type { BackgroundAdjust } from "@/lib/backgrounds/adjust";
 import { GenerateScriptButton } from "@/components/dashboard/project/generate-script-button";
 import { ImageCropPicker } from "@/components/dashboard/project/image-crop-picker";
 import {
@@ -41,6 +43,8 @@ import {
   type SceneIssue,
   type SceneKindValue,
   type SlideImageData,
+  type BackgroundMediaRef,
+  lookSupportsBackground,
 } from "@/lib/projects/rules";
 import { avatarVoiceShortcuts, estimateGeneration, formatDuration, wordCount, type VideoEngineValue } from "@/lib/video-display";
 import { cn } from "@/lib/utils";
@@ -592,6 +596,9 @@ export function SceneEditor({
   onChange,
   onSettingsChange,
   onSlideImageChange,
+  userId,
+  onBackgroundChange,
+  onBackgroundAdjustChange,
 }: {
   scene: SceneData;
   number: number;
@@ -607,6 +614,9 @@ export function SceneEditor({
   onChange: (patch: SceneEdit) => void;
   onSettingsChange: (patch: SceneSettingsPatch) => void;
   onSlideImageChange: (image: SlideImageData) => void;
+  userId: string;
+  onBackgroundChange: (media: BackgroundMediaRef | null) => void;
+  onBackgroundAdjustChange: (adjust: BackgroundAdjust | null) => void;
 }) {
   const resolved = resolveScene(scene, defaults);
   const errors = issues.filter((i) => i.severity === "error");
@@ -655,6 +665,17 @@ export function SceneEditor({
                 disabled={disabled}
                 selection={selection}
                 onSettingsChange={onSettingsChange}
+              />
+
+              <BackgroundPicker
+                userId={userId}
+                value={scene.backgroundMedia}
+                supported={lookSupportsBackground(avatars, resolved.avatarId, resolved.avatarLookId)}
+                disabled={disabled}
+                appliesToCount={selection?.includesThisScene ? selection.count : undefined}
+                onChange={onBackgroundChange}
+                adjust={scene.backgroundAdjust}
+                onAdjustChange={onBackgroundAdjustChange}
               />
 
               {firstBlank && (

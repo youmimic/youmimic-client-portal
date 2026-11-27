@@ -48,7 +48,7 @@ export default async function AvatarStudioPage({
       isPublic: true,
       looks: {
         orderBy: { name: "asc" },
-        select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true },
+        select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, backgroundRemoval: true },
       },
       generatedVideos: {
         orderBy: { createdAt: "desc" },
@@ -163,6 +163,7 @@ export default async function AvatarStudioPage({
           initial={initial}
           resetFrom={initial ? from : undefined}
           canViewCost={!!session.user.adminRole && !session.user.clientModeEnabled}
+          userId={session.user.id}
         />
       ) : (
         <Card>

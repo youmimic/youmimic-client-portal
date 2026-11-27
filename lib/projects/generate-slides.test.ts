@@ -21,7 +21,7 @@ const avatarOption = vi.hoisted(() => ({
   usable: true,
   isPublic: false,
   avatarType: null,
-  looks: [{ id: "lk1", name: "Suit", ready: true, previewUrl: null, videoUrl: null, defaultVoiceId: "voice-neil", avatarType: null }],
+  looks: [{ id: "lk1", name: "Suit", ready: true, previewUrl: null, videoUrl: null, defaultVoiceId: "voice-neil", avatarType: null, backgroundRemoval: "UNKNOWN" }],
 }));
 
 vi.mock("@/lib/prisma", () => ({ default: db }));
@@ -57,6 +57,10 @@ function scene(i: number, over: Record<string, unknown> = {}) {
     slideImageId: null,
     slideImage: null,
     sourcePageNumber: null,
+    backgroundMediaId: null,
+    backgroundMedia: null,
+
+    backgroundAdjust: null,
     ...over,
   };
 }

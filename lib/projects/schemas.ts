@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { VIDEO_ASPECT_RATIOS, VIDEO_ENGINES, VIDEO_RESOLUTIONS, WATERMARK_POSITIONS } from "@/lib/validations/video";
+import { backgroundAdjustSchema } from "@/lib/backgrounds/adjust";
 import {
   HEX_COLOR,
   MAX_MEDIA_DURATION,
@@ -66,6 +67,10 @@ export const updateSceneSchema = z
     motionPrompt: z.string().trim().max(MOTION_PROMPT_MAX).nullable().optional(),
     // Ownership is checked in updateScene; null clears the slide.
     slideImageId: nullableId.optional(),
+    // Ownership is checked in updateScene; null returns to the look's own backdrop.
+    backgroundMediaId: nullableId.optional(),
+    // Photo adjustments for that background; null clears them.
+    backgroundAdjust: backgroundAdjustSchema.nullable().optional(),
   })
   .strict();
 

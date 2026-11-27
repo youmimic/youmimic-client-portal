@@ -22,8 +22,8 @@ const avatars: AvatarOption[] = [
     isPublic: false,
     avatarType: null,
     looks: [
-      { id: "l1", name: "Suit", ready: true, previewUrl: null, videoUrl: null, defaultVoiceId: null, avatarType: null },
-      { id: "l2", name: "Casual", ready: false, previewUrl: null, videoUrl: null, defaultVoiceId: null, avatarType: null },
+      { id: "l1", name: "Suit", ready: true, previewUrl: null, videoUrl: null, defaultVoiceId: null, avatarType: null, backgroundRemoval: "UNKNOWN" },
+      { id: "l2", name: "Casual", ready: false, previewUrl: null, videoUrl: null, defaultVoiceId: null, avatarType: null, backgroundRemoval: "UNKNOWN" },
     ],
   },
   { id: "a2", name: "Chris", previewUrl: null, usable: false, isPublic: false, avatarType: null, looks: [] },
@@ -52,6 +52,10 @@ function scene(over: Partial<SceneData> & { id: string; orderIndex: number }): S
     slideImageId: null,
     slideImage: null,
     sourcePageNumber: null,
+    backgroundMediaId: null,
+    backgroundMedia: null,
+
+    backgroundAdjust: null,
     ...over,
   };
 }

@@ -3,6 +3,7 @@ import {
   getHeyGenAvatarLook,
   getHeyGenVideoStatus,
   createHeyGenVideo,
+  createHeyGenStudioVideo,
   HeyGenApiError,
   PUBLIC_AVATAR_VOICE_LOCALE,
   type HeyGenEngine,
@@ -11,6 +12,9 @@ import type { VideoEngine, VideoGenerationStatus } from "@/app/generated/prisma/
 import { estimatedCostCents } from "@/lib/heygen/pricing";
 import { reserveCreditsForGeneration, releaseReservation, reconcileCredits, releaseReservationForVideo } from "@/lib/usage/ledger";
 import { avatarAccessWhere } from "@/lib/avatar-access";
+import { BACKGROUND_REJECTED_MESSAGE, BackgroundMediaError, isBackgroundRemovalRejection, markLookBackgroundUnsupported } from "@/lib/backgrounds/media";
+import { adjustedBackgroundUrl } from "@/lib/backgrounds/renditions";
+import type { BackgroundAdjust } from "@/lib/backgrounds/adjust";
 
 // Maps the lowercase HeyGen API value (also what lib/validations/video.ts's
 // generateVideoSchema accepts from the client) to the Prisma enum value
@@ -30,13 +34,18 @@ export type GenerateVideoOptions = {
   resolution?: string;
   voiceId?: string;
   voiceName?: string;
+  // A photo/video (BackgroundMedia id, owned by the user) shown behind the
+  // avatar. Only for looks marked SUPPORTED for background removal.
+  backgroundMediaId?: string;
+  // Photo adjustments for that background (ignored for videos).
+  backgroundAdjust?: BackgroundAdjust;
 };
 
 export type GenerateVideoResult =
   | { ok: true; generatedVideoId: string }
   | {
       ok: false;
-      code: "AVATAR_NOT_READY" | "NO_VOICE" | "HEYGEN_ERROR";
+      code: "AVATAR_NOT_READY" | "NO_VOICE" | "HEYGEN_ERROR" | "BACKGROUND_NOT_SUPPORTED";
       error: string;
     }
   | {
@@ -81,7 +90,7 @@ export async function generateAvatarVideo(
       heygenAvatarId: true,
       status: true,
       isPublic: true,
-      looks: { select: { id: true, heygenLookId: true, status: true } },
+      looks: { select: { id: true, heygenLookId: true, status: true, backgroundRemoval: true } },
     },
   });
 
@@ -91,6 +100,7 @@ export async function generateAvatarVideo(
 
   let heygenLookId: string | null;
   let resolvedLookId: string | null;
+  let lookBackgroundRemoval: string | null = null;
 
   if (avatar.looks.length > 0) {
     const look = avatarLookId ? avatar.looks.find((l) => l.id === avatarLookId) : undefined;
@@ -99,6 +109,7 @@ export async function generateAvatarVideo(
     }
     heygenLookId = look.heygenLookId;
     resolvedLookId = look.id;
+    lookBackgroundRemoval = look.backgroundRemoval;
   } else {
     if (!avatar.heygenAvatarId || avatar.status !== "ready") {
       return { ok: false, code: "AVATAR_NOT_READY", error: "This avatar isn't ready to generate videos from yet." };
@@ -122,6 +133,35 @@ export async function generateAvatarVideo(
 
   if (!voiceId) {
     return { ok: false, code: "NO_VOICE", error: "This avatar has no default voice set up yet." };
+  }
+
+  // A custom background: checked before credits are reserved. Legacy
+  // looks-less avatars never support it.
+  let background: { kind: "image" | "video"; url: string } | null = null;
+  if (options.backgroundMediaId) {
+    const media = await prisma.backgroundMedia.findFirst({
+      where: { id: options.backgroundMediaId, userId },
+      select: { kind: true, url: true },
+    });
+    if (!media) {
+      return { ok: false, code: "BACKGROUND_NOT_SUPPORTED", error: "That background isn't available on your account. Upload it again." };
+    }
+    if (lookBackgroundRemoval !== "SUPPORTED") {
+      return { ok: false, code: "BACKGROUND_NOT_SUPPORTED", error: BACKGROUND_REJECTED_MESSAGE };
+    }
+    try {
+      background = {
+        kind: media.kind === "VIDEO" ? "video" : "image",
+        url: await adjustedBackgroundUrl(userId, options.backgroundMediaId, options.backgroundAdjust ?? null),
+      };
+    } catch (err) {
+      if (!(err instanceof BackgroundMediaError)) console.error("Preparing a background failed:", err);
+      return {
+        ok: false,
+        code: "BACKGROUND_NOT_SUPPORTED",
+        error: err instanceof BackgroundMediaError ? err.message : "Couldn't prepare the background. Please try again.",
+      };
+    }
   }
 
   const prismaEngine = ENGINE_TO_PRISMA[engine];
@@ -162,6 +202,7 @@ export async function generateAvatarVideo(
       resolution: options.resolution,
       voiceId: options.voiceId,
       voiceName: options.voiceName,
+      backgroundUrl: background?.url,
     },
     select: { id: true },
   });
@@ -172,17 +213,32 @@ export async function generateAvatarVideo(
   });
 
   try {
-    const { video_id } = await createHeyGenVideo({
-      avatarId: heygenLookId,
-      script,
-      voiceId,
-      engine,
-      callbackUrl: callbackUrl(),
-      title: options.title,
-      aspectRatio: options.aspectRatio,
-      resolution: options.resolution,
-      voiceLocale: avatar.isPublic ? PUBLIC_AVATAR_VOICE_LOCALE : undefined,
-    });
+    const voiceLocale = avatar.isPublic ? PUBLIC_AVATAR_VOICE_LOCALE : undefined;
+    // With a background, a one-scene studio job: the single-avatar request
+    // only accepts colour/image backgrounds (confirmed with safe probes,
+    // 2026-11-26: "Input should be 'color' or 'image'"), while a studio
+    // scene takes photo and video alike, and both were verified with real
+    // renders. Without one, the original single-avatar request, unchanged.
+    const { video_id } = background
+      ? await createHeyGenStudioVideo({
+          scenes: [{ kind: "avatar", avatarId: heygenLookId, script, voiceId, voiceLocale, background }],
+          engine,
+          callbackUrl: callbackUrl(),
+          title: options.title,
+          aspectRatio: options.aspectRatio,
+          resolution: options.resolution,
+        })
+      : await createHeyGenVideo({
+          avatarId: heygenLookId,
+          script,
+          voiceId,
+          engine,
+          callbackUrl: callbackUrl(),
+          title: options.title,
+          aspectRatio: options.aspectRatio,
+          resolution: options.resolution,
+          voiceLocale,
+        });
 
     await prisma.generatedVideo.update({
       where: { id: generatedVideo.id },
@@ -204,6 +260,10 @@ export async function generateAvatarVideo(
       data: { status: "FAILED" as VideoGenerationStatus, errorMessage: message },
     });
 
+    if (background && resolvedLookId && isBackgroundRemovalRejection(message)) {
+      await markLookBackgroundUnsupported(resolvedLookId);
+      return { ok: false, code: "BACKGROUND_NOT_SUPPORTED", error: BACKGROUND_REJECTED_MESSAGE };
+    }
     return { ok: false, code: "HEYGEN_ERROR", error: message };
   }
 }

@@ -28,7 +28,7 @@ export default async function AdminAvatarsPage() {
       previewUrl: true,
       looks: {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        select: { id: true, name: true, heygenLookId: true, status: true, previewUrl: true },
+        select: { id: true, name: true, heygenLookId: true, status: true, previewUrl: true, backgroundRemoval: true },
       },
     },
   });

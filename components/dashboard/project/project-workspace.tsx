@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { clearPendingDocumentImport, peekPendingDocumentImport } from "@/lib/projects/pending-import";
+import type { BackgroundAdjust } from "@/lib/backgrounds/adjust";
 import {
   Dialog,
   DialogContent,
@@ -57,6 +58,7 @@ import {
   type AvatarOption,
   type SceneData,
   type SlideImageData,
+  type BackgroundMediaRef,
 } from "@/lib/projects/rules";
 import type { ProjectView } from "@/lib/projects/service";
 import { formatCents, formatDuration, type VideoEngineValue } from "@/lib/video-display";
@@ -74,10 +76,14 @@ export function ProjectWorkspace({
   initial,
   avatars,
   canViewCost,
+  userId,
 }: {
   initial: ProjectView;
   avatars: AvatarOption[];
   canViewCost: boolean;
+  // Names the user's own upload folder for background photos/videos (the
+  // server only issues upload tokens for that folder).
+  userId: string;
 }) {
   const router = useRouter();
   const [project, setProject] = useState<ProjectView>(initial);
@@ -283,6 +289,37 @@ export function ProjectWorkspace({
       for (const id of selectedSceneIds) editScene(id, shared);
     }
     if (Object.keys(own).length > 0) editScene(sceneId, own);
+  }
+
+  // A custom background goes to every ticked scene, like avatar and voice
+  // (only to Avatar scenes, the only kind that shows one). Locally the scene
+  // keeps the URL for its preview; only the id is saved, and the server
+  // re-checks it belongs to this user.
+  function setSceneBackground(sceneId: string, media: BackgroundMediaRef | null) {
+    const bulk = selectedSceneIds.size > 1 && selectedSceneIds.has(sceneId);
+    const targets = bulk
+      ? project.scenes.filter((s) => selectedSceneIds.has(s.id) && s.kind === "AVATAR").map((s) => s.id)
+      : [sceneId];
+    setProject((p) => ({
+      ...p,
+      scenes: p.scenes.map((s) =>
+        targets.includes(s.id) ? { ...s, backgroundMediaId: media?.id ?? null, backgroundMedia: media } : s,
+      ),
+    }));
+    for (const id of targets) queuePatch(`s:${id}`, { backgroundMediaId: media?.id ?? null });
+  }
+
+  // Photo adjustments follow the same rule: every ticked Avatar scene.
+  function setSceneBackgroundAdjust(sceneId: string, adjust: BackgroundAdjust | null) {
+    const bulk = selectedSceneIds.size > 1 && selectedSceneIds.has(sceneId);
+    const targets = bulk
+      ? project.scenes.filter((s) => selectedSceneIds.has(s.id) && s.kind === "AVATAR").map((s) => s.id)
+      : [sceneId];
+    setProject((p) => ({
+      ...p,
+      scenes: p.scenes.map((s) => (targets.includes(s.id) ? { ...s, backgroundAdjust: adjust } : s)),
+    }));
+    for (const id of targets) queuePatch(`s:${id}`, { backgroundAdjust: adjust });
   }
 
   // The preview needs the image's URL locally, but only its id is saved: the
@@ -1075,6 +1112,9 @@ export function ProjectWorkspace({
                   }
                   onChange={(patch) => editScene(activeScene.id, patch)}
                   onSettingsChange={(patch) => editSceneSettings(activeScene.id, patch)}
+                  userId={userId}
+                  onBackgroundChange={(media) => setSceneBackground(activeScene.id, media)}
+                  onBackgroundAdjustChange={(adjust) => setSceneBackgroundAdjust(activeScene.id, adjust)}
                   onSlideImageChange={(image) => setSceneSlide(activeScene.id, image)}
                 />
               ) : (

@@ -4,6 +4,12 @@ import { generateProjectSchema } from "@/lib/projects/schemas";
 import { generateProject } from "@/lib/projects/generate";
 import { errorResponse, readBody, requireUserId } from "@/lib/projects/http";
 
+// Generating can include making an adjusted copy of a background video with
+// ffmpeg (lib/backgrounds/renditions.ts), roughly 20-40 s for a short clip on
+// a Vercel function, once per setting (cached after). Fluid compute on the
+// Pro plan allows up to 800 s; 300 s leaves headroom for the provider call.
+export const maxDuration = 300;
+
 // Renders the whole project as one video. See lib/projects/generate.ts for the
 // double-submit guard and the credit reservation.
 export async function POST(req: Request, { params }: { params: Promise<{ projectId: string }> }) {

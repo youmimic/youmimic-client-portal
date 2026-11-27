@@ -8,6 +8,7 @@ const work = vi.hoisted(() => ({
   refreshExpiringVideoUrls: vi.fn(async () => ({ refreshed: 0 })),
   sweepStuckGenerations: vi.fn(async () => ({ reconciled: 0 })),
   removeSlideImagesAfterRender: vi.fn(async () => ({ usersChecked: 0, imagesDeleted: 0 })),
+  removeUnusedBackgroundMedia: vi.fn(async () => ({ deleted: 0 })),
   processCheckoutDraftLifecycle: vi.fn(async () => ({ sent2d: 0 })),
   processBookingReminders: vi.fn(async () => ({ sent: 0 })),
 }));
@@ -16,6 +17,7 @@ vi.mock("@/lib/heygen/generate-video", () => ({
   sweepStuckGenerations: work.sweepStuckGenerations,
 }));
 vi.mock("@/lib/slides/images", () => ({ removeSlideImagesAfterRender: work.removeSlideImagesAfterRender }));
+vi.mock("@/lib/backgrounds/media", () => ({ removeUnusedBackgroundMedia: work.removeUnusedBackgroundMedia }));
 vi.mock("@/lib/checkout/process-draft-lifecycle", () => ({ processCheckoutDraftLifecycle: work.processCheckoutDraftLifecycle }));
 vi.mock("@/lib/bookings/process-reminders", () => ({ processBookingReminders: work.processBookingReminders }));
 vi.mock("@/lib/stripe/avatar-billing", () => ({ provisionAvatarStorageSubscription: vi.fn(), retryLegacyAvatarSubscription: vi.fn() }));
