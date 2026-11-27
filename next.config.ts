@@ -95,6 +95,8 @@ const nextConfig: NextConfig = {
     // renditions.ts), run as a separate program by both generate routes.
     "/api/dashboard/projects/[projectId]/generate": ["./node_modules/ffmpeg-static/ffmpeg", "./node_modules/ffmpeg-static/package.json"],
     "/api/dashboard/avatars/[avatarId]/generate-video": ["./node_modules/ffmpeg-static/ffmpeg", "./node_modules/ffmpeg-static/package.json"],
+    // Cut-out previews take a frame from a transparent clip (lib/backgrounds/cutouts.ts).
+    "/api/internal/looks/cutouts": ["./node_modules/ffmpeg-static/ffmpeg", "./node_modules/ffmpeg-static/package.json"],
   },
   images: {
     // Off by default in Next.js since an SVG can embed a <script>; the

@@ -18,6 +18,7 @@ import { mapWithConcurrency } from "@/lib/concurrency";
 import { SlideImageError, slideRenditionUrl } from "@/lib/slides/images";
 import { BackgroundMediaError, isBackgroundRemovalRejection, markLookBackgroundUnsupported } from "@/lib/backgrounds/media";
 import { adjustedBackgroundUrl } from "@/lib/backgrounds/renditions";
+import { backgroundsEnabledFor, withBackgroundAccess } from "@/lib/backgrounds/access";
 
 export type GenerateProjectResult =
   | { ok: true; generatedVideoId: string }
@@ -101,7 +102,9 @@ export async function generateProject(userId: string, projectId: string, expecte
   if (!project) throw new ProjectError("NOT_FOUND", 404, "We couldn't find that project.");
 
   const [ownedAvatars, publicAvatars] = await Promise.all([listAvatarOptions(userId), listPublicAvatarOptions()]);
-  const avatars = [...ownedAvatars, ...publicAvatars];
+  // Backgrounds stay admin-only until the launch switch is on; readiness then
+  // refuses a background for anyone else (lookSupportsBackground).
+  const avatars = withBackgroundAccess([...ownedAvatars, ...publicAvatars], await backgroundsEnabledFor(userId));
   const scenes: SceneData[] = toSceneData(project.scenes);
   const defaults = {
     defaultAvatarId: project.defaultAvatarId,

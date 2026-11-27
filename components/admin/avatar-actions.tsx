@@ -1,6 +1,7 @@
 "use client";
 
 import { LookBackgroundSelect } from "@/components/admin/look-background-select";
+import { LookCutoutCell } from "@/components/admin/look-cutout-cell";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -85,6 +86,8 @@ type Look = {
   status: string;
   previewUrl: string | null;
   backgroundRemoval: string;
+  cutoutStatus: string;
+  cutoutUrl: string | null;
 };
 
 type Avatar = {
@@ -158,6 +161,17 @@ function SortableLookRow({
           {canManage && (
             <div className="mt-1">
               <LookBackgroundSelect lookId={look.id} lookName={look.name} initial={look.backgroundRemoval} />
+            </div>
+          )}
+          {canManage && (
+            <div className="mt-1">
+              <LookCutoutCell
+                lookId={look.id}
+                lookName={look.name}
+                status={look.cutoutStatus}
+                url={look.cutoutUrl}
+                lookReady={look.status === "ready"}
+              />
             </div>
           )}
         </div>

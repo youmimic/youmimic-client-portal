@@ -15,6 +15,8 @@ const heygen = vi.hoisted(() => ({ createHeyGenStudioVideo: vi.fn(), getHeyGenAv
 const ledger = vi.hoisted(() => ({ reserveCreditsForGeneration: vi.fn(), releaseReservation: vi.fn() }));
 const support = vi.hoisted(() => ({ value: "SUPPORTED" as "SUPPORTED" | "UNKNOWN" | "UNSUPPORTED" }));
 
+// The launch switch (lib/backgrounds/access.ts) has its own tests; here backgrounds are allowed.
+vi.mock("@/lib/backgrounds/access", async (orig) => ({ ...(await orig<typeof import("@/lib/backgrounds/access")>()), backgroundsEnabledFor: vi.fn(async () => true) }));
 vi.mock("@/lib/prisma", () => ({ default: db }));
 vi.mock("@/lib/heygen", async (orig) => ({ ...(await orig<typeof import("@/lib/heygen")>()), ...heygen }));
 vi.mock("@/lib/usage/ledger", () => ledger);
@@ -36,7 +38,7 @@ vi.mock("@/lib/projects/service", async (orig) => ({
       isPublic: false,
       avatarType: null,
       looks: [
-        { id: "lk1", name: "Studio", ready: true, previewUrl: null, videoUrl: null, defaultVoiceId: "voice-neil", avatarType: "digital_twin", backgroundRemoval: support.value },
+        { id: "lk1", name: "Studio", ready: true, previewUrl: null, videoUrl: null, defaultVoiceId: "voice-neil", avatarType: "digital_twin", backgroundRemoval: support.value, cutoutUrl: null },
       ],
     },
   ]),

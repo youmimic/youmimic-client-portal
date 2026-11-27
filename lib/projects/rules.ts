@@ -120,6 +120,9 @@ export type AvatarOption = {
     // Whether the provider can cut this look out for a photo/video
     // background (AvatarLook.backgroundRemoval).
     backgroundRemoval: BackgroundRemovalValue;
+    // Transparent PNG of this look (cut-out preview), layered over a chosen
+    // background in the editor. Null until one has been made.
+    cutoutUrl: string | null;
   }[];
 };
 

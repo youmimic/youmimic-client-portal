@@ -14,6 +14,7 @@ import { reserveCreditsForGeneration, releaseReservation, reconcileCredits, rele
 import { avatarAccessWhere } from "@/lib/avatar-access";
 import { BACKGROUND_REJECTED_MESSAGE, BackgroundMediaError, isBackgroundRemovalRejection, markLookBackgroundUnsupported } from "@/lib/backgrounds/media";
 import { adjustedBackgroundUrl } from "@/lib/backgrounds/renditions";
+import { backgroundsEnabledFor } from "@/lib/backgrounds/access";
 import type { BackgroundAdjust } from "@/lib/backgrounds/adjust";
 
 // Maps the lowercase HeyGen API value (also what lib/validations/video.ts's
@@ -146,7 +147,7 @@ export async function generateAvatarVideo(
     if (!media) {
       return { ok: false, code: "BACKGROUND_NOT_SUPPORTED", error: "That background isn't available on your account. Upload it again." };
     }
-    if (lookBackgroundRemoval !== "SUPPORTED") {
+    if (lookBackgroundRemoval !== "SUPPORTED" || !(await backgroundsEnabledFor(userId))) {
       return { ok: false, code: "BACKGROUND_NOT_SUPPORTED", error: BACKGROUND_REJECTED_MESSAGE };
     }
     try {

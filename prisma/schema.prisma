@@ -609,6 +609,18 @@ model AvatarLook {
   // SUPPORTED looks.
   backgroundRemoval BackgroundRemovalSupport @default(UNKNOWN)
 
+  // Cut-out preview: one transparent frame of this look (made from a 1 s
+  // transparent clip the provider renders), layered over a chosen background
+  // in the editor. Worked through by the cut-out cron
+  // (lib/backgrounds/cutouts.ts); the provider's job id is kept while it
+  // renders, attempts count failures.
+  cutoutStatus        CutoutStatus @default(NONE)
+  cutoutUrl           String?
+  cutoutHeygenVideoId String?
+  cutoutAttempts      Int          @default(0)
+  cutoutError         String?
+  cutoutUpdatedAt     DateTime?
+
   avatar          Avatar           @relation(fields: [avatarId], references: [id], onDelete: Cascade)
   generatedVideos GeneratedVideo[]
 
@@ -620,6 +632,27 @@ enum BackgroundRemovalSupport {
   UNKNOWN
   SUPPORTED
   UNSUPPORTED
+}
+
+enum CutoutStatus {
+  NONE
+  QUEUED
+  RENDERING
+  READY
+  FAILED
+  // The provider refused a transparent clip: the look can't be cut out.
+  NOT_POSSIBLE
+}
+
+// Small admin-controlled switches (key -> JSON value), e.g. the launch switch
+// for client backgrounds. Read through lib/settings.ts with safe defaults.
+model AppSetting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@map("app_settings")
 }
 
 enum BackgroundMediaKind {
@@ -825,8 +858,8 @@ model VideoScene {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project    VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  slideImage SlideImage?  @relation(fields: [slideImageId], references: [id], onDelete: SetNull)
+  project         VideoProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  slideImage      SlideImage?      @relation(fields: [slideImageId], references: [id], onDelete: SetNull)
   backgroundMedia BackgroundMedia? @relation(fields: [backgroundMediaId], references: [id], onDelete: SetNull)
 
   @@index([projectId, orderIndex])

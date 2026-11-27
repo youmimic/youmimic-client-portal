@@ -17,6 +17,8 @@ const releaseReservationForVideo = vi.fn();
 const reserveCreditsForGeneration = vi.fn();
 const releaseReservation = vi.fn();
 
+// The launch switch (lib/backgrounds/access.ts) has its own tests; here backgrounds are allowed.
+vi.mock("@/lib/backgrounds/access", async (orig) => ({ ...(await orig<typeof import("@/lib/backgrounds/access")>()), backgroundsEnabledFor: vi.fn(async () => true) }));
 vi.mock("@/lib/prisma", () => ({
   default: {
     generatedVideo: {

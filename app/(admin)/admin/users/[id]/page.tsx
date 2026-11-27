@@ -80,7 +80,7 @@ export default async function AdminUserDetailPage({
           previewUrl: true,
           looks: {
             orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-            select: { id: true, name: true, heygenLookId: true, status: true, previewUrl: true, backgroundRemoval: true },
+            select: { id: true, name: true, heygenLookId: true, status: true, previewUrl: true, backgroundRemoval: true, cutoutStatus: true, cutoutUrl: true },
           },
         },
       },
