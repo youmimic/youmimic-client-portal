@@ -49,7 +49,7 @@ function ffmpegPath(): string {
   return p;
 }
 
-function runFfmpeg(args: string[]): Promise<{ code: number | null; stderr: string }> {
+export function runFfmpeg(args: string[]): Promise<{ code: number | null; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(ffmpegPath(), args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";

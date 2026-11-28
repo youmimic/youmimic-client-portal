@@ -45,6 +45,7 @@ import {
   type SlideImageData,
   type BackgroundMediaRef,
   lookSupportsBackground,
+  effectiveLook,
 } from "@/lib/projects/rules";
 import { avatarVoiceShortcuts, estimateGeneration, formatDuration, wordCount, type VideoEngineValue } from "@/lib/video-display";
 import { cn } from "@/lib/utils";
@@ -676,6 +677,7 @@ export function SceneEditor({
                 onChange={onBackgroundChange}
                 adjust={scene.backgroundAdjust}
                 onAdjustChange={onBackgroundAdjustChange}
+                cutoutUrl={effectiveLook(avatars, resolved.avatarId, resolved.avatarLookId)?.cutoutUrl ?? null}
               />
 
               {firstBlank && (

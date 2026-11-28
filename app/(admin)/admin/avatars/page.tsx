@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import type { AdminRole } from "@/app/generated/prisma/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PublicAvatarsCard } from "@/components/admin/public-avatar-actions";
+import { BackgroundsAdminCard } from "@/components/admin/backgrounds-admin-card";
 import { canManageAvatars } from "@/lib/admin/rbac";
 import { rollupAvatarDisplay } from "@/lib/heygen/sync";
 
@@ -28,7 +29,7 @@ export default async function AdminAvatarsPage() {
       previewUrl: true,
       looks: {
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        select: { id: true, name: true, heygenLookId: true, status: true, previewUrl: true, backgroundRemoval: true },
+        select: { id: true, name: true, heygenLookId: true, status: true, previewUrl: true, backgroundRemoval: true, cutoutStatus: true, cutoutUrl: true },
       },
     },
   });
@@ -54,6 +55,15 @@ export default async function AdminAvatarsPage() {
           Public avatars any signed-in user can generate a video with, regardless of their own avatar.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Backgrounds and cut-out previews</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BackgroundsAdminCard canManage={canManage} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

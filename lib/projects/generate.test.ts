@@ -15,6 +15,8 @@ const ledger = vi.hoisted(() => ({
   releaseReservation: vi.fn(),
 }));
 
+// The launch switch (lib/backgrounds/access.ts) has its own tests; here backgrounds are allowed.
+vi.mock("@/lib/backgrounds/access", async (orig) => ({ ...(await orig<typeof import("@/lib/backgrounds/access")>()), backgroundsEnabledFor: vi.fn(async () => true) }));
 vi.mock("@/lib/prisma", () => ({ default: prismaMock }));
 vi.mock("@/lib/heygen", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/heygen")>();

@@ -13,6 +13,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 const DB_URL = process.env.ISOLATED_DATABASE_URL ?? "";
 const isLocal = /^postgres(ql)?:\/\/[^@]*@(localhost|127\.0\.0\.1)[:/]/.test(DB_URL);
 
+// The launch switch (lib/backgrounds/access.ts) has its own tests; here backgrounds are allowed.
+vi.mock("@/lib/backgrounds/access", async (orig) => ({ ...(await orig<typeof import("@/lib/backgrounds/access")>()), backgroundsEnabledFor: vi.fn(async () => true) }));
 vi.mock("@/lib/prisma", async () => {
   const { PrismaClient } = await import("@/app/generated/prisma/client");
   const { PrismaPg } = await import("@prisma/adapter-pg");

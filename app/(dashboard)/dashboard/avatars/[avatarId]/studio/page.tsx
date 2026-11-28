@@ -11,6 +11,7 @@ import { formatDateTime, videoTitle } from "@/lib/video-display";
 import { VIDEO_ASPECT_RATIOS } from "@/lib/validations/video";
 import { NewProjectButton } from "@/components/dashboard/project/new-project-button";
 import { avatarAccessWhere } from "@/lib/avatar-access";
+import { backgroundsEnabledFor } from "@/lib/backgrounds/access";
 
 export const metadata = {
   title: "Create video | YouMimic Portal",
@@ -48,7 +49,7 @@ export default async function AvatarStudioPage({
       isPublic: true,
       looks: {
         orderBy: { name: "asc" },
-        select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, backgroundRemoval: true },
+        select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, backgroundRemoval: true, cutoutUrl: true },
       },
       generatedVideos: {
         orderBy: { createdAt: "desc" },
@@ -59,6 +60,7 @@ export default async function AvatarStudioPage({
   });
 
   if (!avatar) notFound();
+  const backgroundsOn = await backgroundsEnabledFor(session.user.id);
 
   // For "same voice as X" narration shortcuts — e.g. a photo avatar
   // borrowing a digital twin's own voice. See lib/video-display.ts's
@@ -157,8 +159,13 @@ export default async function AvatarStudioPage({
         <VideoWorkspace
           avatarId={avatar.id}
           avatarName={avatar.name}
-          // Shared avatars never offer an intro clip (owner's call, 2026-11-26).
-          looks={avatar.isPublic ? avatar.looks.map((l) => ({ ...l, videoUrl: null })) : avatar.looks}
+          looks={avatar.looks.map((l) => ({
+            ...l,
+            // Shared avatars never offer an intro clip (owner's call, 2026-11-26).
+            videoUrl: avatar.isPublic ? null : l.videoUrl,
+            // Backgrounds stay admin-only until the launch switch is on.
+            backgroundRemoval: backgroundsOn ? l.backgroundRemoval : "UNKNOWN",
+          }))}
           otherAvatars={otherAvatars}
           initial={initial}
           resetFrom={initial ? from : undefined}

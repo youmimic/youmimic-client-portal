@@ -264,7 +264,7 @@ const AVATAR_OPTION_SELECT = {
   avatarType: true,
   looks: {
     orderBy: { name: "asc" as const },
-    select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, defaultVoiceId: true, avatarType: true, backgroundRemoval: true },
+    select: { id: true, name: true, status: true, previewUrl: true, videoUrl: true, defaultVoiceId: true, avatarType: true, backgroundRemoval: true, cutoutUrl: true },
   },
 } satisfies Prisma.AvatarSelect;
 
@@ -290,6 +290,7 @@ function toAvatarOption(a: AvatarOptionRow, isPublic: boolean): AvatarOption {
       defaultVoiceId: l.defaultVoiceId,
       avatarType: l.avatarType,
       backgroundRemoval: l.backgroundRemoval,
+      cutoutUrl: l.cutoutUrl,
     })),
   };
 }

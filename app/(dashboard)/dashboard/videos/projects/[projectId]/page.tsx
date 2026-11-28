@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { ProjectWorkspace } from "@/components/dashboard/project/project-workspace";
 import { getProjectView, listAvatarOptions, listPublicAvatarOptions, ProjectError } from "@/lib/projects/service";
 import { refreshIfInProgress } from "@/lib/heygen/generate-video";
+import { backgroundsEnabledFor, withBackgroundAccess } from "@/lib/backgrounds/access";
 
 export const metadata = {
   title: "Video project | YouMimic Portal",
@@ -41,7 +42,8 @@ export default async function VideoProjectPage({ params }: { params: Promise<{ p
     listAvatarOptions(session.user.id),
     listPublicAvatarOptions(),
   ]);
-  const avatars = [...ownedAvatars, ...publicAvatars];
+  // Backgrounds stay admin-only until the launch switch is on.
+  const avatars = withBackgroundAccess([...ownedAvatars, ...publicAvatars], await backgroundsEnabledFor(session.user.id));
 
   return (
     <ProjectWorkspace

@@ -11,6 +11,7 @@ const work = vi.hoisted(() => ({
   removeUnusedBackgroundMedia: vi.fn(async () => ({ deleted: 0 })),
   processCheckoutDraftLifecycle: vi.fn(async () => ({ sent2d: 0 })),
   processBookingReminders: vi.fn(async () => ({ sent: 0 })),
+  processCutoutQueue: vi.fn(async () => ({ started: 0 })),
 }));
 vi.mock("@/lib/heygen/generate-video", () => ({
   refreshExpiringVideoUrls: work.refreshExpiringVideoUrls,
@@ -19,14 +20,16 @@ vi.mock("@/lib/heygen/generate-video", () => ({
 vi.mock("@/lib/slides/images", () => ({ removeSlideImagesAfterRender: work.removeSlideImagesAfterRender }));
 vi.mock("@/lib/backgrounds/media", () => ({ removeUnusedBackgroundMedia: work.removeUnusedBackgroundMedia }));
 vi.mock("@/lib/checkout/process-draft-lifecycle", () => ({ processCheckoutDraftLifecycle: work.processCheckoutDraftLifecycle }));
+vi.mock("@/lib/backgrounds/cutouts", () => ({ processCutoutQueue: work.processCutoutQueue }));
 vi.mock("@/lib/bookings/process-reminders", () => ({ processBookingReminders: work.processBookingReminders }));
 vi.mock("@/lib/stripe/avatar-billing", () => ({ provisionAvatarStorageSubscription: vi.fn(), retryLegacyAvatarSubscription: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ default: { subscription: { findMany: vi.fn(async () => []) }, enterprise: { findUnique: vi.fn() } } }));
 
 import * as video from "@/app/api/internal/videos/refresh-expired-urls/route";
 import * as billing from "@/app/api/internal/billing/retry-failed-provisioning/route";
+import * as cutouts from "@/app/api/internal/looks/cutouts/route";
 
-const routes = { video, billing };
+const routes = { video, billing, cutouts };
 const call = (auth?: string) =>
   new Request("http://localhost/cron", { headers: auth ? { authorization: auth } : {} });
 
@@ -40,10 +43,12 @@ describe("cron routes", () => {
     const crons = JSON.parse(readFileSync("vercel.json", "utf8")).crons as { path: string }[];
     expect(crons.map((c) => c.path).sort()).toEqual([
       "/api/internal/billing/retry-failed-provisioning",
+      "/api/internal/looks/cutouts",
       "/api/internal/videos/refresh-expired-urls",
     ]);
     expect(typeof video.GET).toBe("function");
     expect(typeof billing.GET).toBe("function");
+    expect(typeof cutouts.GET).toBe("function");
   });
 
   for (const [name, route] of Object.entries(routes)) {

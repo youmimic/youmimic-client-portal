@@ -203,6 +203,37 @@ export async function createHeyGenVideo(params: {
   });
 }
 
+// A short transparent clip of one look, for its cut-out preview. Verified
+// live (2026-11-26, Neil L04 digital twin and a photo-avatar look): type
+// "avatar" with output_format "webm" returns a VP9 WebM with an alpha
+// channel at 720p, about 1 s for a two-word script. The provider rejects it
+// for looks not trained for background removal ("does not support webm
+// output ... trained with matting"), which is reported as such. No
+// callback: the cut-out cron polls these, since they aren't videos the
+// webhook route knows about.
+export async function createHeyGenTransparentClip(params: {
+  avatarId: string;
+  voiceId: string;
+  title?: string;
+}): Promise<{ video_id: string }> {
+  return heygenFetch<{ video_id: string }>(
+    "/v3/videos",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        type: "avatar",
+        avatar_id: params.avatarId,
+        script: "Hello there.",
+        voice_id: params.voiceId,
+        engine: { type: "avatar_iii" },
+        output_format: "webm",
+        ...(params.title ? { title: params.title } : {}),
+      }),
+    },
+    20000,
+  );
+}
+
 // One scene of a studio job. Confirmed live (2026-09-26), all with
 // deliberately fake ids/URLs per the safe-probing convention:
 //  - avatar: same as before. motionPrompt is schema-valid only on the

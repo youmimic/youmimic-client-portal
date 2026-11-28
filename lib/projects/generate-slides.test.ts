@@ -21,9 +21,11 @@ const avatarOption = vi.hoisted(() => ({
   usable: true,
   isPublic: false,
   avatarType: null,
-  looks: [{ id: "lk1", name: "Suit", ready: true, previewUrl: null, videoUrl: null, defaultVoiceId: "voice-neil", avatarType: null, backgroundRemoval: "UNKNOWN" }],
+  looks: [{ id: "lk1", name: "Suit", ready: true, previewUrl: null, videoUrl: null, defaultVoiceId: "voice-neil", avatarType: null, backgroundRemoval: "UNKNOWN", cutoutUrl: null }],
 }));
 
+// The launch switch (lib/backgrounds/access.ts) has its own tests; here backgrounds are allowed.
+vi.mock("@/lib/backgrounds/access", async (orig) => ({ ...(await orig<typeof import("@/lib/backgrounds/access")>()), backgroundsEnabledFor: vi.fn(async () => true) }));
 vi.mock("@/lib/prisma", () => ({ default: db }));
 vi.mock("@/lib/heygen", async (orig) => ({ ...(await orig<typeof import("@/lib/heygen")>()), ...heygen }));
 vi.mock("@/lib/usage/ledger", () => ledger);

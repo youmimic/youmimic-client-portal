@@ -43,6 +43,7 @@ export function BackgroundPicker({
   onChange,
   adjust,
   onAdjustChange,
+  cutoutUrl,
 }: {
   userId: string;
   value: BackgroundMediaRef | null;
@@ -57,6 +58,10 @@ export function BackgroundPicker({
   // no adjustment controls are shown.
   adjust?: BackgroundAdjust | null;
   onAdjustChange?: (adjust: BackgroundAdjust | null) => void;
+  // The chosen look's cut-out (transparent PNG). When set, it's layered
+  // over the background so the preview shows the avatar in front of it, as
+  // the video will. The adjustments only change the background layer.
+  cutoutUrl?: string | null;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -186,6 +191,14 @@ export function BackgroundPicker({
                 alt="Background photo preview"
                 className="h-full w-full object-cover"
                 style={previewFilter}
+              />
+            )}
+            {cutoutUrl && (
+              // eslint-disable-next-line @next/next/no-img-element -- Vercel Blob URL
+              <img
+                src={cutoutUrl}
+                alt="The avatar in front of this background"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover"
               />
             )}
             {uploading && (

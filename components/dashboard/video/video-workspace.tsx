@@ -51,6 +51,8 @@ export type AvatarLookOption = {
   // AvatarLook.backgroundRemoval; a custom background is only offered for
   // SUPPORTED looks. Optional so callers without it simply offer none.
   backgroundRemoval?: string;
+  // Cut-out preview of this look (transparent PNG), if one has been made.
+  cutoutUrl?: string | null;
 };
 
 // Every avatar on the account (not just this one) — lets narration borrow
@@ -556,6 +558,7 @@ export function VideoWorkspace({
                 }}
                 adjust={backgroundAdjust}
                 onAdjustChange={setBackgroundAdjust}
+                cutoutUrl={looks.find((l) => l.id === lookId)?.cutoutUrl ?? null}
               />
             )}
 
